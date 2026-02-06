@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import {
-  Eye, MousePointer, Keyboard, Monitor, FolderOpen, Terminal,
+  Eye, Monitor, FolderOpen, Terminal,
   Cpu, Shield, Brain, RefreshCw, Camera, Play,
+  Globe, Code, Search, Download,
 } from "lucide-react";
 
 interface ToolCategory {
@@ -19,18 +20,20 @@ const BRIDGE_URL =
     : window.location.origin);
 
 const ICON_MAP: Record<string, React.ElementType> = {
+  web: Globe,
+  code: Code,
   desktop: Eye,
   filesystem: FolderOpen,
-  commands: Terminal,
   process: Cpu,
   memory: Brain,
   security: Shield,
 };
 
 const COLOR_MAP: Record<string, { color: string; bg: string }> = {
+  web: { color: "text-green-400", bg: "bg-green-950/40 border-green-800/50" },
+  code: { color: "text-emerald-400", bg: "bg-emerald-950/40 border-emerald-800/50" },
   desktop: { color: "text-cyan-400", bg: "bg-cyan-950/40 border-cyan-800/50" },
   filesystem: { color: "text-blue-400", bg: "bg-blue-950/40 border-blue-800/50" },
-  commands: { color: "text-emerald-400", bg: "bg-emerald-950/40 border-emerald-800/50" },
   process: { color: "text-orange-400", bg: "bg-orange-950/40 border-orange-800/50" },
   memory: { color: "text-purple-400", bg: "bg-purple-950/40 border-purple-800/50" },
   security: { color: "text-yellow-400", bg: "bg-yellow-950/40 border-yellow-800/50" },
@@ -67,9 +70,11 @@ export default function ToolsView({ onRunTool }: ToolsViewProps) {
   }, []);
 
   const quickActions = [
+    { label: "Sök på nätet", icon: Search, msg: "sök på internet efter: " },
     { label: "Ta screenshot", icon: Camera, msg: "ta en screenshot och beskriv vad du ser" },
+    { label: "Kör kod", icon: Code, msg: "kör denna JavaScript-kod: " },
     { label: "Systeminfo", icon: Cpu, msg: "visa systeminfo" },
-    { label: "Lista processer", icon: RefreshCw, msg: "lista de 10 mest resurskrävande processerna" },
+    { label: "Ladda ner fil", icon: Download, msg: "ladda ner filen från: " },
     { label: "Kör kommando", icon: Terminal, msg: "kör kommandot: " },
   ];
 

@@ -51,6 +51,10 @@ const agent = new Agent();
 
 // Wire agent status events to Socket.IO
 agent.onStatus((status) => {
+  if ((status as any).type === "token_update") {
+    io.emit("token_usage", agent.getTokenUsage());
+    return;
+  }
   const event = {
     ...status,
     category: status.type === "tool_start" || status.type === "tool_done"
@@ -246,13 +250,18 @@ app.get("/api/audit", (req, res) => {
 
 app.get("/api/tools", (_req, res) => {
   res.json({
-    desktop: ["take_screenshot", "mouse_click", "mouse_move", "mouse_scroll", "type_text", "press_key", "desktop_action", "focus_window", "get_active_window", "list_windows"],
+    web: ["web_search", "fetch_url", "http_request", "download_file"],
+    code: ["run_javascript", "run_command"],
+    desktop: ["take_screenshot", "desktop_action", "mouse_click", "type_text", "press_key", "focus_window", "list_windows"],
     filesystem: ["read_file", "write_file", "list_directory", "search_files", "file_info"],
-    commands: ["run_command"],
     process: ["list_processes", "kill_process", "system_info", "network_info"],
-    memory: ["save_memory", "search_memory", "list_memories"],
+    memory: ["save_memory", "search_memory", "list_memories", "update_memory", "delete_memory"],
     security: ["view_audit_log", "view_security_config"],
   });
+});
+
+app.get("/api/tokens", (_req, res) => {
+  res.json(agent.getTokenUsage());
 });
 
 // --- Socket.IO (used by web/mobile clients) ---

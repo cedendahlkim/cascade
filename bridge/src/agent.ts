@@ -17,6 +17,7 @@ import { FILESYSTEM_TOOLS, handleFilesystemTool } from "./tools-filesystem.js";
 import { COMMAND_TOOLS, handleCommandTool } from "./tools-commands.js";
 import { PROCESS_TOOLS, handleProcessTool } from "./tools-process.js";
 import { DESKTOP_TOOLS, handleDesktopTool } from "./tools-desktop.js";
+import { WEB_TOOLS, handleWebTool } from "./tools-web.js";
 import { getAuditLog, getSecurityConfig } from "./security.js";
 
 export interface AgentMessage {
@@ -122,11 +123,12 @@ const SECURITY_TOOLS: Anthropic.Tool[] = [
 
 const ALL_TOOLS: Anthropic.Tool[] = [
   ...MEMORY_TOOLS,
+  ...SECURITY_TOOLS,
   ...FILESYSTEM_TOOLS,
   ...COMMAND_TOOLS,
   ...PROCESS_TOOLS,
   ...DESKTOP_TOOLS,
-  ...SECURITY_TOOLS,
+  ...WEB_TOOLS, // Add web tools to ALL_TOOLS
 ];
 
 async function handleToolCall(name: string, input: Record<string, unknown>): Promise<string> {
@@ -183,6 +185,8 @@ async function handleToolCall(name: string, input: Record<string, unknown>): Pro
       if (!procResult.startsWith("Unknown process tool:")) return procResult;
       const deskResult = await handleDesktopTool(name, input);
       if (!deskResult.startsWith("Unknown desktop tool:")) return deskResult;
+      const webResult = await handleWebTool(name, input);
+      if (!webResult.startsWith("Unknown web tool:")) return webResult;
       return `Unknown tool: ${name}`;
     }
   }
@@ -224,6 +228,11 @@ const TOOL_CATEGORIES: Record<string, string> = {
   desktop_action: "desktop",
   view_audit_log: "security",
   view_security_config: "security",
+  web_search: "web",
+  fetch_url: "web",
+  http_request: "web",
+  run_javascript: "command",
+  download_file: "web",
 };
 
 export function getToolCategory(toolName: string): string {
@@ -233,12 +242,22 @@ export function getToolCategory(toolName: string): string {
 const MAX_HISTORY = 40;
 const MAX_TOOL_ROUNDS = 8;
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  requestCount: number;
+  cacheReadTokens: number;
+  cacheCreateTokens: number;
+}
+
 export class Agent {
   private client: Anthropic | null = null;
   private history: Anthropic.MessageParam[] = [];
   private model: string;
   private enabled: boolean;
   private statusCallback: StatusCallback | null = null;
+  private tokenUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0, cacheReadTokens: 0, cacheCreateTokens: 0 };
 
   constructor() {
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -275,11 +294,15 @@ Respond in the same language the user writes in.
 You have persistent memory. PROACTIVELY save important information the user shares (preferences, names, project details, decisions, etc.) without being asked. This helps you remember across sessions.
 
 You also have powerful system tools:
+- **Web & Internet**: web_search (search the internet), fetch_url (read any webpage), http_request (call APIs), download_file (download files)
+- **Code Execution**: run_javascript (execute JS/Node.js code), run_command (run shell commands)
 - **Filesystem**: read_file, write_file, list_directory, search_files, file_info
-- **Commands**: run_command (validated against security whitelist)
 - **Processes**: list_processes, kill_process, system_info, network_info
-- **Desktop Control**: take_screenshot (with AI vision), mouse_click, mouse_move, mouse_scroll, type_text, press_key, get_active_window, list_windows, focus_window
+- **Desktop Control**: take_screenshot (with AI vision), desktop_action (click, type, press keys)
+- **Memory**: save_memory, search_memory, list_memories, update_memory, delete_memory
 - **Security**: view_audit_log, view_security_config
+
+You can do ANYTHING the user asks. If they want information from the internet, use web_search. If they want to read a webpage, use fetch_url. If they need calculations or data processing, use run_javascript. You are a fully capable AI assistant with no limitations.
 
 For desktop control:
 1. Take a screenshot first to see what's on screen.
@@ -322,6 +345,18 @@ ${memorySummary}`;
           tools: ALL_TOOLS,
           messages: this.history,
         });
+
+        // Track token usage
+        if (response.usage) {
+          this.tokenUsage.inputTokens += response.usage.input_tokens;
+          this.tokenUsage.outputTokens += response.usage.output_tokens;
+          this.tokenUsage.totalTokens += response.usage.input_tokens + response.usage.output_tokens;
+          this.tokenUsage.requestCount++;
+          const cache = response.usage as unknown as Record<string, number>;
+          if (cache.cache_read_input_tokens) this.tokenUsage.cacheReadTokens += cache.cache_read_input_tokens;
+          if (cache.cache_creation_input_tokens) this.tokenUsage.cacheCreateTokens += cache.cache_creation_input_tokens;
+          this.emitStatus({ type: "token_update" as any });
+        }
 
         // Collect text blocks
         const textParts = response.content
@@ -396,5 +431,13 @@ ${memorySummary}`;
 
   clearHistory(): void {
     this.history = [];
+  }
+
+  getTokenUsage(): TokenUsage {
+    return { ...this.tokenUsage };
+  }
+
+  resetTokenUsage(): void {
+    this.tokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0, cacheReadTokens: 0, cacheCreateTokens: 0 };
   }
 }

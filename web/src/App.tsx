@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { io, Socket } from "socket.io-client";
 import {
   Send,
@@ -55,6 +55,7 @@ const STATUS_CONFIG: Record<string, { icon: React.ElementType; label: string; co
   system: { icon: Cpu, label: "Systeminfo", color: "text-violet-400", bg: "bg-violet-950/60 border-violet-800" },
   security: { icon: Shield, label: "Säkerhet", color: "text-yellow-400", bg: "bg-yellow-950/60 border-yellow-800" },
   desktop: { icon: Eye, label: "Datorstyrning", color: "text-cyan-400", bg: "bg-cyan-950/60 border-cyan-800" },
+  web: { icon: Search, label: "Söker på nätet", color: "text-green-400", bg: "bg-green-950/60 border-green-800" },
 };
 
 const BRIDGE_URL =
@@ -77,6 +78,9 @@ export default function App() {
   const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentStatusEvent | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
+  const [tokenUsage, setTokenUsage] = useState({ inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0 });
+  const [tokenPulse, setTokenPulse] = useState(false);
+  const [sendRipple, setSendRipple] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -117,6 +121,12 @@ export default function App() {
       }
     });
 
+    socket.on("token_usage", (usage: typeof tokenUsage) => {
+      setTokenUsage(usage);
+      setTokenPulse(true);
+      setTimeout(() => setTokenPulse(false), 400);
+    });
+
     return () => {
       socket.disconnect();
       if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
@@ -127,13 +137,26 @@ export default function App() {
     if (activeTab === "chat") scrollToBottom();
   }, [messages, scrollToBottom, activeTab]);
 
+  const formattedTokens = useMemo(() => {
+    const t = tokenUsage.totalTokens;
+    if (t >= 1_000_000) return `${(t / 1_000_000).toFixed(1)}M`;
+    if (t >= 1_000) return `${(t / 1_000).toFixed(1)}k`;
+    return String(t);
+  }, [tokenUsage.totalTokens]);
+
   const sendMessage = (text?: string) => {
     const msg = (text || input).trim();
     if (!msg || !socketRef.current) return;
     socketRef.current.emit("message", { content: msg });
-    if (!text) setInput("");
+    if (!text) {
+      setInput("");
+      setSendRipple(true);
+      setTimeout(() => setSendRipple(false), 500);
+    }
     setActiveTab("chat");
   };
+
+  const isThinking = agentStatus && agentStatus.type !== "done";
 
   const answerQuestion = (response: string) => {
     if (!pendingQuestion || !socketRef.current) return;
@@ -177,7 +200,13 @@ export default function App() {
         <div className="text-lg font-bold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
           Cascade
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {tokenUsage.totalTokens > 0 && (
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/50 ${tokenPulse ? 'token-update' : ''}`}>
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              <span className="text-[10px] font-mono text-amber-300">{formattedTokens}</span>
+            </div>
+          )}
           {connected ? (
             <div className="flex items-center gap-1.5 text-emerald-400 text-xs">
               <Wifi className="w-3.5 h-3.5" />
@@ -247,7 +276,7 @@ export default function App() {
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} ${msg.role === "user" ? "msg-user" : "msg-cascade"}`}
               >
                 <div
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
@@ -273,6 +302,16 @@ export default function App() {
                 </div>
               </div>
             ))}
+            {/* Typing indicator */}
+            {isThinking && (
+              <div className="flex justify-start msg-cascade">
+                <div className="bg-slate-800 rounded-2xl px-4 py-3 flex items-center gap-1.5">
+                  <div className="typing-dot w-2 h-2 rounded-full bg-blue-400" />
+                  <div className="typing-dot w-2 h-2 rounded-full bg-blue-400" />
+                  <div className="typing-dot w-2 h-2 rounded-full bg-blue-400" />
+                </div>
+              </div>
+            )}
             <div ref={chatEndRef} />
           </div>
 
@@ -336,9 +375,10 @@ export default function App() {
               <button
                 onClick={() => sendMessage()}
                 disabled={!connected || !input.trim()}
-                className="p-3.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-slate-700 disabled:opacity-50 text-white rounded-2xl transition-colors touch-manipulation"
+                className="relative p-3.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-slate-700 disabled:opacity-50 text-white rounded-2xl transition-colors touch-manipulation overflow-hidden"
               >
-                <Send className="w-5 h-5" />
+                <Send className="w-5 h-5 relative z-10" />
+                {sendRipple && <div className="send-ripple" />}
               </button>
             </div>
           </div>
