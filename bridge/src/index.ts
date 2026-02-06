@@ -13,9 +13,11 @@ import { Server as SocketIOServer } from "socket.io";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import QRCode from "qrcode";
-import { writeFileSync, mkdirSync, existsSync } from "fs";
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { Agent, getToolCategory } from "./agent.js";
+import { getSecurityConfig, getAuditLog } from "./security.js";
+import { listMemories, createMemory, updateMemory, deleteMemory } from "./memory.js";
 
 const PORT = parseInt(process.env.PORT || "3031", 10);
 const WORKSPACE_ROOT = process.env.CASCADE_REMOTE_WORKSPACE || join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")), "..", "..");
@@ -185,6 +187,72 @@ app.get("/api/qr", async (_req, res) => {
   } catch (err) {
     res.status(500).json({ error: "Failed to generate QR code" });
   }
+});
+
+// --- Global Rules API ---
+const GLOBAL_RULES_FILE = join(WORKSPACE_ROOT, "bridge", "data", "global-rules.md");
+
+app.get("/api/global-rules", (_req, res) => {
+  try {
+    if (existsSync(GLOBAL_RULES_FILE)) {
+      res.json({ rules: readFileSync(GLOBAL_RULES_FILE, "utf-8") });
+    } else {
+      res.json({ rules: "" });
+    }
+  } catch { res.json({ rules: "" }); }
+});
+
+app.put("/api/global-rules", (req, res) => {
+  try {
+    const dir = dirname(GLOBAL_RULES_FILE);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(GLOBAL_RULES_FILE, req.body.rules || "", "utf-8");
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// --- Memories API ---
+app.get("/api/memories", (_req, res) => {
+  res.json(listMemories());
+});
+
+app.post("/api/memories", (req, res) => {
+  const { content, tags } = req.body;
+  const mem = createMemory(content, tags || []);
+  res.json(mem);
+});
+
+app.put("/api/memories/:id", (req, res) => {
+  const { content, tags } = req.body;
+  const mem = updateMemory(req.params.id, content, tags);
+  if (mem) res.json(mem);
+  else res.status(404).json({ error: "Not found" });
+});
+
+app.delete("/api/memories/:id", (req, res) => {
+  const ok = deleteMemory(req.params.id);
+  res.json({ ok });
+});
+
+// --- Security & Tools API ---
+app.get("/api/security", (_req, res) => {
+  res.json(getSecurityConfig());
+});
+
+app.get("/api/audit", (req, res) => {
+  const lines = parseInt(req.query.lines as string, 10) || 50;
+  res.json({ log: getAuditLog(lines) });
+});
+
+app.get("/api/tools", (_req, res) => {
+  res.json({
+    desktop: ["take_screenshot", "mouse_click", "mouse_move", "mouse_scroll", "type_text", "press_key", "desktop_action", "focus_window", "get_active_window", "list_windows"],
+    filesystem: ["read_file", "write_file", "list_directory", "search_files", "file_info"],
+    commands: ["run_command"],
+    process: ["list_processes", "kill_process", "system_info", "network_info"],
+    memory: ["save_memory", "search_memory", "list_memories"],
+    security: ["view_audit_log", "view_security_config"],
+  });
 });
 
 // --- Socket.IO (used by web/mobile clients) ---
