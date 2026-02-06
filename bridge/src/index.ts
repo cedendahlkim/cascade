@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from "uuid";
 import QRCode from "qrcode";
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
+import { spawn } from "child_process";
 import { Agent, getToolCategory } from "./agent.js";
 import { getSecurityConfig, getAuditLog } from "./security.js";
 import { listMemories, createMemory, updateMemory, deleteMemory } from "./memory.js";
@@ -365,10 +366,67 @@ if (existsSync(WEB_DIST)) {
   console.log(`[bridge] Serving web client from ${WEB_DIST}`);
 }
 
+// --- Cloudflare Tunnel (auto-start + auto-restart) ---
+
+let tunnelUrl = "";
+let tunnelProcess: ReturnType<typeof spawn> | null = null;
+
+function startTunnel() {
+  if (process.env.NO_TUNNEL === "1") return;
+
+  console.log("[tunnel] Starting Cloudflare Tunnel...");
+  const cf = spawn("cloudflared", ["tunnel", "--url", `http://localhost:${PORT}`], {
+    stdio: ["ignore", "pipe", "pipe"],
+    shell: true,
+  });
+  tunnelProcess = cf;
+
+  const handleOutput = (data: Buffer) => {
+    const line = data.toString();
+    const match = line.match(/(https:\/\/[a-z0-9-]+\.trycloudflare\.com)/);
+    if (match && !tunnelUrl) {
+      tunnelUrl = match[1];
+      console.log(`[tunnel] ✓ Public URL: ${tunnelUrl}`);
+      io.emit("tunnel_url", tunnelUrl);
+    }
+  };
+
+  cf.stdout?.on("data", handleOutput);
+  cf.stderr?.on("data", handleOutput);
+
+  cf.on("close", (code) => {
+    console.log(`[tunnel] Tunnel exited (code ${code}). Restarting in 5s...`);
+    tunnelUrl = "";
+    tunnelProcess = null;
+    setTimeout(startTunnel, 5000);
+  });
+
+  cf.on("error", (err) => {
+    console.error(`[tunnel] Failed to start cloudflared: ${err.message}`);
+    console.log("[tunnel] Install cloudflared or set NO_TUNNEL=1 to disable");
+  });
+}
+
+// API to get current tunnel URL
+app.get("/api/tunnel", (_req, res) => {
+  res.json({ url: tunnelUrl || null });
+});
+
 // --- Start ---
 
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`[bridge] Cascade Remote Bridge running on http://0.0.0.0:${PORT}`);
   console.log(`[bridge] Session token: ${sessionToken}`);
   console.log(`[bridge] Waiting for mobile/web clients...`);
+  startTunnel();
+});
+
+// Cleanup on exit
+process.on("SIGINT", () => {
+  if (tunnelProcess) tunnelProcess.kill();
+  process.exit(0);
+});
+process.on("SIGTERM", () => {
+  if (tunnelProcess) tunnelProcess.kill();
+  process.exit(0);
 });
