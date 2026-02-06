@@ -369,6 +369,7 @@ export function getToolCategory(toolName: string): string {
 
 const MAX_HISTORY = 40;
 const MAX_TOOL_ROUNDS = 8;
+const MAX_TOOL_RESULT_CHARS = 8000;
 
 export interface TokenUsage {
   inputTokens: number;
@@ -479,13 +480,37 @@ ${memorySummary}`;
           ? `${this.getSystemPrompt()}\n\n--- RELEVANT KNOWLEDGE BASE CONTEXT ---\n${ragContext}\n--- END CONTEXT ---\nUse the above context if relevant to the user's question.`
           : this.getSystemPrompt();
 
-        const response = await this.client.messages.create({
-          model: this.model,
-          max_tokens: 1024,
-          system: systemPrompt,
-          tools: ALL_TOOLS,
-          messages: this.history,
-        });
+        let response;
+        try {
+          response = await this.client.messages.create({
+            model: this.model,
+            max_tokens: 1024,
+            system: systemPrompt,
+            tools: ALL_TOOLS,
+            messages: this.history,
+          });
+        } catch (apiErr: unknown) {
+          const errMsg = apiErr instanceof Error ? apiErr.message : String(apiErr);
+          if (errMsg.includes("400") || errMsg.includes("invalid_request")) {
+            console.error(`[agent] API error, trimming history: ${errMsg.slice(0, 120)}`);
+            // Trim history aggressively and retry once
+            this.history = this.history.slice(-6);
+            try {
+              response = await this.client.messages.create({
+                model: this.model,
+                max_tokens: 1024,
+                system: this.getSystemPrompt(),
+                tools: ALL_TOOLS,
+                messages: this.history,
+              });
+            } catch (retryErr) {
+              console.error(`[agent] Retry also failed:`, retryErr);
+              return `Fel: Konversationen blev för lång. Historiken har rensats, försök igen.`;
+            }
+          } else {
+            throw apiErr;
+          }
+        }
 
         // Track token usage
         if (response.usage) {
@@ -534,10 +559,14 @@ ${memorySummary}`;
 
           this.emitStatus({ type: "tool_done", tool: block.name });
 
+          const truncatedResult = result.length > MAX_TOOL_RESULT_CHARS
+            ? result.slice(0, MAX_TOOL_RESULT_CHARS) + `\n\n[Truncated: ${result.length} chars total, showing first ${MAX_TOOL_RESULT_CHARS}]`
+            : result;
+
           toolResults.push({
             type: "tool_result" as const,
             tool_use_id: block.id,
-            content: result,
+            content: truncatedResult,
           });
         }
 
