@@ -8,6 +8,9 @@
  * - http_request: Make arbitrary HTTP requests (GET/POST/PUT/DELETE)
  */
 import Anthropic from "@anthropic-ai/sdk";
+import { execSync } from "child_process";
+import { writeFileSync, mkdirSync } from "fs";
+import { dirname } from "path";
 
 export const WEB_TOOLS: Anthropic.Tool[] = [
   {
@@ -204,7 +207,6 @@ async function httpRequest(
 
 // --- Run JavaScript ---
 function runJavaScript(code: string): string {
-  const { execSync } = require("child_process");
   try {
     const wrapped = `try { ${code} } catch(e) { console.error(e.message); }`;
     const output = execSync(`node -e "${wrapped.replace(/"/g, '\\"')}"`, {
@@ -222,9 +224,6 @@ function runJavaScript(code: string): string {
 // --- Download File ---
 async function downloadFile(url: string, savePath: string): Promise<string> {
   try {
-    const { writeFileSync, mkdirSync } = require("fs");
-    const { dirname } = require("path");
-
     const resp = await fetch(url, { signal: AbortSignal.timeout(30000) });
     if (!resp.ok) return `Download failed: ${resp.status} ${resp.statusText}`;
 
