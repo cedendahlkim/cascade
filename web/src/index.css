@@ -1,0 +1,177 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}
+
+/* Smooth scrolling for chat */
+.chat-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Pulse animation for connection indicator */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* === AI Status Animations === */
+
+/* Thinking – pulsing brain glow */
+@keyframes thinking-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; filter: blur(0px); }
+  50% { transform: scale(1.15); opacity: 1; filter: blur(1px); }
+}
+@keyframes thinking-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+.status-thinking .status-icon {
+  animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+.status-thinking .status-dots::after {
+  content: '';
+  animation: thinking-dots 1.2s steps(4, end) infinite;
+}
+
+/* Memory – sparkle/save effect */
+@keyframes memory-sparkle {
+  0% { transform: scale(0.8) rotate(0deg); opacity: 0.5; }
+  50% { transform: scale(1.2) rotate(180deg); opacity: 1; }
+  100% { transform: scale(0.8) rotate(360deg); opacity: 0.5; }
+}
+.status-memory .status-icon {
+  animation: memory-sparkle 1.2s ease-in-out infinite;
+}
+
+/* Filesystem – scanning lines */
+@keyframes fs-scan {
+  0% { transform: translateY(-100%); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+.status-filesystem .status-icon {
+  animation: thinking-pulse 1s ease-in-out infinite;
+  color: #60a5fa;
+}
+.status-filesystem .scan-line {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #60a5fa, transparent);
+  animation: fs-scan 1s ease-in-out infinite;
+}
+
+/* Search – rotating magnifier */
+@keyframes search-rotate {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-15deg) scale(1.1); }
+  50% { transform: rotate(15deg) scale(1); }
+  75% { transform: rotate(-10deg) scale(1.05); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+.status-search .status-icon {
+  animation: search-rotate 0.8s ease-in-out infinite;
+}
+
+/* Command – terminal blink */
+@keyframes terminal-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes terminal-type {
+  0% { width: 0; }
+  100% { width: 100%; }
+}
+.status-command .status-icon {
+  animation: thinking-pulse 0.8s ease-in-out infinite;
+  color: #34d399;
+}
+.status-command .cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: #34d399;
+  margin-left: 2px;
+  animation: terminal-blink 0.7s step-end infinite;
+}
+
+/* Process – spinning gear */
+@keyframes gear-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.status-process .status-icon {
+  animation: gear-spin 2s linear infinite;
+}
+
+/* System – radar sweep */
+@keyframes radar-sweep {
+  0% { transform: rotate(0deg); opacity: 0.6; }
+  100% { transform: rotate(360deg); opacity: 0.6; }
+}
+.status-system .status-icon {
+  animation: gear-spin 1.5s linear infinite;
+  color: #a78bfa;
+}
+
+/* Security – shield pulse */
+@keyframes shield-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0px #f59e0b); }
+  50% { transform: scale(1.1); filter: drop-shadow(0 0 8px #f59e0b); }
+}
+.status-security .status-icon {
+  animation: shield-pulse 1s ease-in-out infinite;
+}
+
+/* Status bar slide-in */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes slide-down {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(100%); opacity: 0; }
+}
+.status-bar-enter {
+  animation: slide-up 0.3s ease-out forwards;
+}
+.status-bar-exit {
+  animation: slide-down 0.2s ease-in forwards;
+}
+
+/* Glow effect for status bar */
+.status-glow-thinking { box-shadow: 0 -2px 20px rgba(168, 85, 247, 0.3); }
+.status-glow-memory { box-shadow: 0 -2px 20px rgba(251, 191, 36, 0.3); }
+.status-glow-filesystem { box-shadow: 0 -2px 20px rgba(96, 165, 250, 0.3); }
+.status-glow-search { box-shadow: 0 -2px 20px rgba(244, 114, 182, 0.3); }
+.status-glow-command { box-shadow: 0 -2px 20px rgba(52, 211, 153, 0.3); }
+.status-glow-process { box-shadow: 0 -2px 20px rgba(251, 146, 60, 0.3); }
+.status-glow-system { box-shadow: 0 -2px 20px rgba(167, 139, 250, 0.3); }
+.status-glow-security { box-shadow: 0 -2px 20px rgba(245, 158, 11, 0.3); }
+.status-glow-desktop { box-shadow: 0 -2px 20px rgba(34, 211, 238, 0.3); }
+
+/* Desktop – eye scanning */
+@keyframes eye-scan {
+  0%, 100% { transform: scaleY(1); }
+  10% { transform: scaleY(0.1); }
+  20% { transform: scaleY(1); }
+}
+.status-desktop .status-icon {
+  animation: eye-scan 2s ease-in-out infinite;
+  color: #22d3ee;
+}

@@ -1,0 +1,16 @@
+{
+  "name": "cascade-remote",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mobile/web remote access for Windsurf Cascade via MCP",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:bridge\" \"npm run dev:web\"",
+    "dev:bridge": "cd bridge && npm run dev",
+    "dev:web": "cd web && npm run dev",
+    "build": "cd web && npm run build",
+    "install:all": "cd mcp-server && npm install && cd ../bridge && npm install && cd ../web && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

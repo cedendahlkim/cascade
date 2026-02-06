@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.mobile-inbox
+bridge/data/
+*.png
+!web/public/icon.svg
