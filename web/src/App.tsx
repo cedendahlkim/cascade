@@ -361,14 +361,29 @@ export default function App() {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto chat-scroll px-3 py-4 space-y-3">
             {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                <div className="w-20 h-20 mb-4 rounded-2xl bg-slate-800/50 flex items-center justify-center">
-                  <MessageCircle className="w-10 h-10 opacity-30" />
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 px-4">
+                <div className="w-16 h-16 mb-5 rounded-2xl bg-gradient-to-br from-blue-600/20 to-violet-600/20 border border-blue-500/20 flex items-center justify-center">
+                  <Sparkles className="w-8 h-8 text-blue-400/60" />
                 </div>
-                <p className="text-base font-medium">Inga meddelanden än</p>
-                <p className="text-xs mt-1 opacity-60">
-                  Skriv till din AI-assistent
-                </p>
+                <p className="text-lg font-semibold text-slate-200 mb-1">Hej! Vad kan jag hjälpa dig med?</p>
+                <p className="text-xs opacity-50 mb-6">Skriv fritt eller välj ett förslag</p>
+                <div className="w-full max-w-sm space-y-2">
+                  {[
+                    { icon: "🔍", text: "Analysera mitt system och föreslå förbättringar" },
+                    { icon: "🧠", text: "Bygg en plan för mitt nästa projekt" },
+                    { icon: "💡", text: "Utforska lösningar på ett svårt problem" },
+                    { icon: "📸", text: "Ta en screenshot och beskriv vad du ser" },
+                  ].map((s) => (
+                    <button
+                      key={s.text}
+                      onClick={() => sendMessage(s.text)}
+                      className="w-full text-left px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-blue-500/40 active:bg-slate-700/60 transition-all touch-manipulation group"
+                    >
+                      <span className="mr-2">{s.icon}</span>
+                      <span className="text-sm text-slate-300 group-hover:text-white transition-colors">{s.text}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
