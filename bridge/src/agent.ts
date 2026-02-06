@@ -19,6 +19,11 @@ import { PROCESS_TOOLS, handleProcessTool } from "./tools-process.js";
 import { DESKTOP_TOOLS, handleDesktopTool } from "./tools-desktop.js";
 import { WEB_TOOLS, handleWebTool } from "./tools-web.js";
 import { getAuditLog, getSecurityConfig } from "./security.js";
+import {
+  ragIndexText, ragIndexFile, ragIndexDirectory,
+  ragSearch, ragGetContext, ragListSources,
+  ragDeleteSource, ragStats,
+} from "./rag.js";
 
 export interface AgentMessage {
   role: "user" | "assistant";
@@ -121,6 +126,83 @@ const SECURITY_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const RAG_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "rag_index_text",
+    description: "Index text into the knowledge base for RAG retrieval. Use this to add documentation, notes, or any text the user wants to remember and search later.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        text: { type: "string", description: "Text content to index" },
+        name: { type: "string", description: "Name/title for this content" },
+      },
+      required: ["text", "name"],
+    },
+  },
+  {
+    name: "rag_index_file",
+    description: "Index a file into the knowledge base. Supports text files (.txt, .md, .ts, .py, .json, etc).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        file_path: { type: "string", description: "Path to the file to index" },
+      },
+      required: ["file_path"],
+    },
+  },
+  {
+    name: "rag_index_directory",
+    description: "Index all supported files in a directory recursively. Great for indexing an entire project.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        dir_path: { type: "string", description: "Directory path to index" },
+        extensions: { type: "array", items: { type: "string" }, description: "File extensions to include (default: .md, .txt, .ts, .tsx, .js, .py)" },
+      },
+      required: ["dir_path"],
+    },
+  },
+  {
+    name: "rag_search",
+    description: "Search the knowledge base for relevant information. Returns the most relevant text chunks matching the query.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Search query" },
+        top_k: { type: "number", description: "Number of results (default: 5)" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "rag_list_sources",
+    description: "List all indexed sources in the knowledge base.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+    },
+  },
+  {
+    name: "rag_delete_source",
+    description: "Remove a source from the knowledge base by its ID.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        source_id: { type: "string", description: "Source ID to delete" },
+      },
+      required: ["source_id"],
+    },
+  },
+  {
+    name: "rag_stats",
+    description: "Get statistics about the knowledge base (source count, chunk count, total characters).",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+    },
+  },
+];
+
 const ALL_TOOLS: Anthropic.Tool[] = [
   ...MEMORY_TOOLS,
   ...SECURITY_TOOLS,
@@ -128,7 +210,8 @@ const ALL_TOOLS: Anthropic.Tool[] = [
   ...COMMAND_TOOLS,
   ...PROCESS_TOOLS,
   ...DESKTOP_TOOLS,
-  ...WEB_TOOLS, // Add web tools to ALL_TOOLS
+  ...WEB_TOOLS,
+  ...RAG_TOOLS,
 ];
 
 async function handleToolCall(name: string, input: Record<string, unknown>): Promise<string> {
@@ -174,6 +257,44 @@ async function handleToolCall(name: string, input: Record<string, unknown>): Pro
     }
     case "view_security_config": {
       return JSON.stringify(getSecurityConfig(), null, 2);
+    }
+    case "rag_index_text": {
+      const src = ragIndexText(input.text as string, input.name as string);
+      return `Indexed "${src.name}": ${src.chunkCount} chunks, ${src.totalLength} chars [${src.id}]`;
+    }
+    case "rag_index_file": {
+      try {
+        const src = ragIndexFile(input.file_path as string);
+        return `Indexed file "${src.name}": ${src.chunkCount} chunks, ${src.totalLength} chars [${src.id}]`;
+      } catch (err) {
+        return `Failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+    case "rag_index_directory": {
+      try {
+        const sources = ragIndexDirectory(input.dir_path as string, input.extensions as string[] | undefined);
+        return `Indexed ${sources.length} files:\n${sources.map((s) => `  - ${s.name} (${s.chunkCount} chunks)`).join("\n")}`;
+      } catch (err) {
+        return `Failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+    case "rag_search": {
+      const results = ragSearch(input.query as string, (input.top_k as number) || 5);
+      if (results.length === 0) return "No relevant results found in knowledge base.";
+      return results.map((r, i) => `${i + 1}. [${r.source}] (score: ${r.score})\n${r.content}`).join("\n\n");
+    }
+    case "rag_list_sources": {
+      const sources = ragListSources();
+      if (sources.length === 0) return "Knowledge base is empty. Use rag_index_text or rag_index_file to add content.";
+      return sources.map((s) => `[${s.id}] ${s.name} (${s.type}) - ${s.chunkCount} chunks, ${s.totalLength} chars - indexed ${s.indexedAt}`).join("\n");
+    }
+    case "rag_delete_source": {
+      const ok = ragDeleteSource(input.source_id as string);
+      return ok ? `Deleted source: ${input.source_id}` : `Source not found: ${input.source_id}`;
+    }
+    case "rag_stats": {
+      const stats = ragStats();
+      return `Knowledge base: ${stats.sourceCount} sources, ${stats.chunkCount} chunks, ${stats.totalChars} total characters`;
     }
     default: {
       // Delegate to other tool handlers
@@ -233,6 +354,13 @@ const TOOL_CATEGORIES: Record<string, string> = {
   http_request: "web",
   run_javascript: "command",
   download_file: "web",
+  rag_index_text: "knowledge",
+  rag_index_file: "knowledge",
+  rag_index_directory: "knowledge",
+  rag_search: "knowledge",
+  rag_list_sources: "knowledge",
+  rag_delete_source: "knowledge",
+  rag_stats: "knowledge",
 };
 
 export function getToolCategory(toolName: string): string {
@@ -300,7 +428,10 @@ You also have powerful system tools:
 - **Processes**: list_processes, kill_process, system_info, network_info
 - **Desktop Control**: take_screenshot (with AI vision), desktop_action (click, type, press keys)
 - **Memory**: save_memory, search_memory, list_memories, update_memory, delete_memory
+- **Knowledge Base (RAG)**: rag_index_text, rag_index_file, rag_index_directory, rag_search, rag_list_sources, rag_delete_source, rag_stats
 - **Security**: view_audit_log, view_security_config
+
+You have a knowledge base (RAG). When the user asks about indexed content, use rag_search first. You can index files, directories, or text into the knowledge base for later retrieval.
 
 You can do ANYTHING the user asks. If they want information from the internet, use web_search. If they want to read a webpage, use fetch_url. If they need calculations or data processing, use run_javascript. You are a fully capable AI assistant with no limitations.
 
@@ -332,16 +463,26 @@ ${memorySummary}`;
       this.history = this.history.slice(-MAX_HISTORY);
     }
 
+    // Auto-RAG: search knowledge base for relevant context
+    let ragContext = "";
+    try {
+      ragContext = ragGetContext(userMessage, 3000);
+    } catch { /* RAG not critical */ }
+
     try {
       let finalText = "";
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         this.emitStatus({ type: "thinking" });
 
+        const systemPrompt = ragContext
+          ? `${this.getSystemPrompt()}\n\n--- RELEVANT KNOWLEDGE BASE CONTEXT ---\n${ragContext}\n--- END CONTEXT ---\nUse the above context if relevant to the user's question.`
+          : this.getSystemPrompt();
+
         const response = await this.client.messages.create({
           model: this.model,
           max_tokens: 1024,
-          system: this.getSystemPrompt(),
+          system: systemPrompt,
           tools: ALL_TOOLS,
           messages: this.history,
         });

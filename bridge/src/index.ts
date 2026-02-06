@@ -18,6 +18,7 @@ import { join, dirname } from "path";
 import { Agent, getToolCategory } from "./agent.js";
 import { getSecurityConfig, getAuditLog } from "./security.js";
 import { listMemories, createMemory, updateMemory, deleteMemory } from "./memory.js";
+import { ragListSources, ragStats, ragIndexText, ragIndexFile, ragDeleteSource } from "./rag.js";
 
 const PORT = parseInt(process.env.PORT || "3031", 10);
 const WORKSPACE_ROOT = process.env.CASCADE_REMOTE_WORKSPACE || join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")), "..", "..");
@@ -262,6 +263,34 @@ app.get("/api/tools", (_req, res) => {
 
 app.get("/api/tokens", (_req, res) => {
   res.json(agent.getTokenUsage());
+});
+
+// --- RAG API ---
+app.get("/api/rag/sources", (_req, res) => {
+  res.json(ragListSources());
+});
+
+app.get("/api/rag/stats", (_req, res) => {
+  res.json(ragStats());
+});
+
+app.post("/api/rag/index-text", (req, res) => {
+  try {
+    const src = ragIndexText(req.body.text, req.body.name);
+    res.json(src);
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+app.post("/api/rag/index-file", (req, res) => {
+  try {
+    const src = ragIndexFile(req.body.file_path);
+    res.json(src);
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+app.delete("/api/rag/sources/:id", (req, res) => {
+  const ok = ragDeleteSource(req.params.id);
+  res.json({ ok });
 });
 
 // --- Socket.IO (used by web/mobile clients) ---

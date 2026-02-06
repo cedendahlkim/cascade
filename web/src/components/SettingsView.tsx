@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  Save, FileText, Brain, Trash2, Plus, Shield, ScrollText, ChevronDown, ChevronUp,
+  Save, FileText, Brain, Trash2, Plus, Shield, ScrollText, ChevronDown, ChevronUp, Database,
 } from "lucide-react";
 
 const BRIDGE_URL =
@@ -18,7 +18,7 @@ interface Memory {
 }
 
 export default function SettingsView() {
-  const [tab, setTab] = useState<"rules" | "memories" | "security">("rules");
+  const [tab, setTab] = useState<"rules" | "memories" | "knowledge" | "security">("rules");
   const [rules, setRules] = useState("");
   const [rulesSaved, setRulesSaved] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(true);
@@ -28,6 +28,10 @@ export default function SettingsView() {
   const [auditLog, setAuditLog] = useState("");
   const [securityExpanded, setSecurityExpanded] = useState(false);
   const [securityConfig, setSecurityConfig] = useState<Record<string, unknown> | null>(null);
+  const [ragSources, setRagSources] = useState<{ id: string; name: string; type: string; chunkCount: number; totalLength: number; indexedAt: string }[]>([]);
+  const [ragStatsData, setRagStatsData] = useState<{ sourceCount: number; chunkCount: number; totalChars: number } | null>(null);
+  const [newRagText, setNewRagText] = useState("");
+  const [newRagName, setNewRagName] = useState("");
 
   useEffect(() => {
     if (tab === "rules") {
@@ -40,6 +44,15 @@ export default function SettingsView() {
       fetch(`${BRIDGE_URL}/api/memories`)
         .then((r) => r.json())
         .then(setMemories)
+        .catch(() => {});
+    } else if (tab === "knowledge") {
+      fetch(`${BRIDGE_URL}/api/rag/sources`)
+        .then((r) => r.json())
+        .then(setRagSources)
+        .catch(() => {});
+      fetch(`${BRIDGE_URL}/api/rag/stats`)
+        .then((r) => r.json())
+        .then(setRagStatsData)
         .catch(() => {});
     } else if (tab === "security") {
       fetch(`${BRIDGE_URL}/api/audit?lines=30`)
@@ -87,9 +100,34 @@ export default function SettingsView() {
       .then(() => setMemories((prev) => prev.filter((m) => m.id !== id)));
   };
 
+  const addRagText = () => {
+    if (!newRagText.trim() || !newRagName.trim()) return;
+    fetch(`${BRIDGE_URL}/api/rag/index-text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: newRagText, name: newRagName }),
+    })
+      .then((r) => r.json())
+      .then((src) => {
+        setRagSources((prev) => [src, ...prev]);
+        setNewRagText("");
+        setNewRagName("");
+        fetch(`${BRIDGE_URL}/api/rag/stats`).then((r) => r.json()).then(setRagStatsData).catch(() => {});
+      });
+  };
+
+  const deleteRagSource = (id: string) => {
+    fetch(`${BRIDGE_URL}/api/rag/sources/${id}`, { method: "DELETE" })
+      .then(() => {
+        setRagSources((prev) => prev.filter((s) => s.id !== id));
+        fetch(`${BRIDGE_URL}/api/rag/stats`).then((r) => r.json()).then(setRagStatsData).catch(() => {});
+      });
+  };
+
   const tabs = [
     { id: "rules" as const, label: "Regler", icon: FileText },
     { id: "memories" as const, label: "Minnen", icon: Brain },
+    { id: "knowledge" as const, label: "RAG", icon: Database },
     { id: "security" as const, label: "Säkerhet", icon: Shield },
   ];
 
@@ -211,6 +249,84 @@ export default function SettingsView() {
                   )}
                   <p className="text-xs text-slate-600 mt-1.5">
                     {new Date(mem.updatedAt).toLocaleDateString("sv-SE")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Knowledge Base (RAG) */}
+        {tab === "knowledge" && (
+          <div className="p-3 space-y-3">
+            {ragStatsData && (
+              <div className="flex gap-2">
+                <div className="flex-1 p-2.5 bg-indigo-950/30 border border-indigo-800/40 rounded-xl text-center">
+                  <div className="text-lg font-bold text-indigo-300">{ragStatsData.sourceCount}</div>
+                  <div className="text-[10px] text-indigo-400">Källor</div>
+                </div>
+                <div className="flex-1 p-2.5 bg-indigo-950/30 border border-indigo-800/40 rounded-xl text-center">
+                  <div className="text-lg font-bold text-indigo-300">{ragStatsData.chunkCount}</div>
+                  <div className="text-[10px] text-indigo-400">Chunks</div>
+                </div>
+                <div className="flex-1 p-2.5 bg-indigo-950/30 border border-indigo-800/40 rounded-xl text-center">
+                  <div className="text-lg font-bold text-indigo-300">{ragStatsData.totalChars > 1000 ? `${(ragStatsData.totalChars / 1000).toFixed(1)}k` : ragStatsData.totalChars}</div>
+                  <div className="text-[10px] text-indigo-400">Tecken</div>
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-slate-500">
+              Lägg till text i kunskapsbasen. AI:n söker automatiskt här vid varje fråga.
+            </p>
+
+            <div className="space-y-2 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+              <input
+                type="text"
+                value={newRagName}
+                onChange={(e) => setNewRagName(e.target.value)}
+                placeholder="Namn (t.ex. 'Projektdokumentation')"
+                className="w-full bg-slate-900 text-sm text-white rounded-lg px-3 py-2.5 border border-slate-700 focus:outline-none focus:border-indigo-500"
+              />
+              <textarea
+                value={newRagText}
+                onChange={(e) => setNewRagText(e.target.value)}
+                placeholder="Klistra in text att indexera..."
+                className="w-full h-32 bg-slate-900 text-sm text-white rounded-lg px-3 py-2.5 border border-slate-700 focus:outline-none focus:border-indigo-500 resize-none"
+              />
+              <button
+                onClick={addRagText}
+                disabled={!newRagText.trim() || !newRagName.trim()}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 active:bg-indigo-700 disabled:bg-slate-700 disabled:opacity-50 text-white text-sm rounded-lg transition-colors touch-manipulation"
+              >
+                <Plus className="w-4 h-4" />
+                Indexera text
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {ragSources.length === 0 && (
+                <p className="text-sm text-slate-500 text-center py-4">Kunskapsbasen är tom</p>
+              )}
+              {ragSources.map((src) => (
+                <div key={src.id} className="p-3 bg-slate-800/40 rounded-xl border border-slate-700/30">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-200">{src.name}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {src.type} · {src.chunkCount} chunks · {src.totalLength > 1000 ? `${(src.totalLength / 1000).toFixed(1)}k` : src.totalLength} tecken
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => deleteRagSource(src.id)}
+                      title="Ta bort källa"
+                      className="p-1.5 text-red-400 active:text-red-300 touch-manipulation shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-600 mt-1">
+                    {new Date(src.indexedAt).toLocaleDateString("sv-SE")}
                   </p>
                 </div>
               ))}
