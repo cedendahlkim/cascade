@@ -46,16 +46,64 @@ interface PendingQuestion {
   timer: ReturnType<typeof setTimeout>;
 }
 
-const messages: Message[] = [];
+const HISTORY_FILE = join(WORKSPACE_ROOT, "bridge", "data", "conversation.json");
+
+// Load persisted messages
+function loadMessages(): Message[] {
+  try {
+    if (existsSync(HISTORY_FILE)) {
+      return JSON.parse(readFileSync(HISTORY_FILE, "utf-8"));
+    }
+  } catch { /* start fresh */ }
+  return [];
+}
+
+function saveMessages(msgs: Message[]) {
+  try {
+    const dir = dirname(HISTORY_FILE);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(HISTORY_FILE, JSON.stringify(msgs.slice(-500), null, 2), "utf-8");
+  } catch (err) {
+    console.error("[bridge] Failed to save conversation:", err);
+  }
+}
+
+const messages: Message[] = loadMessages();
 const pendingQuestions: Map<string, PendingQuestion> = new Map();
 let connectedClients = 0;
 const sessionToken = uuidv4();
 const agent = new Agent();
 
+// Rate limiting
+const rateLimits = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW = 60_000; // 1 minute
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || "30", 10);
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const timestamps = rateLimits.get(key) || [];
+  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW);
+  recent.push(now);
+  rateLimits.set(key, recent);
+  return recent.length <= RATE_LIMIT_MAX;
+}
+
+// Token budget from env
+const TOKEN_BUDGET = parseInt(process.env.TOKEN_BUDGET || "0", 10);
+if (TOKEN_BUDGET > 0) {
+  agent.setTokenBudget(TOKEN_BUDGET);
+  console.log(`[bridge] Token budget set: ${TOKEN_BUDGET.toLocaleString()} tokens`);
+}
+
 // Wire agent status events to Socket.IO
 agent.onStatus((status) => {
   if ((status as any).type === "token_update") {
     io.emit("token_usage", agent.getTokenUsage());
+    return;
+  }
+  if ((status as any).type === "budget_warning") {
+    io.emit("budget_warning", { used: agent.getTokenUsage().totalTokens, budget: agent.getTokenBudget() });
+    console.log(`[agent] ⚠️ Token budget 80% reached`);
     return;
   }
   const event = {
@@ -66,6 +114,11 @@ agent.onStatus((status) => {
     timestamp: new Date().toISOString(),
   };
   io.emit("agent_status", event);
+});
+
+// Wire agent streaming to Socket.IO
+agent.onStream((chunk) => {
+  io.emit("agent_stream", chunk);
 });
 
 function writeInbox(allMessages: Message[]) {
@@ -267,7 +320,22 @@ app.get("/api/tools", (_req, res) => {
 });
 
 app.get("/api/tokens", (_req, res) => {
-  res.json(agent.getTokenUsage());
+  res.json({ ...agent.getTokenUsage(), budget: agent.getTokenBudget(), overBudget: agent.isOverBudget() });
+});
+
+app.post("/api/tokens/budget", (req, res) => {
+  const budget = parseInt(req.body.budget, 10) || 0;
+  agent.setTokenBudget(budget);
+  res.json({ ok: true, budget });
+});
+
+// --- Clear conversation ---
+app.delete("/api/messages", (_req, res) => {
+  messages.length = 0;
+  agent.clearHistory();
+  saveMessages(messages);
+  io.emit("history", []);
+  res.json({ ok: true });
 });
 
 // --- RAG API ---
@@ -319,8 +387,8 @@ io.on("connection", (socket) => {
     };
     messages.push(msg);
     io.emit("message", msg);
-    // Write to file so Cascade sees it immediately
     writeInbox(messages);
+    saveMessages(messages);
 
     // Auto-respond via AI agent
     if (agent.isEnabled()) {
@@ -334,6 +402,7 @@ io.on("connection", (socket) => {
         };
         messages.push(aiMsg);
         io.emit("message", aiMsg);
+        saveMessages(messages);
         console.log(`[agent] Replied: "${reply.slice(0, 80)}..."`);
       }).catch((err) => {
         console.error("[agent] Failed to respond:", err);

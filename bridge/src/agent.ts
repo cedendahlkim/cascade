@@ -380,13 +380,18 @@ export interface TokenUsage {
   cacheCreateTokens: number;
 }
 
+export type StreamCallback = (chunk: string) => void;
+
 export class Agent {
   private client: Anthropic | null = null;
   private history: Anthropic.MessageParam[] = [];
   private model: string;
   private enabled: boolean;
   private statusCallback: StatusCallback | null = null;
+  private streamCallback: StreamCallback | null = null;
   private tokenUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0, cacheReadTokens: 0, cacheCreateTokens: 0 };
+  private tokenBudget: number = 0;
+  private tokenBudgetWarned: boolean = false;
 
   constructor() {
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -407,6 +412,27 @@ export class Agent {
 
   onStatus(cb: StatusCallback): void {
     this.statusCallback = cb;
+  }
+
+  onStream(cb: StreamCallback): void {
+    this.streamCallback = cb;
+  }
+
+  private emitStream(chunk: string): void {
+    if (this.streamCallback) this.streamCallback(chunk);
+  }
+
+  setTokenBudget(budget: number): void {
+    this.tokenBudget = budget;
+    this.tokenBudgetWarned = false;
+  }
+
+  getTokenBudget(): number {
+    return this.tokenBudget;
+  }
+
+  isOverBudget(): boolean {
+    return this.tokenBudget > 0 && this.tokenUsage.totalTokens >= this.tokenBudget;
   }
 
   private emitStatus(status: AgentStatus): void {
@@ -484,7 +510,7 @@ ${memorySummary}`;
         try {
           response = await this.client.messages.create({
             model: this.model,
-            max_tokens: 1024,
+            max_tokens: 4096,
             system: systemPrompt,
             tools: ALL_TOOLS,
             messages: this.history,
@@ -493,12 +519,11 @@ ${memorySummary}`;
           const errMsg = apiErr instanceof Error ? apiErr.message : String(apiErr);
           if (errMsg.includes("400") || errMsg.includes("invalid_request")) {
             console.error(`[agent] API error, trimming history: ${errMsg.slice(0, 120)}`);
-            // Trim history aggressively and retry once
             this.history = this.history.slice(-6);
             try {
               response = await this.client.messages.create({
                 model: this.model,
-                max_tokens: 1024,
+                max_tokens: 4096,
                 system: this.getSystemPrompt(),
                 tools: ALL_TOOLS,
                 messages: this.history,
@@ -524,12 +549,19 @@ ${memorySummary}`;
           this.emitStatus({ type: "token_update" as any });
         }
 
-        // Collect text blocks
+        // Collect text blocks and stream them
         const textParts = response.content
           .filter((b): b is Anthropic.TextBlock => b.type === "text")
           .map((b) => b.text);
         if (textParts.length > 0) {
           finalText = textParts.join("\n");
+          this.emitStream(finalText);
+        }
+
+        // Token budget check
+        if (this.tokenBudget > 0 && !this.tokenBudgetWarned && this.tokenUsage.totalTokens >= this.tokenBudget * 0.8) {
+          this.tokenBudgetWarned = true;
+          this.emitStatus({ type: "budget_warning" as any });
         }
 
         // Check for tool use
@@ -601,6 +633,14 @@ ${memorySummary}`;
 
   clearHistory(): void {
     this.history = [];
+  }
+
+  getHistory(): Anthropic.MessageParam[] {
+    return this.history;
+  }
+
+  setHistory(history: Anthropic.MessageParam[]): void {
+    this.history = history;
   }
 
   getTokenUsage(): TokenUsage {

@@ -24,6 +24,10 @@ import {
   Wrench,
   Settings,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import ToolsView from "./components/ToolsView";
 import SettingsView from "./components/SettingsView";
 
@@ -87,6 +91,9 @@ export default function App() {
   const [sendRipple, setSendRipple] = useState(false);
   const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
   const [showTunnel, setShowTunnel] = useState(false);
+  const [streamingText, setStreamingText] = useState<string | null>(null);
+  const [budgetWarning, setBudgetWarning] = useState<{ used: number; budget: number } | null>(null);
+  const [showSlash, setShowSlash] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -137,6 +144,15 @@ export default function App() {
       setTunnelUrl(url);
     });
 
+    socket.on("agent_stream", (chunk: string) => {
+      setStreamingText(chunk);
+    });
+
+    socket.on("budget_warning", (data: { used: number; budget: number }) => {
+      setBudgetWarning(data);
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    });
+
     // Fetch current tunnel URL on connect
     fetch(`${BRIDGE_URL}/api/tunnel`)
       .then((r) => r.json())
@@ -160,15 +176,48 @@ export default function App() {
     return String(t);
   }, [tokenUsage.totalTokens]);
 
+  const SLASH_COMMANDS = [
+    { cmd: "/screenshot", desc: "Ta en skärmdump", action: "Ta en screenshot och beskriv vad du ser" },
+    { cmd: "/search", desc: "Sök på nätet", action: "" },
+    { cmd: "/files", desc: "Lista filer", action: "Lista filerna i projektets rot-mapp" },
+    { cmd: "/status", desc: "Systemstatus", action: "Visa systeminfo: CPU, RAM, disk, nätverk" },
+    { cmd: "/clear", desc: "Rensa chatten", action: "__clear__" },
+    { cmd: "/memory", desc: "Visa minnen", action: "Lista alla sparade minnen" },
+    { cmd: "/rag", desc: "Kunskapsbas", action: "Visa RAG-statistik och källor" },
+  ];
+
+  const clearConversation = async () => {
+    try {
+      await fetch(`${BRIDGE_URL}/api/messages`, { method: "DELETE" });
+      setMessages([]);
+      setStreamingText(null);
+    } catch { /* ignore */ }
+  };
+
   const sendMessage = (text?: string) => {
     const msg = (text || input).trim();
     if (!msg || !socketRef.current) return;
-    socketRef.current.emit("message", { content: msg });
+
+    // Handle slash commands
+    if (msg === "/clear") {
+      clearConversation();
+      setInput("");
+      setShowSlash(false);
+      return;
+    }
+    const slashMatch = SLASH_COMMANDS.find((s) => msg.startsWith(s.cmd) && s.action && s.action !== "__clear__");
+    const finalMsg = slashMatch
+      ? (msg.length > slashMatch.cmd.length ? slashMatch.action + ": " + msg.slice(slashMatch.cmd.length).trim() : slashMatch.action)
+      : msg;
+
+    socketRef.current.emit("message", { content: finalMsg });
+    setStreamingText(null);
     if (!text) {
       setInput("");
       setSendRipple(true);
       setTimeout(() => setSendRipple(false), 500);
     }
+    setShowSlash(false);
     setActiveTab("chat");
   };
 
@@ -346,19 +395,64 @@ export default function App() {
                       {formatTime(msg.timestamp)}
                     </span>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap break-words">
-                    {msg.content}
-                  </p>
+                  <div className="text-sm break-words prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-2 prose-code:text-emerald-300 prose-code:bg-transparent prose-a:text-blue-400">
+                    {msg.role === "user" ? (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    ) : (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code({ className, children, ...props }) {
+                            const match = /language-(\w+)/.exec(className || "");
+                            const code = String(children).replace(/\n$/, "");
+                            if (match) {
+                              return (
+                                <div className="relative group">
+                                  <button
+                                    onClick={() => navigator.clipboard.writeText(code)}
+                                    className="absolute right-2 top-2 p-1 rounded bg-slate-700/80 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                                    title="Kopiera"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                  <SyntaxHighlighter
+                                    style={oneDark}
+                                    language={match[1]}
+                                    PreTag="div"
+                                    customStyle={{ margin: 0, borderRadius: "0.5rem", fontSize: "0.75rem" }}
+                                  >
+                                    {code}
+                                  </SyntaxHighlighter>
+                                </div>
+                              );
+                            }
+                            return <code className="bg-slate-700/60 px-1.5 py-0.5 rounded text-xs" {...props}>{children}</code>;
+                          },
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
-            {/* Typing indicator */}
+            {/* Streaming preview or typing indicator */}
             {isThinking && (
               <div className="flex justify-start msg-cascade">
-                <div className="bg-slate-800 rounded-2xl px-4 py-3 flex items-center gap-1.5">
-                  <div className="typing-dot w-2 h-2 rounded-full bg-blue-400" />
-                  <div className="typing-dot w-2 h-2 rounded-full bg-blue-400" />
-                  <div className="typing-dot w-2 h-2 rounded-full bg-blue-400" />
+                <div className="max-w-[85%] bg-slate-800 rounded-2xl px-4 py-2.5 text-slate-100">
+                  {streamingText ? (
+                    <div className="text-sm break-words prose prose-invert prose-sm max-w-none prose-p:my-1 prose-code:text-emerald-300">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingText}</ReactMarkdown>
+                      <span className="inline-block w-2 h-4 bg-blue-400 animate-pulse ml-0.5" />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 py-1">
+                      <div className="typing-dot w-2 h-2 rounded-full bg-blue-400" />
+                      <div className="typing-dot w-2 h-2 rounded-full bg-blue-400" />
+                      <div className="typing-dot w-2 h-2 rounded-full bg-blue-400" />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -406,16 +500,43 @@ export default function App() {
             );
           })()}
 
+          {/* Budget warning */}
+          {budgetWarning && (
+            <div className="mx-3 mb-1 px-3 py-2 bg-amber-950/60 border border-amber-800/50 rounded-xl text-amber-300 text-xs flex items-center justify-between">
+              <span>⚠️ Token-budget 80% ({Math.round(budgetWarning.used / 1000)}k / {Math.round(budgetWarning.budget / 1000)}k)</span>
+              <button onClick={() => setBudgetWarning(null)} className="text-amber-500 ml-2" title="Stäng">✕</button>
+            </div>
+          )}
+
+          {/* Slash commands menu */}
+          {showSlash && (
+            <div className="mx-3 mb-1 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+              {SLASH_COMMANDS.filter((s) => !input || s.cmd.startsWith(input)).map((s) => (
+                <button
+                  key={s.cmd}
+                  onClick={() => { setInput(s.cmd + " "); setShowSlash(false); }}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-700 active:bg-slate-600 flex items-center gap-2 border-b border-slate-700/50 last:border-0"
+                >
+                  <span className="text-blue-400 font-mono text-xs">{s.cmd}</span>
+                  <span className="text-slate-400 text-xs">{s.desc}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Input */}
           <div className="shrink-0 px-3 pb-1 pt-2 bg-slate-950 border-t border-slate-800">
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  setShowSlash(e.target.value === "/");
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={
-                  connected ? "Skriv till Cascade..." : "Ansluter..."
+                  connected ? "Skriv till Cascade... ( / för kommandon)" : "Ansluter..."
                 }
                 disabled={!connected}
                 autoComplete="off"
