@@ -20,6 +20,7 @@ import { Agent, getToolCategory } from "./agent.js";
 import { getSecurityConfig, getAuditLog } from "./security.js";
 import { listMemories, createMemory, updateMemory, deleteMemory } from "./memory.js";
 import { ragListSources, ragStats, ragIndexText, ragIndexFile, ragDeleteSource } from "./rag.js";
+import cascadeApi from "./api-cascade.js";
 
 const PORT = parseInt(process.env.PORT || "3031", 10);
 const WORKSPACE_ROOT = process.env.CASCADE_REMOTE_WORKSPACE || join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")), "..", "..");
@@ -85,7 +86,10 @@ function writeInbox(allMessages: Message[]) {
 // Express setup
 const app = express();
 app.use(cors({ origin: ALLOWED_ORIGINS === "*" ? true : ALLOWED_ORIGINS }));
-app.use(express.json());
+app.use(express.json({ limit: "5mb" }));
+
+// Mount Cascade API
+app.use("/cascade", cascadeApi);
 
 const httpServer = createServer(app);
 
