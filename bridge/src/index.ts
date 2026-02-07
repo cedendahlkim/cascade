@@ -27,6 +27,7 @@ import {
   createSession, updateSession, getSession, getSessions, addMemoryToSession,
   getMemoriesBySession, formatMemoriesForPrompt,
 } from "./shared-memory.js";
+import { LLMOrchestrator } from "./llm-orchestrator.js";
 import cascadeApi from "./api-cascade.js";
 
 const PORT = parseInt(process.env.PORT || "3031", 10);
@@ -103,6 +104,44 @@ const sessionToken = uuidv4();
 const agent = new Agent();
 const geminiAgent = new GeminiAgent();
 
+// --- Multi-LLM Orchestrator ---
+const orchestrator = new LLMOrchestrator();
+
+// Register Claude as analyst worker
+orchestrator.registerWorker(
+  "claude", "Claude", process.env.LLM_MODEL || "claude-sonnet-4-20250514",
+  "anthropic", "analyst",
+  (prompt) => agent.respond(prompt),
+  ["code", "analysis", "reasoning", "tools"],
+  agent.isEnabled(),
+);
+
+// Register Gemini as researcher worker
+orchestrator.registerWorker(
+  "gemini", "Gemini", process.env.GEMINI_MODEL || "gemini-2.0-flash",
+  "google", "researcher",
+  (prompt) => geminiAgent.respond(prompt),
+  ["code", "analysis", "web_search", "fast"],
+  geminiAgent.isEnabled(),
+);
+
+// Placeholder slots for future LLMs (GPT-4o, Ollama, etc.)
+orchestrator.registerWorker(
+  "worker3", "Worker 3 (GPT-4o)", "gpt-4o",
+  "openai", "verifier",
+  async () => "Worker 3 not configured. Set OPENAI_API_KEY to enable.",
+  ["code", "analysis", "vision"],
+  false,
+);
+
+orchestrator.registerWorker(
+  "worker4", "Worker 4 (Local)", "llama3",
+  "ollama", "generalist",
+  async () => "Worker 4 not configured. Install Ollama to enable.",
+  ["code", "analysis", "privacy"],
+  false,
+);
+
 // Rate limiting
 const rateLimits = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW = 60_000; // 1 minute
@@ -156,6 +195,14 @@ geminiAgent.onStatus((status) => {
 });
 geminiAgent.onStream((chunk) => {
   io.emit("gemini_stream", chunk);
+});
+
+// Wire orchestrator events to Socket.IO
+orchestrator.onTaskUpdate((task) => {
+  io.emit("orchestrator_task", task);
+});
+orchestrator.onWorkerUpdate((worker) => {
+  io.emit("orchestrator_worker", worker);
 });
 
 function writeInbox(allMessages: Message[]) {
@@ -676,6 +723,56 @@ app.get("/api/sessions/:id", (req, res) => {
   if (!session) return res.status(404).json({ error: "Session not found" });
   const memories = getMemoriesBySession(req.params.id);
   res.json({ session, memories });
+});
+
+// --- Orchestrator API ---
+app.get("/api/orchestrator/status", (_req, res) => {
+  res.json(orchestrator.getStats());
+});
+
+app.get("/api/orchestrator/workers", (_req, res) => {
+  res.json(orchestrator.getWorkers());
+});
+
+app.get("/api/orchestrator/tasks", (req, res) => {
+  const limit = parseInt(req.query.limit as string, 10) || 50;
+  res.json(orchestrator.getTasks(limit));
+});
+
+app.get("/api/orchestrator/tasks/:id", (req, res) => {
+  const task = orchestrator.getTask(req.params.id);
+  if (!task) return res.status(404).json({ error: "Task not found" });
+  res.json(task);
+});
+
+app.post("/api/orchestrator/task", async (req, res) => {
+  try {
+    const { type, prompt, priority, consensus, workers } = req.body;
+    if (!prompt) return res.status(400).json({ error: "prompt required" });
+    const task = await orchestrator.submitTask(
+      type || "general",
+      prompt,
+      {
+        priority: priority || "normal",
+        requireConsensus: !!consensus,
+        specificWorkers: workers,
+      }
+    );
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/api/orchestrator/workers/:id/reset", (req, res) => {
+  const ok = orchestrator.resetWorker(req.params.id);
+  res.json({ ok });
+});
+
+app.post("/api/orchestrator/workers/:id/toggle", (req, res) => {
+  const { enabled } = req.body;
+  const ok = orchestrator.setWorkerEnabled(req.params.id, !!enabled);
+  res.json({ ok });
 });
 
 // --- Gemini API ---

@@ -25,6 +25,7 @@ import {
   Eye,
   Wrench,
   Settings,
+  Activity,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -74,7 +75,7 @@ const BRIDGE_URL =
     ? `${window.location.protocol}//${window.location.hostname}:3031`
     : window.location.origin);
 
-type Tab = "chat" | "gemini" | "arena" | "tools" | "settings";
+type Tab = "chat" | "gemini" | "arena" | "lab" | "tools" | "settings";
 
 interface ArenaMessage {
   id: string;
@@ -112,6 +113,70 @@ const MEMORY_ICONS: Record<string, string> = {
   summary: "📝",
 };
 
+interface OrchestratorWorker {
+  id: string;
+  name: string;
+  model: string;
+  provider: string;
+  role: string;
+  status: "online" | "offline" | "busy" | "error" | "rate_limited";
+  enabled: boolean;
+  health: {
+    avgLatencyMs: number;
+    successRate: number;
+    totalRequests: number;
+    failedRequests: number;
+    totalTokens: number;
+    estimatedCostUsd: number;
+    lastResponseMs: number;
+    lastError: string | null;
+    lastActiveAt: string | null;
+    uptime: number;
+  };
+  capabilities: string[];
+  activeTasks: number;
+}
+
+interface OrchestratorTask {
+  id: string;
+  type: string;
+  prompt: string;
+  status: string;
+  priority: string;
+  assignedWorkers: string[];
+  results: { workerId: string; workerName: string; response: string; latencyMs: number; tokens: number; confidence: number }[];
+  consensusResult: string | null;
+  consensusScore: number | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+interface OrchestratorStats {
+  totalTasks: number;
+  completedTasks: number;
+  failedTasks: number;
+  avgLatencyMs: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+  consensusAccuracy: number;
+  uptimeSeconds: number;
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  online: "bg-green-500",
+  offline: "bg-slate-600",
+  busy: "bg-amber-500",
+  error: "bg-red-500",
+  rate_limited: "bg-orange-500",
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  analyst: "🔍 Analytiker",
+  researcher: "🔬 Forskare",
+  verifier: "✅ Verifierare",
+  generalist: "🌐 Generalist",
+};
+
 function formatTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -146,6 +211,13 @@ export default function App() {
   const [sharedMemories, setSharedMemories] = useState<SharedMemoryItem[]>([]);
   const [showMemories, setShowMemories] = useState(false);
   const arenaEndRef = useRef<HTMLDivElement>(null);
+  const [labWorkers, setLabWorkers] = useState<OrchestratorWorker[]>([]);
+  const [labStats, setLabStats] = useState<OrchestratorStats | null>(null);
+  const [labTasks, setLabTasks] = useState<OrchestratorTask[]>([]);
+  const [labInput, setLabInput] = useState("");
+  const [labConsensus, setLabConsensus] = useState(false);
+  const [labTaskType, setLabTaskType] = useState<string>("general");
+  const [labActiveTask, setLabActiveTask] = useState<OrchestratorTask | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -240,6 +312,19 @@ export default function App() {
       setSharedMemories((prev) => [...mems, ...prev]);
     });
     socket.on("shared_memories", (mems: SharedMemoryItem[]) => setSharedMemories(mems));
+
+    // Orchestrator events
+    socket.on("orchestrator_task", (task: OrchestratorTask) => {
+      setLabTasks(prev => {
+        const idx = prev.findIndex(t => t.id === task.id);
+        if (idx >= 0) { const next = [...prev]; next[idx] = task; return next; }
+        return [task, ...prev];
+      });
+      setLabActiveTask(prev => prev?.id === task.id ? task : prev);
+    });
+    socket.on("orchestrator_worker", (worker: OrchestratorWorker) => {
+      setLabWorkers(prev => prev.map(w => w.id === worker.id ? worker : w));
+    });
 
     // Fetch current tunnel URL on connect
     fetch(`${BRIDGE_URL}/api/tunnel`)
@@ -408,12 +493,51 @@ export default function App() {
         .then(setSharedMemories)
         .catch(() => {});
     }
+    if (activeTab === "lab") {
+      Promise.all([
+        fetch(`${BRIDGE_URL}/api/orchestrator/workers`).then(r => r.json()),
+        fetch(`${BRIDGE_URL}/api/orchestrator/status`).then(r => r.json()),
+        fetch(`${BRIDGE_URL}/api/orchestrator/tasks?limit=20`).then(r => r.json()),
+      ]).then(([workers, stats, tasks]) => {
+        setLabWorkers(workers);
+        setLabStats(stats);
+        setLabTasks(tasks);
+      }).catch(() => {});
+    }
   }, [activeTab]);
+
+  const submitLabTask = async () => {
+    const prompt = labInput.trim();
+    if (!prompt) return;
+    setLabInput("");
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/orchestrator/task`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: labTaskType, prompt, consensus: labConsensus }),
+      });
+      const task = await res.json();
+      setLabActiveTask(task);
+    } catch {}
+  };
+
+  const toggleWorker = async (id: string, enabled: boolean) => {
+    await fetch(`${BRIDGE_URL}/api/orchestrator/workers/${id}/toggle`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    setLabWorkers(prev => prev.map(w => w.id === id ? { ...w, enabled, status: enabled ? "online" : "offline" } : w));
+  };
+
+  const resetWorker = async (id: string) => {
+    await fetch(`${BRIDGE_URL}/api/orchestrator/workers/${id}/reset`, { method: "POST" });
+    setLabWorkers(prev => prev.map(w => w.id === id ? { ...w, status: "online", health: { ...w.health, lastError: null, failedRequests: 0 } } : w));
+  };
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "chat", label: "Claude", icon: Brain },
     { id: "gemini", label: "Gemini", icon: Zap },
     { id: "arena", label: "Arena", icon: Swords },
+    { id: "lab", label: "Lab", icon: Activity },
     { id: "tools", label: "Verktyg", icon: Wrench },
     { id: "settings", label: "Inställningar", icon: Settings },
   ];
@@ -1098,6 +1222,200 @@ export default function App() {
             )}
           </div>
         </>
+      )}
+
+      {activeTab === "lab" && (
+        <div className="flex-1 overflow-y-auto chat-scroll px-3 py-4 space-y-4">
+          {/* Stats Bar */}
+          {labStats && (
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: "Tasks", value: labStats.completedTasks, sub: `/${labStats.totalTasks}` },
+                { label: "Latens", value: `${(labStats.avgLatencyMs / 1000).toFixed(1)}s`, sub: "" },
+                { label: "Tokens", value: labStats.totalTokens >= 1000 ? `${(labStats.totalTokens / 1000).toFixed(1)}k` : labStats.totalTokens, sub: "" },
+                { label: "Kostnad", value: `$${labStats.estimatedCostUsd.toFixed(3)}`, sub: "" },
+              ].map(s => (
+                <div key={s.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-2 py-2 text-center">
+                  <div className="text-sm font-semibold text-white">{s.value}<span className="text-slate-500 text-xs">{s.sub}</span></div>
+                  <div className="text-[10px] text-slate-500">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Workers Grid */}
+          <div>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Workers ({labWorkers.filter(w => w.enabled).length}/{labWorkers.length} aktiva)</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {labWorkers.map(w => (
+                <div key={w.id} className={`rounded-xl border p-3 ${w.enabled ? "bg-slate-800/60 border-slate-700/50" : "bg-slate-900/40 border-slate-800/30 opacity-60"}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[w.status] || "bg-slate-600"} ${w.status === "busy" ? "animate-pulse" : ""}`} />
+                      <span className="text-xs font-semibold text-white">{w.name}</span>
+                    </div>
+                    <button
+                      onClick={() => w.status === "error" ? resetWorker(w.id) : toggleWorker(w.id, !w.enabled)}
+                      className={`text-[10px] px-1.5 py-0.5 rounded ${w.status === "error" ? "bg-red-900/60 text-red-300" : "bg-slate-700/60 text-slate-400"}`}
+                    >
+                      {w.status === "error" ? "Reset" : w.enabled ? "On" : "Off"}
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mb-1">{w.model}</div>
+                  <div className="text-[10px] text-slate-400">{ROLE_LABELS[w.role] || w.role}</div>
+                  {w.enabled && w.health.totalRequests > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-slate-500">Framgång</span>
+                        <span className={w.health.successRate > 0.9 ? "text-green-400" : w.health.successRate > 0.7 ? "text-amber-400" : "text-red-400"}>
+                          {(w.health.successRate * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-1">
+                        <div className={`h-1 rounded-full ${w.health.successRate > 0.9 ? "bg-green-500" : w.health.successRate > 0.7 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${w.health.successRate * 100}%` }} />
+                      </div>
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-slate-500">Latens</span>
+                        <span className="text-slate-300">{(w.health.avgLatencyMs / 1000).toFixed(1)}s</span>
+                      </div>
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-slate-500">Requests</span>
+                        <span className="text-slate-300">{w.health.totalRequests}</span>
+                      </div>
+                      {w.health.lastError && (
+                        <div className="text-[10px] text-red-400 truncate" title={w.health.lastError}>⚠ {w.health.lastError.slice(0, 40)}</div>
+                      )}
+                    </div>
+                  )}
+                  {!w.enabled && (
+                    <div className="mt-2 text-[10px] text-slate-600 italic">Ej konfigurerad</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Active Task Result */}
+          {labActiveTask && (
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                    labActiveTask.status === "completed" ? "bg-green-900/60 text-green-300" :
+                    labActiveTask.status === "failed" ? "bg-red-900/60 text-red-300" :
+                    labActiveTask.status === "in_progress" || labActiveTask.status === "consensus" ? "bg-amber-900/60 text-amber-300" :
+                    "bg-slate-700 text-slate-300"
+                  }`}>{labActiveTask.status}</span>
+                  <span className="text-[10px] text-slate-500">{labActiveTask.type}</span>
+                  {labActiveTask.consensusScore !== null && (
+                    <span className="text-[10px] text-amber-400">🎯 {(labActiveTask.consensusScore * 100).toFixed(0)}%</span>
+                  )}
+                </div>
+                <button onClick={() => setLabActiveTask(null)} className="text-[10px] text-slate-500 hover:text-white">✕</button>
+              </div>
+              <p className="text-xs text-slate-400 mb-2 line-clamp-2">{labActiveTask.prompt}</p>
+              {labActiveTask.consensusResult && (
+                <div className="prose prose-invert prose-xs max-w-none prose-p:my-1 text-sm">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{labActiveTask.consensusResult}</ReactMarkdown>
+                </div>
+              )}
+              {labActiveTask.results.length > 1 && (
+                <div className="mt-2 pt-2 border-t border-slate-700/50">
+                  <div className="text-[10px] text-slate-500 mb-1">Individuella svar ({labActiveTask.results.length}):</div>
+                  {labActiveTask.results.map((r, i) => (
+                    <div key={i} className="text-[10px] text-slate-400 mb-1">
+                      <span className="font-medium text-slate-300">{r.workerName}</span>
+                      <span className="text-slate-600 ml-1">{(r.latencyMs / 1000).toFixed(1)}s · {r.tokens} tokens · {(r.confidence * 100).toFixed(0)}% conf</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Task History */}
+          {labTasks.length > 0 && !labActiveTask && (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Senaste uppgifter</h3>
+              <div className="space-y-1.5">
+                {labTasks.slice(0, 10).map(task => (
+                  <button
+                    key={task.id}
+                    onClick={() => setLabActiveTask(task)}
+                    className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-700/30 hover:border-slate-600/50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-300 truncate flex-1">{task.prompt.slice(0, 60)}{task.prompt.length > 60 ? "..." : ""}</span>
+                      <span className={`text-[10px] ml-2 ${task.status === "completed" ? "text-green-400" : task.status === "failed" ? "text-red-400" : "text-amber-400"}`}>
+                        {task.status === "completed" ? "✓" : task.status === "failed" ? "✗" : "⏳"}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-600 mt-0.5">
+                      {task.type} · {task.assignedWorkers.length} workers · {formatTime(task.createdAt)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {labTasks.length === 0 && !labActiveTask && labWorkers.length > 0 && (
+            <div className="text-center py-8">
+              <Activity className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+              <p className="text-sm text-slate-400 mb-1">Skicka en uppgift till AI-teamet</p>
+              <p className="text-xs text-slate-600">Coordinator fördelar arbetet till bästa tillgängliga worker</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "lab" && (
+        <div className="shrink-0 px-3 pb-1 pt-2 bg-slate-950 border-t border-slate-800 space-y-2">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={labInput}
+              onChange={(e) => setLabInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitLabTask(); } }}
+              placeholder="Ge en uppgift till AI-teamet..."
+              autoComplete="off"
+              enterKeyHint="send"
+              className="flex-1 bg-slate-800 text-white rounded-2xl px-4 py-3.5 text-base border border-slate-700 focus:outline-none focus:border-emerald-500 placeholder:text-slate-500"
+            />
+            <button
+              onClick={submitLabTask}
+              disabled={!labInput.trim()}
+              className="p-3.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-slate-700 disabled:opacity-50 text-white rounded-2xl transition-colors touch-manipulation"
+              title="Skicka uppgift"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex items-center gap-3 px-1">
+            <select
+              value={labTaskType}
+              onChange={(e) => setLabTaskType(e.target.value)}
+              title="Uppgiftstyp"
+              className="text-[11px] bg-slate-800 text-slate-300 border border-slate-700 rounded-lg px-2 py-1"
+            >
+              <option value="general">Generell</option>
+              <option value="analysis">Analys</option>
+              <option value="research">Forskning</option>
+              <option value="code">Kod</option>
+              <option value="review">Granskning</option>
+            </select>
+            <label className="flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={labConsensus}
+                onChange={(e) => setLabConsensus(e.target.checked)}
+                className="w-3.5 h-3.5 rounded bg-slate-700 border-slate-600 text-emerald-500 focus:ring-0"
+              />
+              Konsensus (alla workers)
+            </label>
+          </div>
+        </div>
       )}
 
       {activeTab === "tools" && (
