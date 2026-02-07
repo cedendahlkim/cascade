@@ -775,6 +775,24 @@ app.post("/api/orchestrator/workers/:id/toggle", (req, res) => {
   res.json({ ok });
 });
 
+app.get("/api/orchestrator/learnings", (_req, res) => {
+  res.json(orchestrator.getLearnings());
+});
+
+app.get("/api/orchestrator/learnings/:workerId", (req, res) => {
+  res.json(orchestrator.getWorkerLearning(req.params.workerId));
+});
+
+app.get("/api/orchestrator/bias-alerts", (req, res) => {
+  const limit = parseInt(req.query.limit as string, 10) || 20;
+  res.json(orchestrator.getBiasAlerts(limit));
+});
+
+app.get("/api/orchestrator/audit", (req, res) => {
+  const limit = parseInt(req.query.limit as string, 10) || 50;
+  res.json(orchestrator.getAuditLog(limit));
+});
+
 // --- Gemini API ---
 app.get("/api/gemini/status", (_req, res) => {
   res.json({ enabled: geminiAgent.isEnabled(), tokens: geminiAgent.getTokenUsage() });

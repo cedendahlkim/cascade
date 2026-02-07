@@ -160,6 +160,39 @@ interface OrchestratorStats {
   estimatedCostUsd: number;
   consensusAccuracy: number;
   uptimeSeconds: number;
+  biasAlerts: number;
+  crossWorkerLearnings: number;
+  evaluationScore: number;
+}
+
+interface BiasAlert {
+  taskId: string;
+  timestamp: string;
+  divergenceScore: number;
+  workers: { id: string; name: string; keyDifference: string }[];
+  resolved: boolean;
+}
+
+interface AuditEntry {
+  timestamp: string;
+  workerId: string;
+  workerName: string;
+  action: string;
+  taskId?: string;
+  taskType?: string;
+  latencyMs?: number;
+  tokens?: number;
+  details?: string;
+}
+
+interface WorkerLearning {
+  workerId: string;
+  taskType: string;
+  avgLatencyMs: number;
+  avgConfidence: number;
+  successCount: number;
+  failCount: number;
+  lastUpdated: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -218,6 +251,10 @@ export default function App() {
   const [labConsensus, setLabConsensus] = useState(false);
   const [labTaskType, setLabTaskType] = useState<string>("general");
   const [labActiveTask, setLabActiveTask] = useState<OrchestratorTask | null>(null);
+  const [labBiasAlerts, setLabBiasAlerts] = useState<BiasAlert[]>([]);
+  const [labAuditLog, setLabAuditLog] = useState<AuditEntry[]>([]);
+  const [labLearnings, setLabLearnings] = useState<WorkerLearning[]>([]);
+  const [labSubTab, setLabSubTab] = useState<"overview" | "audit" | "learning">("overview");
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -498,10 +535,16 @@ export default function App() {
         fetch(`${BRIDGE_URL}/api/orchestrator/workers`).then(r => r.json()),
         fetch(`${BRIDGE_URL}/api/orchestrator/status`).then(r => r.json()),
         fetch(`${BRIDGE_URL}/api/orchestrator/tasks?limit=20`).then(r => r.json()),
-      ]).then(([workers, stats, tasks]) => {
+        fetch(`${BRIDGE_URL}/api/orchestrator/bias-alerts`).then(r => r.json()),
+        fetch(`${BRIDGE_URL}/api/orchestrator/audit?limit=30`).then(r => r.json()),
+        fetch(`${BRIDGE_URL}/api/orchestrator/learnings`).then(r => r.json()),
+      ]).then(([workers, stats, tasks, bias, audit, learnings]) => {
         setLabWorkers(workers);
         setLabStats(stats);
         setLabTasks(tasks);
+        setLabBiasAlerts(bias);
+        setLabAuditLog(audit);
+        setLabLearnings(learnings);
       }).catch(() => {});
     }
   }, [activeTab]);
@@ -1226,146 +1269,272 @@ export default function App() {
 
       {activeTab === "lab" && (
         <div className="flex-1 overflow-y-auto chat-scroll px-3 py-4 space-y-4">
-          {/* Stats Bar */}
+          {/* Evaluation Score + Stats Bar */}
           {labStats && (
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { label: "Tasks", value: labStats.completedTasks, sub: `/${labStats.totalTasks}` },
-                { label: "Latens", value: `${(labStats.avgLatencyMs / 1000).toFixed(1)}s`, sub: "" },
-                { label: "Tokens", value: labStats.totalTokens >= 1000 ? `${(labStats.totalTokens / 1000).toFixed(1)}k` : labStats.totalTokens, sub: "" },
-                { label: "Kostnad", value: `$${labStats.estimatedCostUsd.toFixed(3)}`, sub: "" },
-              ].map(s => (
-                <div key={s.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-2 py-2 text-center">
-                  <div className="text-sm font-semibold text-white">{s.value}<span className="text-slate-500 text-xs">{s.sub}</span></div>
-                  <div className="text-[10px] text-slate-500">{s.label}</div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2">
+                <div className={`text-2xl font-bold ${labStats.evaluationScore >= 70 ? "text-green-400" : labStats.evaluationScore >= 40 ? "text-amber-400" : "text-red-400"}`}>
+                  {labStats.evaluationScore}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Workers Grid */}
-          <div>
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Workers ({labWorkers.filter(w => w.enabled).length}/{labWorkers.length} aktiva)</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {labWorkers.map(w => (
-                <div key={w.id} className={`rounded-xl border p-3 ${w.enabled ? "bg-slate-800/60 border-slate-700/50" : "bg-slate-900/40 border-slate-800/30 opacity-60"}`}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[w.status] || "bg-slate-600"} ${w.status === "busy" ? "animate-pulse" : ""}`} />
-                      <span className="text-xs font-semibold text-white">{w.name}</span>
-                    </div>
-                    <button
-                      onClick={() => w.status === "error" ? resetWorker(w.id) : toggleWorker(w.id, !w.enabled)}
-                      className={`text-[10px] px-1.5 py-0.5 rounded ${w.status === "error" ? "bg-red-900/60 text-red-300" : "bg-slate-700/60 text-slate-400"}`}
-                    >
-                      {w.status === "error" ? "Reset" : w.enabled ? "On" : "Off"}
-                    </button>
+                <div className="flex-1">
+                  <div className="text-[10px] text-slate-500 uppercase">System Health</div>
+                  <div className="w-full bg-slate-700 rounded-full h-1.5 mt-1">
+                    <div className={`h-1.5 rounded-full transition-all ${labStats.evaluationScore >= 70 ? "bg-green-500" : labStats.evaluationScore >= 40 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${labStats.evaluationScore}%` }} />
                   </div>
-                  <div className="text-[10px] text-slate-500 mb-1">{w.model}</div>
-                  <div className="text-[10px] text-slate-400">{ROLE_LABELS[w.role] || w.role}</div>
-                  {w.enabled && w.health.totalRequests > 0 && (
-                    <div className="mt-2 space-y-1">
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-slate-500">Framgång</span>
-                        <span className={w.health.successRate > 0.9 ? "text-green-400" : w.health.successRate > 0.7 ? "text-amber-400" : "text-red-400"}>
-                          {(w.health.successRate * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-700 rounded-full h-1">
-                        <div className={`h-1 rounded-full ${w.health.successRate > 0.9 ? "bg-green-500" : w.health.successRate > 0.7 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${w.health.successRate * 100}%` }} />
-                      </div>
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-slate-500">Latens</span>
-                        <span className="text-slate-300">{(w.health.avgLatencyMs / 1000).toFixed(1)}s</span>
-                      </div>
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-slate-500">Requests</span>
-                        <span className="text-slate-300">{w.health.totalRequests}</span>
-                      </div>
-                      {w.health.lastError && (
-                        <div className="text-[10px] text-red-400 truncate" title={w.health.lastError}>⚠ {w.health.lastError.slice(0, 40)}</div>
-                      )}
-                    </div>
-                  )}
-                  {!w.enabled && (
-                    <div className="mt-2 text-[10px] text-slate-600 italic">Ej konfigurerad</div>
-                  )}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Active Task Result */}
-          {labActiveTask && (
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                    labActiveTask.status === "completed" ? "bg-green-900/60 text-green-300" :
-                    labActiveTask.status === "failed" ? "bg-red-900/60 text-red-300" :
-                    labActiveTask.status === "in_progress" || labActiveTask.status === "consensus" ? "bg-amber-900/60 text-amber-300" :
-                    "bg-slate-700 text-slate-300"
-                  }`}>{labActiveTask.status}</span>
-                  <span className="text-[10px] text-slate-500">{labActiveTask.type}</span>
-                  {labActiveTask.consensusScore !== null && (
-                    <span className="text-[10px] text-amber-400">🎯 {(labActiveTask.consensusScore * 100).toFixed(0)}%</span>
-                  )}
-                </div>
-                <button onClick={() => setLabActiveTask(null)} className="text-[10px] text-slate-500 hover:text-white">✕</button>
+                {labStats.biasAlerts > 0 && (
+                  <div className="text-[10px] px-1.5 py-0.5 rounded bg-orange-900/60 text-orange-300">
+                    ⚠ {labStats.biasAlerts} bias
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-slate-400 mb-2 line-clamp-2">{labActiveTask.prompt}</p>
-              {labActiveTask.consensusResult && (
-                <div className="prose prose-invert prose-xs max-w-none prose-p:my-1 text-sm">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{labActiveTask.consensusResult}</ReactMarkdown>
-                </div>
-              )}
-              {labActiveTask.results.length > 1 && (
-                <div className="mt-2 pt-2 border-t border-slate-700/50">
-                  <div className="text-[10px] text-slate-500 mb-1">Individuella svar ({labActiveTask.results.length}):</div>
-                  {labActiveTask.results.map((r, i) => (
-                    <div key={i} className="text-[10px] text-slate-400 mb-1">
-                      <span className="font-medium text-slate-300">{r.workerName}</span>
-                      <span className="text-slate-600 ml-1">{(r.latencyMs / 1000).toFixed(1)}s · {r.tokens} tokens · {(r.confidence * 100).toFixed(0)}% conf</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Task History */}
-          {labTasks.length > 0 && !labActiveTask && (
-            <div>
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Senaste uppgifter</h3>
-              <div className="space-y-1.5">
-                {labTasks.slice(0, 10).map(task => (
-                  <button
-                    key={task.id}
-                    onClick={() => setLabActiveTask(task)}
-                    className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-700/30 hover:border-slate-600/50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-300 truncate flex-1">{task.prompt.slice(0, 60)}{task.prompt.length > 60 ? "..." : ""}</span>
-                      <span className={`text-[10px] ml-2 ${task.status === "completed" ? "text-green-400" : task.status === "failed" ? "text-red-400" : "text-amber-400"}`}>
-                        {task.status === "completed" ? "✓" : task.status === "failed" ? "✗" : "⏳"}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-600 mt-0.5">
-                      {task.type} · {task.assignedWorkers.length} workers · {formatTime(task.createdAt)}
-                    </div>
-                  </button>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: "Tasks", value: labStats.completedTasks, sub: `/${labStats.totalTasks}` },
+                  { label: "Latens", value: `${(labStats.avgLatencyMs / 1000).toFixed(1)}s`, sub: "" },
+                  { label: "Tokens", value: labStats.totalTokens >= 1000 ? `${(labStats.totalTokens / 1000).toFixed(1)}k` : labStats.totalTokens, sub: "" },
+                  { label: "Kostnad", value: `$${labStats.estimatedCostUsd.toFixed(3)}`, sub: "" },
+                ].map(s => (
+                  <div key={s.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-2 py-2 text-center">
+                    <div className="text-sm font-semibold text-white">{s.value}<span className="text-slate-500 text-xs">{s.sub}</span></div>
+                    <div className="text-[10px] text-slate-500">{s.label}</div>
+                  </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Empty State */}
-          {labTasks.length === 0 && !labActiveTask && labWorkers.length > 0 && (
-            <div className="text-center py-8">
-              <Activity className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-              <p className="text-sm text-slate-400 mb-1">Skicka en uppgift till AI-teamet</p>
-              <p className="text-xs text-slate-600">Coordinator fördelar arbetet till bästa tillgängliga worker</p>
-            </div>
+          {/* Sub-tabs */}
+          <div className="flex gap-1 bg-slate-800/40 rounded-lg p-0.5">
+            {([["overview", "Översikt"], ["learning", "Learning"], ["audit", "Audit"]] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setLabSubTab(id)}
+                className={`flex-1 text-[11px] py-1.5 rounded-md font-medium transition-colors ${labSubTab === id ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* === OVERVIEW SUB-TAB === */}
+          {labSubTab === "overview" && (
+            <>
+              {/* Workers Grid */}
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Workers ({labWorkers.filter(w => w.enabled).length}/{labWorkers.length} aktiva)</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {labWorkers.map(w => (
+                    <div key={w.id} className={`rounded-xl border p-3 ${w.enabled ? "bg-slate-800/60 border-slate-700/50" : "bg-slate-900/40 border-slate-800/30 opacity-60"}`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[w.status] || "bg-slate-600"} ${w.status === "busy" ? "animate-pulse" : ""}`} />
+                          <span className="text-xs font-semibold text-white">{w.name}</span>
+                        </div>
+                        <button
+                          onClick={() => w.status === "error" ? resetWorker(w.id) : toggleWorker(w.id, !w.enabled)}
+                          className={`text-[10px] px-1.5 py-0.5 rounded ${w.status === "error" ? "bg-red-900/60 text-red-300" : "bg-slate-700/60 text-slate-400"}`}
+                        >
+                          {w.status === "error" ? "Reset" : w.enabled ? "On" : "Off"}
+                        </button>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mb-1">{w.model}</div>
+                      <div className="text-[10px] text-slate-400">{ROLE_LABELS[w.role] || w.role}</div>
+                      {w.enabled && w.health.totalRequests > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-slate-500">Framgång</span>
+                            <span className={w.health.successRate > 0.9 ? "text-green-400" : w.health.successRate > 0.7 ? "text-amber-400" : "text-red-400"}>
+                              {(w.health.successRate * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-700 rounded-full h-1">
+                            <div className={`h-1 rounded-full ${w.health.successRate > 0.9 ? "bg-green-500" : w.health.successRate > 0.7 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${w.health.successRate * 100}%` }} />
+                          </div>
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-slate-500">Latens</span>
+                            <span className="text-slate-300">{(w.health.avgLatencyMs / 1000).toFixed(1)}s</span>
+                          </div>
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-slate-500">Requests</span>
+                            <span className="text-slate-300">{w.health.totalRequests}</span>
+                          </div>
+                          {w.health.lastError && (
+                            <div className="text-[10px] text-red-400 truncate" title={w.health.lastError}>⚠ {w.health.lastError.slice(0, 40)}</div>
+                          )}
+                        </div>
+                      )}
+                      {!w.enabled && (
+                        <div className="mt-2 text-[10px] text-slate-600 italic">Ej konfigurerad</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Bias Alerts */}
+              {labBiasAlerts.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold text-orange-400 uppercase tracking-wider mb-2">⚠ Bias-varningar ({labBiasAlerts.length})</h3>
+                  <div className="space-y-1.5">
+                    {labBiasAlerts.slice(0, 5).map((alert, i) => (
+                      <div key={i} className="bg-orange-950/30 border border-orange-800/40 rounded-lg px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-orange-300 font-medium">Divergens: {(alert.divergenceScore * 100).toFixed(0)}%</span>
+                          <span className="text-[10px] text-slate-500">{formatTime(alert.timestamp)}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-1">
+                          {alert.workers.map(w => `${w.name}: ${w.keyDifference}`).join(" vs ")}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Active Task Result */}
+              {labActiveTask && (
+                <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                        labActiveTask.status === "completed" ? "bg-green-900/60 text-green-300" :
+                        labActiveTask.status === "failed" ? "bg-red-900/60 text-red-300" :
+                        labActiveTask.status === "in_progress" || labActiveTask.status === "consensus" ? "bg-amber-900/60 text-amber-300" :
+                        "bg-slate-700 text-slate-300"
+                      }`}>{labActiveTask.status}</span>
+                      <span className="text-[10px] text-slate-500">{labActiveTask.type}</span>
+                      {labActiveTask.consensusScore !== null && (
+                        <span className="text-[10px] text-amber-400">🎯 {(labActiveTask.consensusScore * 100).toFixed(0)}%</span>
+                      )}
+                    </div>
+                    <button onClick={() => setLabActiveTask(null)} className="text-[10px] text-slate-500 hover:text-white">✕</button>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-2 line-clamp-2">{labActiveTask.prompt}</p>
+                  {labActiveTask.consensusResult && (
+                    <div className="prose prose-invert prose-xs max-w-none prose-p:my-1 text-sm">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{labActiveTask.consensusResult}</ReactMarkdown>
+                    </div>
+                  )}
+                  {labActiveTask.results.length > 1 && (
+                    <div className="mt-2 pt-2 border-t border-slate-700/50">
+                      <div className="text-[10px] text-slate-500 mb-1">Individuella svar ({labActiveTask.results.length}):</div>
+                      {labActiveTask.results.map((r, i) => (
+                        <div key={i} className="text-[10px] text-slate-400 mb-1">
+                          <span className="font-medium text-slate-300">{r.workerName}</span>
+                          <span className="text-slate-600 ml-1">{(r.latencyMs / 1000).toFixed(1)}s · {r.tokens} tokens · {(r.confidence * 100).toFixed(0)}% conf</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Task History */}
+              {labTasks.length > 0 && !labActiveTask && (
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Senaste uppgifter</h3>
+                  <div className="space-y-1.5">
+                    {labTasks.slice(0, 10).map(task => (
+                      <button
+                        key={task.id}
+                        onClick={() => setLabActiveTask(task)}
+                        className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-700/30 hover:border-slate-600/50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-300 truncate flex-1">{task.prompt.slice(0, 60)}{task.prompt.length > 60 ? "..." : ""}</span>
+                          <span className={`text-[10px] ml-2 ${task.status === "completed" ? "text-green-400" : task.status === "failed" ? "text-red-400" : "text-amber-400"}`}>
+                            {task.status === "completed" ? "✓" : task.status === "failed" ? "✗" : "⏳"}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-600 mt-0.5">
+                          {task.type} · {task.assignedWorkers.length} workers · {formatTime(task.createdAt)}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {labTasks.length === 0 && !labActiveTask && labWorkers.length > 0 && (
+                <div className="text-center py-8">
+                  <Activity className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                  <p className="text-sm text-slate-400 mb-1">Skicka en uppgift till AI-teamet</p>
+                  <p className="text-xs text-slate-600">Coordinator fördelar arbetet till bästa tillgängliga worker</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* === LEARNING SUB-TAB === */}
+          {labSubTab === "learning" && (
+            <>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cross-Worker Learning</h3>
+              <p className="text-[10px] text-slate-600 -mt-2">Systemet lär sig vilken worker som presterar bäst per uppgiftstyp</p>
+              {labLearnings.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 text-sm">Ingen data ännu. Kör uppgifter för att bygga upp learning.</div>
+              ) : (
+                <div className="space-y-2">
+                  {labWorkers.filter(w => w.enabled).map(worker => {
+                    const wl = labLearnings.filter(l => l.workerId === worker.id);
+                    if (wl.length === 0) return null;
+                    return (
+                      <div key={worker.id} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[worker.status]}`} />
+                          <span className="text-xs font-semibold text-white">{worker.name}</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {wl.map(l => (
+                            <div key={l.taskType} className="flex items-center justify-between text-[10px]">
+                              <span className="text-slate-400 capitalize">{l.taskType}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-slate-500">{(l.avgLatencyMs / 1000).toFixed(1)}s</span>
+                                <span className={l.avgConfidence > 0.7 ? "text-green-400" : "text-amber-400"}>
+                                  {(l.avgConfidence * 100).toFixed(0)}% conf
+                                </span>
+                                <span className="text-slate-500">{l.successCount}✓ {l.failCount}✗</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* === AUDIT SUB-TAB === */}
+          {labSubTab === "audit" && (
+            <>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Säkerhetsaudit</h3>
+              <p className="text-[10px] text-slate-600 -mt-2">Alla LLM-interaktioner loggas för spårbarhet</p>
+              {labAuditLog.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 text-sm">Ingen audit-data ännu.</div>
+              ) : (
+                <div className="space-y-1">
+                  {labAuditLog.map((entry, i) => (
+                    <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded-lg bg-slate-800/30 border border-slate-800/50">
+                      <span className={`text-[10px] px-1 py-0.5 rounded font-mono shrink-0 ${
+                        entry.action === "task_completed" ? "bg-green-900/40 text-green-400" :
+                        entry.action === "task_failed" ? "bg-red-900/40 text-red-400" :
+                        entry.action === "bias_detected" ? "bg-orange-900/40 text-orange-400" :
+                        entry.action === "consensus_run" ? "bg-purple-900/40 text-purple-400" :
+                        "bg-slate-700/40 text-slate-400"
+                      }`}>{entry.action.replace(/_/g, " ")}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] text-slate-300">{entry.workerName}</div>
+                        {entry.details && <div className="text-[10px] text-slate-500 truncate">{entry.details}</div>}
+                      </div>
+                      <div className="text-[10px] text-slate-600 shrink-0">{formatTime(entry.timestamp)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
