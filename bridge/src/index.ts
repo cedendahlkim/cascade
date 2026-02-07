@@ -369,6 +369,121 @@ app.delete("/api/messages", (_req, res) => {
   res.json({ ok: true });
 });
 
+// --- AI Arena (Claude ↔ Gemini dialog) ---
+interface ArenaMessage {
+  id: string;
+  role: "claude" | "gemini" | "system";
+  content: string;
+  timestamp: string;
+}
+
+const arenaMessages: ArenaMessage[] = [];
+let arenaRunning = false;
+let arenaAbort = false;
+const ARENA_HISTORY_FILE = join(WORKSPACE_ROOT, "bridge", "data", "arena.json");
+
+function loadArenaMessages(): ArenaMessage[] {
+  try {
+    if (existsSync(ARENA_HISTORY_FILE)) return JSON.parse(readFileSync(ARENA_HISTORY_FILE, "utf-8"));
+  } catch {}
+  return [];
+}
+
+function saveArenaMessages() {
+  try {
+    const dir = dirname(ARENA_HISTORY_FILE);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(ARENA_HISTORY_FILE, JSON.stringify(arenaMessages.slice(-200), null, 2), "utf-8");
+  } catch {}
+}
+
+// Load persisted arena
+arenaMessages.push(...loadArenaMessages());
+
+async function runArena(topic: string, maxRounds: number) {
+  if (arenaRunning) return;
+  arenaRunning = true;
+  arenaAbort = false;
+
+  const sysMsg: ArenaMessage = {
+    id: uuidv4(), role: "system", content: `Ämne: "${topic}"`, timestamp: new Date().toISOString(),
+  };
+  arenaMessages.push(sysMsg);
+  io.emit("arena_message", sysMsg);
+
+  // Claude starts
+  let lastMessage = topic;
+  let currentTurn: "claude" | "gemini" = "claude";
+
+  for (let round = 0; round < maxRounds; round++) {
+    if (arenaAbort) break;
+
+    io.emit("arena_status", { thinking: currentTurn, round: round + 1, maxRounds });
+
+    let reply: string;
+    const prompt = round === 0
+      ? `Du deltar i en diskussion med ${currentTurn === "claude" ? "Gemini" : "Claude"} om följande ämne. Ge ditt perspektiv koncist (max 2-3 stycken). Ämne: "${lastMessage}"`
+      : `${currentTurn === "claude" ? "Gemini" : "Claude"} sa:\n\n"${lastMessage}"\n\nSvara koncist (max 2-3 stycken). Bygg vidare, utmana eller komplettera.`;
+
+    try {
+      if (currentTurn === "claude") {
+        reply = await agent.respond(prompt);
+      } else {
+        reply = await geminiAgent.respond(prompt);
+      }
+    } catch (err) {
+      reply = `[Error: ${err instanceof Error ? err.message : String(err)}]`;
+    }
+
+    if (arenaAbort) break;
+
+    const msg: ArenaMessage = {
+      id: uuidv4(), role: currentTurn, content: reply, timestamp: new Date().toISOString(),
+    };
+    arenaMessages.push(msg);
+    io.emit("arena_message", msg);
+    saveArenaMessages();
+
+    lastMessage = reply;
+    currentTurn = currentTurn === "claude" ? "gemini" : "claude";
+
+    // Small delay between turns
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
+  arenaRunning = false;
+  io.emit("arena_status", { thinking: null, round: 0, maxRounds: 0, done: true });
+}
+
+app.post("/api/arena/start", (req, res) => {
+  if (arenaRunning) return res.status(409).json({ error: "Arena already running" });
+  const { topic, rounds } = req.body;
+  if (!topic) return res.status(400).json({ error: "Topic required" });
+  const maxRounds = Math.min(parseInt(rounds, 10) || 6, 20);
+  runArena(topic, maxRounds);
+  res.json({ ok: true, topic, rounds: maxRounds });
+});
+
+app.post("/api/arena/stop", (_req, res) => {
+  arenaAbort = true;
+  res.json({ ok: true });
+});
+
+app.get("/api/arena/messages", (_req, res) => {
+  res.json(arenaMessages);
+});
+
+app.delete("/api/arena/messages", (_req, res) => {
+  arenaMessages.length = 0;
+  saveArenaMessages();
+  io.emit("arena_history", []);
+  res.json({ ok: true });
+});
+
+app.get("/api/arena/status", (_req, res) => {
+  res.json({ running: arenaRunning });
+});
+
 // --- Gemini API ---
 app.get("/api/gemini/status", (_req, res) => {
   res.json({ enabled: geminiAgent.isEnabled(), tokens: geminiAgent.getTokenUsage() });
@@ -430,6 +545,8 @@ io.on("connection", (socket) => {
   socket.emit("history", recent);
   socket.emit("gemini_history", geminiMessages.slice(-50));
   socket.emit("gemini_enabled", geminiAgent.isEnabled());
+  socket.emit("arena_history", arenaMessages.slice(-100));
+  socket.emit("arena_running", arenaRunning);
 
   // Client sends a chat message
   socket.on("message", (data: { content: string }) => {

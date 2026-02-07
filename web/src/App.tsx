@@ -12,6 +12,7 @@ import {
   Brain,
   Sparkles,
   Zap,
+  Swords,
   FolderSearch,
   Search,
   Globe,
@@ -73,7 +74,21 @@ const BRIDGE_URL =
     ? `${window.location.protocol}//${window.location.hostname}:3031`
     : window.location.origin);
 
-type Tab = "chat" | "gemini" | "tools" | "settings";
+type Tab = "chat" | "gemini" | "arena" | "tools" | "settings";
+
+interface ArenaMessage {
+  id: string;
+  role: "claude" | "gemini" | "system";
+  content: string;
+  timestamp: string;
+}
+
+interface ArenaStatus {
+  thinking: "claude" | "gemini" | null;
+  round: number;
+  maxRounds: number;
+  done?: boolean;
+}
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -102,6 +117,11 @@ export default function App() {
   const [geminiStream, setGeminiStream] = useState<string | null>(null);
   const [geminiTokens, setGeminiTokens] = useState({ inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0 });
   const geminiEndRef = useRef<HTMLDivElement>(null);
+  const [arenaMessages, setArenaMessages] = useState<ArenaMessage[]>([]);
+  const [arenaInput, setArenaInput] = useState("");
+  const [arenaRunning, setArenaRunning] = useState(false);
+  const [arenaStatus, setArenaStatus] = useState<ArenaStatus | null>(null);
+  const arenaEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -184,6 +204,15 @@ export default function App() {
       setGeminiTokens(tokens);
     });
 
+    // Arena events
+    socket.on("arena_history", (msgs: ArenaMessage[]) => setArenaMessages(msgs));
+    socket.on("arena_running", (running: boolean) => setArenaRunning(running));
+    socket.on("arena_message", (msg: ArenaMessage) => setArenaMessages((prev) => [...prev, msg]));
+    socket.on("arena_status", (status: ArenaStatus) => {
+      setArenaStatus(status);
+      if (status.done) setArenaRunning(false);
+    });
+
     // Fetch current tunnel URL on connect
     fetch(`${BRIDGE_URL}/api/tunnel`)
       .then((r) => r.json())
@@ -199,6 +228,14 @@ export default function App() {
   useEffect(() => {
     if (activeTab === "chat") scrollToBottom();
   }, [messages, scrollToBottom, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "arena") arenaEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [arenaMessages, arenaStatus, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "gemini") geminiEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [geminiMessages, geminiThinking, activeTab]);
 
   const formattedTokens = useMemo(() => {
     const t = tokenUsage.totalTokens;
@@ -307,9 +344,32 @@ export default function App() {
     return String(t);
   }, [geminiTokens.totalTokens]);
 
+  const startArena = async (topic?: string) => {
+    const t = (topic || arenaInput).trim();
+    if (!t) return;
+    setArenaInput("");
+    setArenaRunning(true);
+    await fetch(`${BRIDGE_URL}/api/arena/start`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: t, rounds: 6 }),
+    });
+  };
+
+  const stopArena = () => {
+    fetch(`${BRIDGE_URL}/api/arena/stop`, { method: "POST" });
+    setArenaRunning(false);
+  };
+
+  const clearArena = () => {
+    fetch(`${BRIDGE_URL}/api/arena/messages`, { method: "DELETE" });
+    setArenaMessages([]);
+    setArenaStatus(null);
+  };
+
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "chat", label: "Claude", icon: Brain },
     { id: "gemini", label: "Gemini", icon: Zap },
+    { id: "arena", label: "Arena", icon: Swords },
     { id: "tools", label: "Verktyg", icon: Wrench },
     { id: "settings", label: "Inställningar", icon: Settings },
   ];
@@ -766,6 +826,148 @@ export default function App() {
             {geminiTokens.totalTokens > 0 && (
               <div className="text-center text-[10px] text-slate-600 mt-1">
                 Gemini: {formattedGeminiTokens} tokens
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {activeTab === "arena" && (
+        <>
+          {/* Arena Messages */}
+          <div className="flex-1 overflow-y-auto chat-scroll px-3 py-4 space-y-3">
+            {arenaMessages.length === 0 && !arenaRunning && (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 px-4">
+                <div className="w-16 h-16 mb-5 rounded-2xl bg-gradient-to-br from-amber-600/20 to-red-600/20 border border-amber-500/20 flex items-center justify-center">
+                  <Swords className="w-8 h-8 text-amber-400/60" />
+                </div>
+                <p className="text-lg font-semibold text-slate-200 mb-1">AI Arena</p>
+                <p className="text-xs opacity-50 mb-6">Låt Claude och Gemini diskutera ett ämne</p>
+                <div className="w-full max-w-sm space-y-2">
+                  {[
+                    { icon: "🤔", text: "Vad är medvetande?" },
+                    { icon: "⚔️", text: "Vilken är bäst – React eller Vue?" },
+                    { icon: "🚀", text: "Hur kommer AI att förändra programmering?" },
+                    { icon: "🧪", text: "Debattera: TDD vs prototyping" },
+                  ].map((s) => (
+                    <button
+                      key={s.text}
+                      onClick={() => startArena(s.text)}
+                      className="w-full text-left px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-amber-500/40 active:bg-slate-700/60 transition-all touch-manipulation group"
+                    >
+                      <span className="mr-2">{s.icon}</span>
+                      <span className="text-sm text-slate-300 group-hover:text-white transition-colors">{s.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {arenaMessages.map((msg) => (
+              <div key={msg.id} className={`flex ${msg.role === "system" ? "justify-center" : msg.role === "claude" ? "justify-start" : "justify-end"}`}>
+                {msg.role === "system" ? (
+                  <div className="px-4 py-2 rounded-full bg-slate-800/60 border border-slate-700/50 text-xs text-slate-400">
+                    <Swords className="w-3 h-3 inline mr-1.5 -mt-0.5" />{msg.content}
+                  </div>
+                ) : (
+                  <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                    msg.role === "claude"
+                      ? "bg-blue-950/60 border border-blue-800/50 text-blue-100"
+                      : "bg-violet-950/60 border border-violet-800/50 text-violet-100"
+                  }`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      {msg.role === "claude" ? <Brain className="w-3 h-3 text-blue-400" /> : <Zap className="w-3 h-3 text-violet-400" />}
+                      <span className="text-xs opacity-70 font-medium">
+                        {msg.role === "claude" ? "Claude" : "Gemini"} · {formatTime(msg.timestamp)}
+                      </span>
+                    </div>
+                    <div className={`text-sm break-words prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-2 ${
+                      msg.role === "claude" ? "prose-code:text-blue-300" : "prose-code:text-violet-300"
+                    } prose-code:bg-transparent prose-a:text-blue-400`}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code({ className, children, ...props }) {
+                            const match = /language-(\w+)/.exec(className || "");
+                            const code = String(children).replace(/\n$/, "");
+                            if (match) {
+                              return (
+                                <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div" customStyle={{ margin: 0, borderRadius: "0.5rem", fontSize: "0.75rem" }}>
+                                  {code}
+                                </SyntaxHighlighter>
+                              );
+                            }
+                            return <code className="bg-slate-700/60 px-1.5 py-0.5 rounded text-xs" {...props}>{children}</code>;
+                          },
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Thinking indicator */}
+            {arenaRunning && arenaStatus?.thinking && (
+              <div className={`flex ${arenaStatus.thinking === "claude" ? "justify-start" : "justify-end"}`}>
+                <div className={`rounded-2xl px-4 py-2.5 ${
+                  arenaStatus.thinking === "claude"
+                    ? "bg-blue-950/60 border border-blue-800/50"
+                    : "bg-violet-950/60 border border-violet-800/50"
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {arenaStatus.thinking === "claude" ? <Brain className="w-3.5 h-3.5 text-blue-400 animate-pulse" /> : <Zap className="w-3.5 h-3.5 text-violet-400 animate-pulse" />}
+                    <span className="text-xs text-slate-400">
+                      {arenaStatus.thinking === "claude" ? "Claude" : "Gemini"} tänker... (runda {arenaStatus.round}/{arenaStatus.maxRounds})
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={arenaEndRef} />
+          </div>
+
+          {/* Arena Controls */}
+          <div className="shrink-0 px-3 pb-1 pt-2 bg-slate-950 border-t border-slate-800">
+            {arenaRunning ? (
+              <button
+                onClick={stopArena}
+                className="w-full py-3 rounded-2xl bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-medium transition-colors touch-manipulation"
+              >
+                ⏹ Stoppa dialogen
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={arenaInput}
+                    onChange={(e) => setArenaInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); startArena(); } }}
+                    placeholder="Ge ett ämne att diskutera..."
+                    autoComplete="off"
+                    enterKeyHint="send"
+                    className="flex-1 bg-slate-800 text-white rounded-2xl px-4 py-3.5 text-base border border-slate-700 focus:outline-none focus:border-amber-500 placeholder:text-slate-500"
+                  />
+                  <button
+                    onClick={() => startArena()}
+                    disabled={!arenaInput.trim()}
+                    className="p-3.5 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 disabled:bg-slate-700 disabled:opacity-50 text-white rounded-2xl transition-colors touch-manipulation"
+                    title="Starta dialog"
+                  >
+                    <Swords className="w-5 h-5" />
+                  </button>
+                </div>
+                {arenaMessages.length > 0 && (
+                  <button
+                    onClick={clearArena}
+                    className="w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                  >
+                    Rensa arena
+                  </button>
+                )}
               </div>
             )}
           </div>
