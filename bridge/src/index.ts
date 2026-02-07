@@ -21,6 +21,12 @@ import { GeminiAgent } from "./agent-gemini.js";
 import { getSecurityConfig, getAuditLog } from "./security.js";
 import { listMemories, createMemory, updateMemory, deleteMemory } from "./memory.js";
 import { ragListSources, ragStats, ragIndexText, ragIndexFile, ragDeleteSource } from "./rag.js";
+import {
+  SharedMemory, ResearchSession,
+  addMemory, getMemories, getAllMemories, clearMemories, deleteMemoryById,
+  createSession, updateSession, getSession, getSessions, addMemoryToSession,
+  getMemoriesBySession, formatMemoriesForPrompt,
+} from "./shared-memory.js";
 import cascadeApi from "./api-cascade.js";
 
 const PORT = parseInt(process.env.PORT || "3031", 10);
@@ -369,17 +375,20 @@ app.delete("/api/messages", (_req, res) => {
   res.json({ ok: true });
 });
 
-// --- AI Arena (Claude ↔ Gemini dialog) ---
+// --- AI Research Lab (Claude ↔ Gemini collaboration) ---
 interface ArenaMessage {
   id: string;
   role: "claude" | "gemini" | "system";
   content: string;
   timestamp: string;
+  phase?: string;
+  memoryId?: string; // if this message created a shared memory
 }
 
 const arenaMessages: ArenaMessage[] = [];
 let arenaRunning = false;
 let arenaAbort = false;
+let currentSessionId: string | null = null;
 const ARENA_HISTORY_FILE = join(WORKSPACE_ROOT, "bridge", "data", "arena.json");
 
 function loadArenaMessages(): ArenaMessage[] {
@@ -393,79 +402,227 @@ function saveArenaMessages() {
   try {
     const dir = dirname(ARENA_HISTORY_FILE);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(ARENA_HISTORY_FILE, JSON.stringify(arenaMessages.slice(-200), null, 2), "utf-8");
+    writeFileSync(ARENA_HISTORY_FILE, JSON.stringify(arenaMessages.slice(-500), null, 2), "utf-8");
   } catch {}
 }
 
-// Load persisted arena
 arenaMessages.push(...loadArenaMessages());
 
-async function runArena(topic: string, maxRounds: number) {
+const PHASE_CONFIG: Record<string, { label: string; claudeRole: string; geminiRole: string; rounds: number }> = {
+  analyze: {
+    label: "🔍 Analys",
+    claudeRole: "Analysera problemet/ämnet grundligt. Identifiera nyckelaspekter, utmaningar och möjligheter. Var specifik och strukturerad.",
+    geminiRole: "Komplettera analysen med ytterligare perspektiv. Hitta saker som missades. Identifiera dolda mönster eller risker.",
+    rounds: 2,
+  },
+  discuss: {
+    label: "💬 Diskussion",
+    claudeRole: "Föreslå konkreta lösningar och tillvägagångssätt baserat på analysen. Motivera dina val. Utmana svaga argument.",
+    geminiRole: "Granska förslagen kritiskt. Föreslå alternativ eller förbättringar. Lyft fram styrkor och svagheter i varje approach.",
+    rounds: 2,
+  },
+  synthesize: {
+    label: "🧬 Syntes",
+    claudeRole: "Kombinera de bästa idéerna från diskussionen till en sammanhängande lösning. Identifiera konsensus och kvarstående frågor.",
+    geminiRole: "Validera syntesen. Fyll i luckor. Föreslå konkreta nästa steg och prioriteringar.",
+    rounds: 2,
+  },
+  conclude: {
+    label: "📋 Slutsats",
+    claudeRole: "Sammanfatta hela forskningssessionen: problem, insikter, beslut, och rekommenderade åtgärder. Var koncis men komplett.",
+    geminiRole: "Granska sammanfattningen. Lägg till eventuella missade punkter. Ge en slutlig bedömning och betyg på lösningen.",
+    rounds: 2,
+  },
+};
+
+function extractMemories(text: string, author: "claude" | "gemini", topic: string, sessionId: string): SharedMemory[] {
+  const memories: SharedMemory[] = [];
+  // Look for [INSIKT], [BESLUT], [FRÅGA], [TODO], [FINDING] markers
+  const patterns: { regex: RegExp; type: SharedMemory["type"] }[] = [
+    { regex: /\[INSIKT\]\s*(.+?)(?=\n\[|$)/gis, type: "insight" },
+    { regex: /\[BESLUT\]\s*(.+?)(?=\n\[|$)/gis, type: "decision" },
+    { regex: /\[FRÅGA\]\s*(.+?)(?=\n\[|$)/gis, type: "question" },
+    { regex: /\[TODO\]\s*(.+?)(?=\n\[|$)/gis, type: "todo" },
+    { regex: /\[FINDING\]\s*(.+?)(?=\n\[|$)/gis, type: "finding" },
+  ];
+
+  for (const { regex, type } of patterns) {
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const mem = addMemory({
+        type,
+        content: match[1].trim(),
+        author,
+        topic,
+        tags: [topic.slice(0, 30)],
+        references: [],
+      });
+      addMemoryToSession(sessionId, mem.id);
+      memories.push(mem);
+    }
+  }
+  return memories;
+}
+
+async function runResearchLab(topic: string, mode: string, maxRounds: number) {
   if (arenaRunning) return;
   arenaRunning = true;
   arenaAbort = false;
 
+  const session = createSession(topic, maxRounds);
+  currentSessionId = session.id;
+
   const sysMsg: ArenaMessage = {
-    id: uuidv4(), role: "system", content: `Ämne: "${topic}"`, timestamp: new Date().toISOString(),
+    id: uuidv4(), role: "system",
+    content: `🔬 Forskningssession startad: "${topic}"`,
+    timestamp: new Date().toISOString(), phase: "start",
   };
   arenaMessages.push(sysMsg);
   io.emit("arena_message", sysMsg);
+  io.emit("arena_session", session);
 
-  // Claude starts
-  let lastMessage = topic;
-  let currentTurn: "claude" | "gemini" = "claude";
+  const phases = mode === "quick" ? ["discuss", "conclude"] : ["analyze", "discuss", "synthesize", "conclude"];
+  const existingMemories = getMemories({ limit: 10 });
+  const memoryContext = existingMemories.length > 0
+    ? `\n\nDELADE MINNEN (från tidigare sessioner):\n${formatMemoriesForPrompt(existingMemories)}`
+    : "";
 
-  for (let round = 0; round < maxRounds; round++) {
+  let conversationSoFar = "";
+  let round = 0;
+
+  for (const phase of phases) {
     if (arenaAbort) break;
 
-    io.emit("arena_status", { thinking: currentTurn, round: round + 1, maxRounds });
+    const config = PHASE_CONFIG[phase];
+    updateSession(session.id, { phase: phase as ResearchSession["phase"] });
 
-    let reply: string;
-    const prompt = round === 0
-      ? `Du deltar i en diskussion med ${currentTurn === "claude" ? "Gemini" : "Claude"} om följande ämne. Ge ditt perspektiv koncist (max 2-3 stycken). Ämne: "${lastMessage}"`
-      : `${currentTurn === "claude" ? "Gemini" : "Claude"} sa:\n\n"${lastMessage}"\n\nSvara koncist (max 2-3 stycken). Bygg vidare, utmana eller komplettera.`;
+    const phaseMsg: ArenaMessage = {
+      id: uuidv4(), role: "system",
+      content: `${config.label}`,
+      timestamp: new Date().toISOString(), phase,
+    };
+    arenaMessages.push(phaseMsg);
+    io.emit("arena_message", phaseMsg);
+
+    let currentTurn: "claude" | "gemini" = "claude";
+
+    for (let phaseRound = 0; phaseRound < config.rounds; phaseRound++) {
+      if (arenaAbort) break;
+      round++;
+
+      io.emit("arena_status", { thinking: currentTurn, round, maxRounds, phase: config.label, sessionId: session.id });
+
+      const partner = currentTurn === "claude" ? "Gemini" : "Claude";
+      const roleInstruction = currentTurn === "claude" ? config.claudeRole : config.geminiRole;
+
+      const prompt = `Du är ${currentTurn === "claude" ? "Claude" : "Gemini"} i ett AI Research Lab. Du samarbetar med ${partner} för att forska om och lösa problem.
+
+ÄMNE: "${topic}"
+FAS: ${config.label}
+DIN ROLL: ${roleInstruction}
+
+${conversationSoFar ? `KONVERSATION HITTILLS:\n${conversationSoFar}\n` : ""}${memoryContext}
+
+VIKTIGT: Om du gör en viktig insikt, skriv den på en egen rad med prefix:
+[INSIKT] din insikt här
+[BESLUT] ett beslut ni kommit fram till
+[FRÅGA] en öppen fråga att utforska vidare
+[TODO] en konkret åtgärd att genomföra
+[FINDING] ett forskningsresultat
+
+Svara koncist (max 2-3 stycken + eventuella minnes-markeringar). Skriv på samma språk som ämnet.`;
+
+      let reply: string;
+      try {
+        if (currentTurn === "claude") {
+          reply = await agent.respond(prompt);
+        } else {
+          reply = await geminiAgent.respond(prompt);
+        }
+      } catch (err) {
+        reply = `[Error: ${err instanceof Error ? err.message : String(err)}]`;
+      }
+
+      if (arenaAbort) break;
+
+      // Extract and save memories
+      const newMemories = extractMemories(reply, currentTurn, topic, session.id);
+      if (newMemories.length > 0) {
+        io.emit("arena_memories", newMemories);
+      }
+
+      const msg: ArenaMessage = {
+        id: uuidv4(), role: currentTurn, content: reply,
+        timestamp: new Date().toISOString(), phase,
+        memoryId: newMemories.length > 0 ? newMemories[0].id : undefined,
+      };
+      arenaMessages.push(msg);
+      io.emit("arena_message", msg);
+      saveArenaMessages();
+
+      conversationSoFar += `\n[${currentTurn === "claude" ? "Claude" : "Gemini"} - ${config.label}]: ${reply}\n`;
+      updateSession(session.id, { rounds: round });
+
+      currentTurn = currentTurn === "claude" ? "gemini" : "claude";
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+
+  // Generate final summary
+  if (!arenaAbort && conversationSoFar) {
+    io.emit("arena_status", { thinking: "claude", round, maxRounds, phase: "📝 Sammanfattning" });
 
     try {
-      if (currentTurn === "claude") {
-        reply = await agent.respond(prompt);
-      } else {
-        reply = await geminiAgent.respond(prompt);
-      }
-    } catch (err) {
-      reply = `[Error: ${err instanceof Error ? err.message : String(err)}]`;
-    }
+      const summaryPrompt = `Sammanfatta denna forskningssession MYCKET koncist (max 5 punkter):
 
-    if (arenaAbort) break;
+ÄMNE: "${topic}"
 
-    const msg: ArenaMessage = {
-      id: uuidv4(), role: currentTurn, content: reply, timestamp: new Date().toISOString(),
-    };
-    arenaMessages.push(msg);
-    io.emit("arena_message", msg);
-    saveArenaMessages();
+${conversationSoFar}
 
-    lastMessage = reply;
-    currentTurn = currentTurn === "claude" ? "gemini" : "claude";
+Ge en kort sammanfattning med de viktigaste insikterna, besluten och nästa steg. Skriv på samma språk som ämnet.`;
 
-    // Small delay between turns
-    await new Promise((r) => setTimeout(r, 500));
+      const summary = await agent.respond(summaryPrompt);
+      const summaryMem = addMemory({
+        type: "summary",
+        content: summary,
+        author: "both",
+        topic,
+        tags: [topic.slice(0, 30), "summary"],
+        references: [],
+      });
+      addMemoryToSession(session.id, summaryMem.id);
+      updateSession(session.id, { summary, status: "completed", completedAt: new Date().toISOString() });
+
+      const summaryMsg: ArenaMessage = {
+        id: uuidv4(), role: "system",
+        content: `📝 **Sammanfattning**\n\n${summary}`,
+        timestamp: new Date().toISOString(), phase: "summary",
+      };
+      arenaMessages.push(summaryMsg);
+      io.emit("arena_message", summaryMsg);
+      io.emit("arena_memories", [summaryMem]);
+      saveArenaMessages();
+    } catch {}
   }
 
   arenaRunning = false;
+  currentSessionId = null;
   io.emit("arena_status", { thinking: null, round: 0, maxRounds: 0, done: true });
 }
 
 app.post("/api/arena/start", (req, res) => {
   if (arenaRunning) return res.status(409).json({ error: "Arena already running" });
-  const { topic, rounds } = req.body;
+  const { topic, rounds, mode } = req.body;
   if (!topic) return res.status(400).json({ error: "Topic required" });
-  const maxRounds = Math.min(parseInt(rounds, 10) || 6, 20);
-  runArena(topic, maxRounds);
-  res.json({ ok: true, topic, rounds: maxRounds });
+  const maxRounds = Math.min(parseInt(rounds, 10) || 8, 20);
+  const researchMode = mode || "full"; // "full" or "quick"
+  runResearchLab(topic, researchMode, maxRounds);
+  res.json({ ok: true, topic, rounds: maxRounds, mode: researchMode });
 });
 
 app.post("/api/arena/stop", (_req, res) => {
   arenaAbort = true;
+  if (currentSessionId) updateSession(currentSessionId, { status: "paused" });
   res.json({ ok: true });
 });
 
@@ -481,7 +638,44 @@ app.delete("/api/arena/messages", (_req, res) => {
 });
 
 app.get("/api/arena/status", (_req, res) => {
-  res.json({ running: arenaRunning });
+  res.json({ running: arenaRunning, sessionId: currentSessionId });
+});
+
+// --- Shared Memory API ---
+app.get("/api/shared-memory", (req, res) => {
+  const { topic, type, author, limit } = req.query;
+  res.json(getMemories({
+    topic: topic as string,
+    type: type as string,
+    author: author as string,
+    limit: limit ? parseInt(limit as string, 10) : 50,
+  }));
+});
+
+app.get("/api/shared-memory/all", (_req, res) => {
+  res.json({ memories: getAllMemories(), sessions: getSessions() });
+});
+
+app.delete("/api/shared-memory", (_req, res) => {
+  clearMemories();
+  io.emit("shared_memories", []);
+  res.json({ ok: true });
+});
+
+app.delete("/api/shared-memory/:id", (req, res) => {
+  const ok = deleteMemoryById(req.params.id);
+  res.json({ ok });
+});
+
+app.get("/api/sessions", (_req, res) => {
+  res.json(getSessions());
+});
+
+app.get("/api/sessions/:id", (req, res) => {
+  const session = getSession(req.params.id);
+  if (!session) return res.status(404).json({ error: "Session not found" });
+  const memories = getMemoriesBySession(req.params.id);
+  res.json({ session, memories });
 });
 
 // --- Gemini API ---

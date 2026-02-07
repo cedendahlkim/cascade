@@ -81,14 +81,36 @@ interface ArenaMessage {
   role: "claude" | "gemini" | "system";
   content: string;
   timestamp: string;
+  phase?: string;
+  memoryId?: string;
 }
 
 interface ArenaStatus {
   thinking: "claude" | "gemini" | null;
   round: number;
   maxRounds: number;
+  phase?: string;
   done?: boolean;
 }
+
+interface SharedMemoryItem {
+  id: string;
+  type: "insight" | "finding" | "decision" | "question" | "todo" | "summary";
+  content: string;
+  author: "claude" | "gemini" | "both";
+  topic: string;
+  tags: string[];
+  timestamp: string;
+}
+
+const MEMORY_ICONS: Record<string, string> = {
+  insight: "💡",
+  finding: "🔬",
+  decision: "✅",
+  question: "❓",
+  todo: "📌",
+  summary: "📝",
+};
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -121,6 +143,8 @@ export default function App() {
   const [arenaInput, setArenaInput] = useState("");
   const [arenaRunning, setArenaRunning] = useState(false);
   const [arenaStatus, setArenaStatus] = useState<ArenaStatus | null>(null);
+  const [sharedMemories, setSharedMemories] = useState<SharedMemoryItem[]>([]);
+  const [showMemories, setShowMemories] = useState(false);
   const arenaEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -212,6 +236,10 @@ export default function App() {
       setArenaStatus(status);
       if (status.done) setArenaRunning(false);
     });
+    socket.on("arena_memories", (mems: SharedMemoryItem[]) => {
+      setSharedMemories((prev) => [...mems, ...prev]);
+    });
+    socket.on("shared_memories", (mems: SharedMemoryItem[]) => setSharedMemories(mems));
 
     // Fetch current tunnel URL on connect
     fetch(`${BRIDGE_URL}/api/tunnel`)
@@ -344,14 +372,15 @@ export default function App() {
     return String(t);
   }, [geminiTokens.totalTokens]);
 
-  const startArena = async (topic?: string) => {
+  const startArena = async (topic?: string, mode: "full" | "quick" = "full") => {
     const t = (topic || arenaInput).trim();
     if (!t) return;
     setArenaInput("");
     setArenaRunning(true);
+    setShowMemories(false);
     await fetch(`${BRIDGE_URL}/api/arena/start`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic: t, rounds: 6 }),
+      body: JSON.stringify({ topic: t, rounds: mode === "quick" ? 4 : 8, mode }),
     });
   };
 
@@ -365,6 +394,21 @@ export default function App() {
     setArenaMessages([]);
     setArenaStatus(null);
   };
+
+  const clearSharedMemories = () => {
+    fetch(`${BRIDGE_URL}/api/shared-memory`, { method: "DELETE" });
+    setSharedMemories([]);
+  };
+
+  // Load shared memories on tab switch
+  useEffect(() => {
+    if (activeTab === "arena") {
+      fetch(`${BRIDGE_URL}/api/shared-memory?limit=50`)
+        .then(r => r.json())
+        .then(setSharedMemories)
+        .catch(() => {});
+    }
+  }, [activeTab]);
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "chat", label: "Claude", icon: Brain },
@@ -834,6 +878,43 @@ export default function App() {
 
       {activeTab === "arena" && (
         <>
+          {/* Shared Memories Drawer */}
+          {showMemories && (
+            <div className="shrink-0 max-h-[40vh] overflow-y-auto border-b border-slate-800 bg-slate-900/95 px-3 py-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Delade minnen ({sharedMemories.length})</h3>
+                <div className="flex gap-2">
+                  {sharedMemories.length > 0 && (
+                    <button onClick={clearSharedMemories} className="text-[10px] text-slate-500 hover:text-red-400 transition-colors">Rensa alla</button>
+                  )}
+                  <button onClick={() => setShowMemories(false)} className="text-[10px] text-slate-500 hover:text-white transition-colors">Stäng</button>
+                </div>
+              </div>
+              {sharedMemories.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-4">Inga minnen ännu. Starta en forskningssession!</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {sharedMemories.map((mem) => (
+                    <div key={mem.id} className="flex gap-2 items-start px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700/40">
+                      <span className="text-sm mt-0.5">{MEMORY_ICONS[mem.type] || "📎"}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                            mem.author === "claude" ? "bg-blue-900/60 text-blue-300" :
+                            mem.author === "gemini" ? "bg-violet-900/60 text-violet-300" :
+                            "bg-amber-900/60 text-amber-300"
+                          }`}>{mem.author}</span>
+                          <span className="text-[10px] text-slate-500">{mem.type}</span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed">{mem.content.slice(0, 200)}{mem.content.length > 200 ? "..." : ""}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Arena Messages */}
           <div className="flex-1 overflow-y-auto chat-scroll px-3 py-4 space-y-3">
             {arenaMessages.length === 0 && !arenaRunning && (
@@ -841,14 +922,15 @@ export default function App() {
                 <div className="w-16 h-16 mb-5 rounded-2xl bg-gradient-to-br from-amber-600/20 to-red-600/20 border border-amber-500/20 flex items-center justify-center">
                   <Swords className="w-8 h-8 text-amber-400/60" />
                 </div>
-                <p className="text-lg font-semibold text-slate-200 mb-1">AI Arena</p>
-                <p className="text-xs opacity-50 mb-6">Låt Claude och Gemini diskutera ett ämne</p>
+                <p className="text-lg font-semibold text-slate-200 mb-1">AI Research Lab</p>
+                <p className="text-xs opacity-50 mb-6">Claude & Gemini forskar, löser problem och sparar insikter</p>
                 <div className="w-full max-w-sm space-y-2">
                   {[
-                    { icon: "🤔", text: "Vad är medvetande?" },
-                    { icon: "⚔️", text: "Vilken är bäst – React eller Vue?" },
-                    { icon: "🚀", text: "Hur kommer AI att förändra programmering?" },
-                    { icon: "🧪", text: "Debattera: TDD vs prototyping" },
+                    { icon: "🔬", text: "Analysera microservices vs monolith" },
+                    { icon: "🧠", text: "Hur bygger man en AI-agent från grunden?" },
+                    { icon: "🚀", text: "Optimera React-appens prestanda" },
+                    { icon: "🔐", text: "Designa ett säkert autentiseringssystem" },
+                    { icon: "�", text: "Vad är medvetande?" },
                   ].map((s) => (
                     <button
                       key={s.text}
@@ -860,14 +942,29 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+                {sharedMemories.length > 0 && (
+                  <button onClick={() => setShowMemories(true)} className="mt-4 text-xs text-amber-400/70 hover:text-amber-300 transition-colors">
+                    💡 {sharedMemories.length} sparade minnen från tidigare sessioner
+                  </button>
+                )}
               </div>
             )}
 
             {arenaMessages.map((msg) => (
               <div key={msg.id} className={`flex ${msg.role === "system" ? "justify-center" : msg.role === "claude" ? "justify-start" : "justify-end"}`}>
                 {msg.role === "system" ? (
-                  <div className="px-4 py-2 rounded-full bg-slate-800/60 border border-slate-700/50 text-xs text-slate-400">
-                    <Swords className="w-3 h-3 inline mr-1.5 -mt-0.5" />{msg.content}
+                  <div className={`px-4 py-2 rounded-full border text-xs ${
+                    msg.phase === "summary"
+                      ? "bg-amber-950/60 border-amber-700/50 text-amber-300"
+                      : "bg-slate-800/60 border-slate-700/50 text-slate-400"
+                  }`}>
+                    {msg.phase === "summary" ? (
+                      <div className="text-left max-w-[85vw] prose prose-invert prose-xs prose-p:my-1">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <>{msg.content}</>
+                    )}
                   </div>
                 ) : (
                   <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
@@ -878,8 +975,11 @@ export default function App() {
                     <div className="flex items-center gap-1.5 mb-1">
                       {msg.role === "claude" ? <Brain className="w-3 h-3 text-blue-400" /> : <Zap className="w-3 h-3 text-violet-400" />}
                       <span className="text-xs opacity-70 font-medium">
-                        {msg.role === "claude" ? "Claude" : "Gemini"} · {formatTime(msg.timestamp)}
+                        {msg.role === "claude" ? "Claude" : "Gemini"}
+                        {msg.phase && <span className="ml-1 opacity-50">· {msg.phase}</span>}
+                        {" · "}{formatTime(msg.timestamp)}
                       </span>
+                      {msg.memoryId && <span className="text-[10px] ml-1" title="Sparade minne">💾</span>}
                     </div>
                     <div className={`text-sm break-words prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-2 ${
                       msg.role === "claude" ? "prose-code:text-blue-300" : "prose-code:text-violet-300"
@@ -920,7 +1020,7 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     {arenaStatus.thinking === "claude" ? <Brain className="w-3.5 h-3.5 text-blue-400 animate-pulse" /> : <Zap className="w-3.5 h-3.5 text-violet-400 animate-pulse" />}
                     <span className="text-xs text-slate-400">
-                      {arenaStatus.thinking === "claude" ? "Claude" : "Gemini"} tänker... (runda {arenaStatus.round}/{arenaStatus.maxRounds})
+                      {arenaStatus.thinking === "claude" ? "Claude" : "Gemini"} {arenaStatus.phase || "tänker"}... ({arenaStatus.round}/{arenaStatus.maxRounds})
                     </span>
                   </div>
                 </div>
@@ -932,12 +1032,21 @@ export default function App() {
           {/* Arena Controls */}
           <div className="shrink-0 px-3 pb-1 pt-2 bg-slate-950 border-t border-slate-800">
             {arenaRunning ? (
-              <button
-                onClick={stopArena}
-                className="w-full py-3 rounded-2xl bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-medium transition-colors touch-manipulation"
-              >
-                ⏹ Stoppa dialogen
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={stopArena}
+                  className="flex-1 py-3 rounded-2xl bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-medium transition-colors touch-manipulation text-sm"
+                >
+                  ⏹ Stoppa
+                </button>
+                <button
+                  onClick={() => setShowMemories(!showMemories)}
+                  className="px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 transition-colors touch-manipulation text-sm"
+                  title="Visa minnen"
+                >
+                  💡 {sharedMemories.length}
+                </button>
+              </div>
             ) : (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -946,28 +1055,45 @@ export default function App() {
                     value={arenaInput}
                     onChange={(e) => setArenaInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); startArena(); } }}
-                    placeholder="Ge ett ämne att diskutera..."
+                    placeholder="Ämne att forska om..."
                     autoComplete="off"
                     enterKeyHint="send"
                     className="flex-1 bg-slate-800 text-white rounded-2xl px-4 py-3.5 text-base border border-slate-700 focus:outline-none focus:border-amber-500 placeholder:text-slate-500"
                   />
                   <button
-                    onClick={() => startArena()}
+                    onClick={() => startArena(undefined, "full")}
                     disabled={!arenaInput.trim()}
                     className="p-3.5 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 disabled:bg-slate-700 disabled:opacity-50 text-white rounded-2xl transition-colors touch-manipulation"
-                    title="Starta dialog"
+                    title="Full forskning (4 faser)"
                   >
                     <Swords className="w-5 h-5" />
                   </button>
                 </div>
-                {arenaMessages.length > 0 && (
-                  <button
-                    onClick={clearArena}
-                    className="w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                  >
-                    Rensa arena
-                  </button>
-                )}
+                <div className="flex items-center justify-between">
+                  <div className="flex gap-2">
+                    {arenaInput.trim() && (
+                      <button
+                        onClick={() => startArena(undefined, "quick")}
+                        className="text-[11px] text-amber-400/70 hover:text-amber-300 transition-colors px-2 py-1 rounded-lg bg-amber-950/30 border border-amber-800/30"
+                      >
+                        ⚡ Snabb (2 faser)
+                      </button>
+                    )}
+                    {sharedMemories.length > 0 && (
+                      <button
+                        onClick={() => setShowMemories(!showMemories)}
+                        className="text-[11px] text-slate-400 hover:text-amber-300 transition-colors px-2 py-1"
+                      >
+                        💡 {sharedMemories.length} minnen
+                      </button>
+                    )}
+                  </div>
+                  {arenaMessages.length > 0 && (
+                    <button onClick={clearArena} className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors">
+                      Rensa
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
