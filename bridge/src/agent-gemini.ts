@@ -27,7 +27,7 @@ export class GeminiAgent {
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
-    this.model = process.env.GEMINI_MODEL || "gemini-2.5-flash-preview-05-20";
+    this.model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
     this.enabled = !!apiKey;
 
     if (apiKey) {
