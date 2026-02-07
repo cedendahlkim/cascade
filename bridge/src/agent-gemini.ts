@@ -5,6 +5,7 @@
  * Runs independently alongside the Claude agent.
  */
 import { GoogleGenerativeAI, Content, Part } from "@google/generative-ai";
+import { getGeminiContext } from "./system-context.js";
 
 export type GeminiStreamCallback = (chunk: string) => void;
 export type GeminiStatusCallback = (status: { type: string }) => void;
@@ -146,11 +147,6 @@ export class GeminiAgent {
   }
 
   private getSystemPrompt(): string {
-    return `You are Gemini, an AI assistant running alongside Claude in the Cascade Remote app.
-You help the user with questions, coding, analysis, brainstorming, and general tasks.
-Keep responses concise and mobile-friendly.
-Respond in the same language the user writes in.
-You can use markdown formatting including code blocks, lists, and headers.
-Be helpful, direct, and honest. If you don't know something, say so.`;
+    return getGeminiContext();
   }
 }
