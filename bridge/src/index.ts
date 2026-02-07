@@ -17,6 +17,7 @@ import { writeFileSync, readFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { spawn } from "child_process";
 import { Agent, getToolCategory } from "./agent.js";
+import { GeminiAgent } from "./agent-gemini.js";
 import { getSecurityConfig, getAuditLog } from "./security.js";
 import { listMemories, createMemory, updateMemory, deleteMemory } from "./memory.js";
 import { ragListSources, ragStats, ragIndexText, ragIndexFile, ragDeleteSource } from "./rag.js";
@@ -47,6 +48,7 @@ interface PendingQuestion {
 }
 
 const HISTORY_FILE = join(WORKSPACE_ROOT, "bridge", "data", "conversation.json");
+const GEMINI_HISTORY_FILE = join(WORKSPACE_ROOT, "bridge", "data", "gemini-conversation.json");
 
 // Load persisted messages
 function loadMessages(): Message[] {
@@ -68,11 +70,32 @@ function saveMessages(msgs: Message[]) {
   }
 }
 
+function loadGeminiMessages(): Message[] {
+  try {
+    if (existsSync(GEMINI_HISTORY_FILE)) {
+      return JSON.parse(readFileSync(GEMINI_HISTORY_FILE, "utf-8"));
+    }
+  } catch { /* start fresh */ }
+  return [];
+}
+
+function saveGeminiMessages(msgs: Message[]) {
+  try {
+    const dir = dirname(GEMINI_HISTORY_FILE);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(GEMINI_HISTORY_FILE, JSON.stringify(msgs.slice(-500), null, 2), "utf-8");
+  } catch (err) {
+    console.error("[bridge] Failed to save Gemini conversation:", err);
+  }
+}
+
 const messages: Message[] = loadMessages();
+const geminiMessages: Message[] = loadGeminiMessages();
 const pendingQuestions: Map<string, PendingQuestion> = new Map();
 let connectedClients = 0;
 const sessionToken = uuidv4();
 const agent = new Agent();
+const geminiAgent = new GeminiAgent();
 
 // Rate limiting
 const rateLimits = new Map<string, number[]>();
@@ -119,6 +142,14 @@ agent.onStatus((status) => {
 // Wire agent streaming to Socket.IO
 agent.onStream((chunk) => {
   io.emit("agent_stream", chunk);
+});
+
+// Wire Gemini agent events to Socket.IO
+geminiAgent.onStatus((status) => {
+  io.emit("gemini_status", status);
+});
+geminiAgent.onStream((chunk) => {
+  io.emit("gemini_stream", chunk);
 });
 
 function writeInbox(allMessages: Message[]) {
@@ -338,6 +369,28 @@ app.delete("/api/messages", (_req, res) => {
   res.json({ ok: true });
 });
 
+// --- Gemini API ---
+app.get("/api/gemini/status", (_req, res) => {
+  res.json({ enabled: geminiAgent.isEnabled(), tokens: geminiAgent.getTokenUsage() });
+});
+
+app.get("/api/gemini/messages", (req, res) => {
+  const limit = parseInt(req.query.limit as string, 10) || 50;
+  res.json(geminiMessages.slice(-limit));
+});
+
+app.delete("/api/gemini/messages", (_req, res) => {
+  geminiMessages.length = 0;
+  geminiAgent.clearHistory();
+  saveGeminiMessages(geminiMessages);
+  io.emit("gemini_history", []);
+  res.json({ ok: true });
+});
+
+app.get("/api/gemini/tokens", (_req, res) => {
+  res.json(geminiAgent.getTokenUsage());
+});
+
 // --- RAG API ---
 app.get("/api/rag/sources", (_req, res) => {
   res.json(ragListSources());
@@ -375,6 +428,8 @@ io.on("connection", (socket) => {
   // Send recent messages on connect
   const recent = messages.slice(-50);
   socket.emit("history", recent);
+  socket.emit("gemini_history", geminiMessages.slice(-50));
+  socket.emit("gemini_enabled", geminiAgent.isEnabled());
 
   // Client sends a chat message
   socket.on("message", (data: { content: string }) => {
@@ -407,6 +462,49 @@ io.on("connection", (socket) => {
       }).catch((err) => {
         console.error("[agent] Failed to respond:", err);
       });
+    }
+  });
+
+  // Client sends a Gemini chat message
+  socket.on("gemini_message", (data: { content: string }) => {
+    const msg: Message = {
+      id: uuidv4(),
+      role: "user",
+      content: data.content,
+      type: "message",
+      timestamp: new Date().toISOString(),
+    };
+    geminiMessages.push(msg);
+    io.emit("gemini_message", msg);
+    saveGeminiMessages(geminiMessages);
+
+    if (geminiAgent.isEnabled()) {
+      geminiAgent.respond(data.content).then((reply) => {
+        const aiMsg: Message = {
+          id: uuidv4(),
+          role: "cascade",
+          content: reply,
+          type: "message",
+          timestamp: new Date().toISOString(),
+        };
+        geminiMessages.push(aiMsg);
+        io.emit("gemini_message", aiMsg);
+        saveGeminiMessages(geminiMessages);
+        io.emit("gemini_tokens", geminiAgent.getTokenUsage());
+        console.log(`[gemini] Replied: "${reply.slice(0, 80)}..."`);
+      }).catch((err) => {
+        console.error("[gemini] Failed to respond:", err);
+      });
+    } else {
+      const errMsg: Message = {
+        id: uuidv4(),
+        role: "cascade",
+        content: "Gemini är inte konfigurerad. Sätt GEMINI_API_KEY i bridge/.env",
+        type: "message",
+        timestamp: new Date().toISOString(),
+      };
+      geminiMessages.push(errMsg);
+      io.emit("gemini_message", errMsg);
     }
   });
 

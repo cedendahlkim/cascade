@@ -11,6 +11,7 @@ import {
   XCircle,
   Brain,
   Sparkles,
+  Zap,
   FolderSearch,
   Search,
   Globe,
@@ -72,7 +73,7 @@ const BRIDGE_URL =
     ? `${window.location.protocol}//${window.location.hostname}:3031`
     : window.location.origin);
 
-type Tab = "chat" | "tools" | "settings";
+type Tab = "chat" | "gemini" | "tools" | "settings";
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -94,6 +95,13 @@ export default function App() {
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [budgetWarning, setBudgetWarning] = useState<{ used: number; budget: number } | null>(null);
   const [showSlash, setShowSlash] = useState(false);
+  const [geminiMessages, setGeminiMessages] = useState<Message[]>([]);
+  const [geminiInput, setGeminiInput] = useState("");
+  const [geminiEnabled, setGeminiEnabled] = useState(false);
+  const [geminiThinking, setGeminiThinking] = useState(false);
+  const [geminiStream, setGeminiStream] = useState<string | null>(null);
+  const [geminiTokens, setGeminiTokens] = useState({ inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0 });
+  const geminiEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -151,6 +159,29 @@ export default function App() {
     socket.on("budget_warning", (data: { used: number; budget: number }) => {
       setBudgetWarning(data);
       if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    });
+
+    // Gemini events
+    socket.on("gemini_history", (history: Message[]) => {
+      setGeminiMessages(history);
+    });
+    socket.on("gemini_enabled", (enabled: boolean) => {
+      setGeminiEnabled(enabled);
+    });
+    socket.on("gemini_message", (msg: Message) => {
+      setGeminiMessages((prev) => [...prev, msg]);
+      setGeminiThinking(false);
+      setGeminiStream(null);
+    });
+    socket.on("gemini_stream", (chunk: string) => {
+      setGeminiStream(chunk);
+    });
+    socket.on("gemini_status", (status: { type: string }) => {
+      if (status.type === "thinking") setGeminiThinking(true);
+      if (status.type === "done") { setGeminiThinking(false); setGeminiStream(null); }
+    });
+    socket.on("gemini_tokens", (tokens: typeof geminiTokens) => {
+      setGeminiTokens(tokens);
     });
 
     // Fetch current tunnel URL on connect
@@ -252,8 +283,33 @@ export default function App() {
     }
   };
 
+  const sendGeminiMessage = (text?: string) => {
+    const msg = (text || geminiInput).trim();
+    if (!msg || !socketRef.current) return;
+    if (msg === "/clear") {
+      fetch(`${BRIDGE_URL}/api/gemini/messages`, { method: "DELETE" });
+      setGeminiMessages([]);
+      setGeminiStream(null);
+      setGeminiInput("");
+      return;
+    }
+    socketRef.current.emit("gemini_message", { content: msg });
+    setGeminiStream(null);
+    setGeminiThinking(true);
+    if (!text) setGeminiInput("");
+    setActiveTab("gemini");
+  };
+
+  const formattedGeminiTokens = useMemo(() => {
+    const t = geminiTokens.totalTokens;
+    if (t >= 1_000_000) return `${(t / 1_000_000).toFixed(1)}M`;
+    if (t >= 1_000) return `${(t / 1_000).toFixed(1)}k`;
+    return String(t);
+  }, [geminiTokens.totalTokens]);
+
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: "chat", label: "Chat", icon: MessageCircle },
+    { id: "chat", label: "Claude", icon: Brain },
+    { id: "gemini", label: "Gemini", icon: Zap },
     { id: "tools", label: "Verktyg", icon: Wrench },
     { id: "settings", label: "Inställningar", icon: Settings },
   ];
@@ -567,6 +623,151 @@ export default function App() {
                 {sendRipple && <div className="send-ripple" />}
               </button>
             </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === "gemini" && (
+        <>
+          {/* Gemini Messages */}
+          <div className="flex-1 overflow-y-auto chat-scroll px-3 py-4 space-y-3">
+            {geminiMessages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 px-4">
+                <div className="w-16 h-16 mb-5 rounded-2xl bg-gradient-to-br from-violet-600/20 to-pink-600/20 border border-violet-500/20 flex items-center justify-center">
+                  <Zap className="w-8 h-8 text-violet-400/60" />
+                </div>
+                <p className="text-lg font-semibold text-slate-200 mb-1">Gemini</p>
+                <p className="text-xs opacity-50 mb-6">{geminiEnabled ? "Googles AI-modell – ställ en fråga!" : "Sätt GEMINI_API_KEY i bridge/.env"}</p>
+                {geminiEnabled && (
+                  <div className="w-full max-w-sm space-y-2">
+                    {[
+                      { icon: "⚡", text: "Jämför din lösning med Claudes svar" },
+                      { icon: "🔬", text: "Analysera den här koden och hitta buggar" },
+                      { icon: "✍️", text: "Skriv en sammanfattning av mitt projekt" },
+                    ].map((s) => (
+                      <button
+                        key={s.text}
+                        onClick={() => sendGeminiMessage(s.text)}
+                        className="w-full text-left px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-violet-500/40 active:bg-slate-700/60 transition-all touch-manipulation group"
+                      >
+                        <span className="mr-2">{s.icon}</span>
+                        <span className="text-sm text-slate-300 group-hover:text-white transition-colors">{s.text}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {geminiMessages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                    msg.role === "user" ? "bg-violet-600 text-white" : "bg-slate-800 text-slate-100"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    {msg.role === "user" ? <Send className="w-3 h-3 opacity-60" /> : <Zap className="w-3 h-3 text-violet-400" />}
+                    <span className="text-xs opacity-60">
+                      {msg.role === "cascade" ? "Gemini" : "Du"} &middot; {formatTime(msg.timestamp)}
+                    </span>
+                  </div>
+                  <div className="text-sm break-words prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-2 prose-code:text-violet-300 prose-code:bg-transparent prose-a:text-blue-400">
+                    {msg.role === "user" ? (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    ) : (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code({ className, children, ...props }) {
+                            const match = /language-(\w+)/.exec(className || "");
+                            const code = String(children).replace(/\n$/, "");
+                            if (match) {
+                              return (
+                                <div className="relative group">
+                                  <button
+                                    onClick={() => navigator.clipboard.writeText(code)}
+                                    className="absolute right-2 top-2 p-1 rounded bg-slate-700/80 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                                    title="Kopiera"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                  <SyntaxHighlighter
+                                    style={oneDark}
+                                    language={match[1]}
+                                    PreTag="div"
+                                    customStyle={{ margin: 0, borderRadius: "0.5rem", fontSize: "0.75rem" }}
+                                  >
+                                    {code}
+                                  </SyntaxHighlighter>
+                                </div>
+                              );
+                            }
+                            return <code className="bg-slate-700/60 px-1.5 py-0.5 rounded text-xs" {...props}>{children}</code>;
+                          },
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Gemini streaming/thinking */}
+            {geminiThinking && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] bg-slate-800 rounded-2xl px-4 py-2.5 text-slate-100">
+                  {geminiStream ? (
+                    <div className="text-sm break-words prose prose-invert prose-sm max-w-none prose-p:my-1 prose-code:text-violet-300">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{geminiStream}</ReactMarkdown>
+                      <span className="inline-block w-2 h-4 bg-violet-400 animate-pulse ml-0.5" />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 py-1">
+                      <div className="typing-dot w-2 h-2 rounded-full bg-violet-400" />
+                      <div className="typing-dot w-2 h-2 rounded-full bg-violet-400" />
+                      <div className="typing-dot w-2 h-2 rounded-full bg-violet-400" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            <div ref={geminiEndRef} />
+          </div>
+
+          {/* Gemini Input */}
+          <div className="shrink-0 px-3 pb-1 pt-2 bg-slate-950 border-t border-slate-800">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={geminiInput}
+                onChange={(e) => setGeminiInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendGeminiMessage(); } }}
+                placeholder={geminiEnabled ? "Fråga Gemini..." : "GEMINI_API_KEY saknas"}
+                disabled={!connected || !geminiEnabled}
+                autoComplete="off"
+                enterKeyHint="send"
+                className="flex-1 bg-slate-800 text-white rounded-2xl px-4 py-3.5 text-base border border-slate-700 focus:outline-none focus:border-violet-500 disabled:opacity-50 placeholder:text-slate-500"
+              />
+              <button
+                onClick={() => sendGeminiMessage()}
+                disabled={!connected || !geminiEnabled || !geminiInput.trim()}
+                className="relative p-3.5 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 disabled:bg-slate-700 disabled:opacity-50 text-white rounded-2xl transition-colors touch-manipulation"
+                title="Skicka till Gemini"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
+            {geminiTokens.totalTokens > 0 && (
+              <div className="text-center text-[10px] text-slate-600 mt-1">
+                Gemini: {formattedGeminiTokens} tokens
+              </div>
+            )}
           </div>
         </>
       )}
