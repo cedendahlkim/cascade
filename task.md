@@ -2,8 +2,9 @@
 
 ## Status: ✅ Full-stack implementerat & deployat (2026-02-16)
 
-> Backend + Frontend + Frankenstein AI + Deploy. 44 backend-moduler, 25 frontend-views, 80+ API-endpoints.
+> Backend + Frontend + Frankenstein AI + Deploy. 45 backend-moduler, 26 frontend-views, 80+ API-endpoints.
 > Live på **https://app.gracestack.se/** — Docker + Nginx + SSL + Cloudflare Tunnel.
+> Landningssida på **https://www.gracestack.se/** — Investor-fokuserad.
 
 ---
 
@@ -160,6 +161,28 @@
 - [x] Automatisk sparning var 50:e store + vid garbage collect
 - [x] Backup av 134MB träningsdata på host
 - [x] Minne överlever container-restarts och rebuilds
+
+### 27. Multi-user stöd ✅
+
+- [x] Supabase-tabeller: `conversations`, `messages`, `workspace_shares` med RLS
+- [x] `bridge/src/user-data.ts` — Per-user konversationer CRUD, meddelanden, workspace-delning (15 endpoints)
+- [x] `bridge/src/auth-middleware.ts` — `requireAuth()`, `requireRole()`, `requireAdmin()` guards
+- [x] `bridge/src/auth-routes.ts` — Admin-endpoints: lista/ändra roll/ta bort användare
+- [x] `bridge/src/supabase.ts` — `listUsers()`, `updateUserRole()`, `deleteUser()`, `getUserCount()`
+- [x] `web/src/contexts/AuthContext.tsx` — `role`, `isAdmin`, `isViewer` + `fetchRole()`
+- [x] `web/src/components/AdminPanel.tsx` — Användarhantering med rollväljare (admin/user/viewer)
+- [x] Admin-tab i SettingsView (bara synlig för admins)
+- [x] Roller: admin (full åtkomst), user (chatta + dela), viewer (läs delade)
+
+### 28. Landningssida (Investor) ✅
+
+- [x] `landing/index.html` — Statisk landningssida för `www.gracestack.se`
+- [x] Hero med live-stats, teknologi-sektion (6 kognitiva moduler)
+- [x] Arkitektur (System 0/1/2), jämförelsetabell vs LLM:er
+- [x] Plattform-features, tech stack, roadmap-timeline, team, CTA
+- [x] Scroll-reveal animationer, animerade räknare, mobil hamburger-meny
+- [x] SVG favicon, SEO meta-tags, Open Graph
+- [x] Nginx multi-domain: `gracestack.se` → `www.gracestack.se` → landing, `app.gracestack.se` → app
 
 ### 21. Prestanda-optimeringar ✅
 - [x] Socket.IO throttling (agent_stream 50ms, gemini_stream 50ms, orchestrator_worker 200ms)
@@ -356,7 +379,7 @@
 
 ## Alla filer i projektet
 
-### Bridge (Backend — 44 filer)
+### Bridge (Backend — 45 filer)
 
 | Fil | Beskrivning |
 |---|---|
@@ -368,8 +391,8 @@
 | `bridge/src/agent-grok.ts` | Grok (xAI) AI-agent |
 | `bridge/src/agent-ollama.ts` | Ollama lokal LLM-agent |
 | `bridge/src/agent-chains.ts` | AI Agent Chains — DAG-baserad kedjeexekvering |
-| `bridge/src/auth-middleware.ts` | Supabase JWT-validering (soft middleware) |
-| `bridge/src/auth-routes.ts` | Login/register/logout endpoints |
+| `bridge/src/auth-middleware.ts` | JWT-validering + role guards (requireAuth/requireRole/requireAdmin) |
+| `bridge/src/auth-routes.ts` | Login/register/logout + admin endpoints (list/update/delete users) |
 | `bridge/src/bot-network.ts` | Autonomt AI bot-nätverk |
 | `bridge/src/cascade-client.ts` | Cascade MCP-klient |
 | `bridge/src/clipboard.ts` | Clipboard-synk |
@@ -401,10 +424,11 @@
 | `bridge/src/tools-filesystem.ts` | Filsystem-verktyg |
 | `bridge/src/tools-process.ts` | Process-verktyg |
 | `bridge/src/workflows.ts` | Automation workflow engine |
+| `bridge/src/user-data.ts` | Per-user konversationer, meddelanden, workspace-delning (15 endpoints) |
 | `bridge/src/api-cascade.ts` | Cascade MCP API routes |
 | `bridge/plugins/` | 20 community-plugins (math, crypto, network, etc.) |
 
-### Web (Frontend — 25 views + lib)
+### Web (Frontend — 26 views + lib)
 
 | Fil | Beskrivning |
 |---|---|
@@ -432,12 +456,13 @@
 | `web/src/components/SchedulerView.tsx` | Schemalagda uppgifter |
 | `web/src/components/SearchView.tsx` | Konversationssök |
 | `web/src/components/SelfImproveView.tsx` | Self-improvement dashboard |
-| `web/src/components/SettingsView.tsx` | Inställningar (rules, memories, RAG, security) |
+| `web/src/components/AdminPanel.tsx` | Admin-panel: användarhantering, roller, ta bort |
+| `web/src/components/SettingsView.tsx` | Inställningar (rules, memories, RAG, security, admin) |
 | `web/src/components/SwarmView.tsx` | Frankenstein Swarm visualisering |
 | `web/src/components/ToolsView.tsx` | Verktyg och snabbkommandon |
 | `web/src/components/VoiceButton.tsx` | Röstinput/output |
 | `web/src/components/WorkflowsView.tsx` | Workflow-builder |
-| `web/src/contexts/AuthContext.tsx` | React auth context (Supabase) |
+| `web/src/contexts/AuthContext.tsx` | React auth context (Supabase) med role/isAdmin/isViewer |
 | `web/src/hooks/useMobile.ts` | Haptic feedback + mobil-detection |
 | `web/src/lib/api.ts` | API-klient |
 | `web/src/lib/supabase.ts` | Supabase-klient |
@@ -490,9 +515,10 @@
 |---|---|
 | `Dockerfile` | Multi-stage: Node 22 + Python 3 + git → bridge + web build |
 | `docker-compose.yml` | Bridge-service, named volumes (bridge-data, frank-training) |
-| `deploy/nginx-ssl.conf` | Nginx reverse proxy med SSL (Let's Encrypt) |
+| `deploy/nginx-ssl.conf` | Nginx multi-domain: landing + app + SSL (Let's Encrypt) |
 | `deploy/nginx.conf` | Nginx base-konfiguration |
 | `deploy/setup-server.sh` | Server provisioning-skript |
+| `landing/index.html` | Investor-landningssida (www.gracestack.se) |
 
 ### MCP Server
 

@@ -11,6 +11,7 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.gracestack.se">
   <link rel="canonical" href="https://www.gracestack.se">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%233b82f6'/><stop offset='100%25' stop-color='%238b5cf6'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='url(%23g)'/><text x='50' y='68' font-family='system-ui' font-size='55' font-weight='900' fill='white' text-anchor='middle'>G</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -508,16 +509,61 @@
     }
     footer .links a:hover { color: var(--text-primary); }
 
+    /* Scroll reveal animation */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Mobile menu */
+    .hamburger {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px;
+    }
+    .hamburger span {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background: var(--text-secondary);
+      margin: 5px 0;
+      border-radius: 2px;
+      transition: all 0.3s;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
-      .nav-links a:not(.btn) { display: none; }
+      .hamburger { display: block; }
+      .nav-links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        background: rgba(2, 6, 23, 0.95);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+        padding: 16px 24px;
+        gap: 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .nav-links.open { display: flex; }
+      .nav-links a { font-size: 1rem; }
       .hero { padding: 120px 0 60px; }
       .stats-bar { grid-template-columns: repeat(2, 1fr); }
       .features-grid { grid-template-columns: 1fr; }
       .arch-grid { grid-template-columns: 1fr; }
       section { padding: 60px 0; }
-      .comparison-table { font-size: 0.8rem; }
-      .comparison-table th, .comparison-table td { padding: 12px 14px; }
+      .comparison-table { font-size: 0.8rem; overflow-x: auto; display: block; }
+      .comparison-table th, .comparison-table td { padding: 12px 14px; white-space: nowrap; }
     }
   </style>
 </head>
@@ -529,6 +575,9 @@
   <nav>
     <div class="container">
       <div class="logo">Gracestack</div>
+      <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Meny">
+        <span></span><span></span><span></span>
+      </button>
       <div class="nav-links">
         <a href="#technology">Teknologi</a>
         <a href="#architecture">Arkitektur</a>
@@ -868,5 +917,51 @@
       </div>
     </div>
   </footer>
+  <script>
+    // Scroll reveal
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.feature-card, .arch-card, .timeline-item, .team-card, .stat, .section-title, .section-desc').forEach(el => {
+      el.classList.add('reveal');
+      observer.observe(el);
+    });
+
+    // Animated counters
+    function animateCounter(el, target, suffix = '') {
+      const duration = 1500;
+      const start = performance.now();
+      const update = (now) => {
+        const progress = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = Math.round(eased * target);
+        el.textContent = current.toLocaleString('sv-SE') + suffix;
+        if (progress < 1) requestAnimationFrame(update);
+      };
+      requestAnimationFrame(update);
+    }
+
+    const statsObserver = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          const counters = e.target.querySelectorAll('.stat-value');
+          counters.forEach(c => {
+            const text = c.textContent.trim();
+            if (text === '99%') animateCounter(c, 99, '%');
+            else if (text.includes('31')) animateCounter(c, 31500, '+');
+            else if (text === '127') animateCounter(c, 127, '');
+          });
+          statsObserver.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.3 });
+    const statsBar = document.querySelector('.stats-bar');
+    if (statsBar) statsObserver.observe(statsBar);
+
+    // Close mobile menu on link click
+    document.querySelectorAll('.nav-links a').forEach(a => {
+      a.addEventListener('click', () => document.querySelector('.nav-links').classList.remove('open'));
+    });
+  </script>
 </body>
 </html>
