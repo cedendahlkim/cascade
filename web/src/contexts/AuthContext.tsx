@@ -7,7 +7,8 @@
  * When auth IS enabled, wraps the app with login/register flow.
  */
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
-import { getSupabase, isAuthEnabled } from "../lib/supabase";
+import { getSupabase, isAuthEnabled, loadAuthConfig } from "../lib/supabase";
+import { BRIDGE_URL } from "../config";
 import type { User, Session } from "@supabase/supabase-js";
 
 type UserRole = "admin" | "user" | "viewer";
@@ -49,44 +50,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<UserRole>("user");
+  const [authReady, setAuthReady] = useState(isAuthEnabled);
 
-  // On mount: check for existing session
+  // On mount: load auth config from backend, then check session
   useEffect(() => {
-    if (!isAuthEnabled) {
-      setLoading(false);
-      return;
-    }
+    let subscription: { unsubscribe: () => void } | null = null;
 
-    const supabase = getSupabase();
-    if (!supabase) {
-      setLoading(false);
-      return;
-    }
+    loadAuthConfig().then(() => {
+      setAuthReady(isAuthEnabled);
 
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.access_token) {
-        await fetchRole(s.access_token);
+      if (!isAuthEnabled) {
+        setLoading(false);
+        return;
       }
-      setLoading(false);
-    });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, s) => {
+      const supabase = getSupabase();
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
+
+      // Get initial session
+      supabase.auth.getSession().then(async ({ data: { session: s } }) => {
         setSession(s);
         setUser(s?.user ?? null);
         if (s?.access_token) {
           await fetchRole(s.access_token);
-        } else {
-          setRole("user");
         }
-      },
-    );
+        setLoading(false);
+      });
 
-    return () => subscription.unsubscribe();
+      // Listen for auth changes
+      const { data } = supabase.auth.onAuthStateChange(
+        async (_event, s) => {
+          setSession(s);
+          setUser(s?.user ?? null);
+          if (s?.access_token) {
+            await fetchRole(s.access_token);
+          } else {
+            setRole("user");
+          }
+        },
+      );
+      subscription = data.subscription;
+    });
+
+    return () => { subscription?.unsubscribe(); };
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
@@ -108,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchRole = useCallback(async (token: string) => {
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_BRIDGE_URL || ""}/api/auth/me`,
+        `${BRIDGE_URL}/api/auth/me`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (res.ok) {
@@ -136,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         session,
         loading,
-        authEnabled: isAuthEnabled,
+        authEnabled: authReady,
         role,
         isAdmin: role === "admin",
         isViewer: role === "viewer",

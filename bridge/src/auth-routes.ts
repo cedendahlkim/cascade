@@ -30,6 +30,14 @@ router.get("/api/auth/enabled", (_req, res) => {
   res.json({ enabled: isSupabaseEnabled() });
 });
 
+// Return public Supabase config (URL + anon key) for frontend runtime init
+router.get("/api/auth/config", (_req, res) => {
+  const url = process.env.SUPABASE_URL || "";
+  const anonKey = process.env.SUPABASE_ANON_KEY || "";
+  const enabled = !!(url && anonKey);
+  res.json({ enabled, supabaseUrl: url, supabaseAnonKey: anonKey });
+});
+
 // Register
 router.post("/api/auth/register", async (req, res) => {
   if (!isSupabaseEnabled()) {
