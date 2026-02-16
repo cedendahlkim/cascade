@@ -482,8 +482,8 @@ def run_continuous():
 
             # === VAKEN: Normal träning med circadian-påverkan ===
 
-            # === TERMINAL BATCH: var 10:e batch kör terminal-uppgifter ===
-            if batch_num % 10 == 0:
+            # === TERMINAL BATCH: var 5:e batch kör terminal-uppgifter ===
+            if batch_num % 5 == 0:
                 # Terminal tasks: cap at 5 initially, scale up as terminal_stats improve
                 term_solve_rate = progress.get("terminal_stats", {}).get("solve_rate", 0)
                 term_max = 5 if term_solve_rate < 0.7 else 7 if term_solve_rate < 0.9 else 9
@@ -583,7 +583,7 @@ def run_continuous():
                 continue
 
             # === FRANKENSTEIN 2.0: Nya okända uppgifter (var 7:e batch) ===
-            if batch_num % 7 == 0 and batch_num % 10 != 0:
+            if batch_num % 7 == 0 and batch_num % 5 != 0:
                 v2_diff = max(3, min(8, progress.get("current_difficulty", 5)))
                 console.print(f"[bold white on red] Batch {batch_num} {circ_state.emoji} — 🧟 FRANKENSTEIN 2.0 (bugfix/api/optimization) [/]")
                 v2_solved = 0
@@ -646,7 +646,7 @@ def run_continuous():
                 continue
 
             # === CHAOS MONKEY: Muterade lösningar (var 15:e batch) ===
-            if batch_num % 15 == 0 and batch_num % 10 != 0:
+            if batch_num % 15 == 0 and batch_num % 5 != 0:
                 console.print(f"[bold white on dark_red] Batch {batch_num} {circ_state.emoji} — 🐒 CHAOS MONKEY (bugg-injektion) [/]")
                 chaos_solved = 0
                 for ci in range(5):

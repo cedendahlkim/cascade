@@ -3,7 +3,7 @@ FROM node:22-slim
 WORKDIR /app
 
 # Install Python 3 for Frankenstein AI training
-RUN apt-get update -qq && apt-get install -y -qq python3 python3-pip python3-venv && \
+RUN apt-get update -qq && apt-get install -y -qq python3 python3-pip python3-venv git && \
     rm -rf /var/lib/apt/lists/*
 
 # Install ALL dependencies (including devDeps for build)
