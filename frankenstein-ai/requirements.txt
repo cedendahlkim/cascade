@@ -1,0 +1,17 @@
+# Frankenstein AI Stack - Requirements
+# Liquid Neural Networks (Perception)
+ncps>=1.0.0
+torch>=2.0.0
+
+# Hyperdimensional Computing (Cognition)
+# Pure PyTorch implementation — no torchhd needed
+
+# Active Inference (Agency)
+pymdp
+
+# Episodic Memory
+chromadb>=0.4.0
+
+# Utilities
+numpy>=1.24.0
+rich>=13.0.0

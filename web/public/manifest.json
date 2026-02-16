@@ -1,7 +1,7 @@
 {
-  "name": "Cascade Remote",
-  "short_name": "Cascade",
-  "description": "AI-assistent via mobilen – styr din dator var du än är",
+  "name": "Gracestack AI Lab",
+  "short_name": "Gracestack",
+  "description": "AI-labb av Gracestack AB – styr din dator och forska med AI",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
@@ -21,5 +21,44 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "Ny fråga",
+      "short_name": "Fråga",
+      "description": "Ställ en snabb fråga till AI:n",
+      "url": "/?action=ask",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Screenshot",
+      "short_name": "Skärm",
+      "description": "Ta en skärmdump och analysera",
+      "url": "/?action=screenshot",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Sök på nätet",
+      "short_name": "Sök",
+      "description": "Sök information på internet",
+      "url": "/?action=search",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Stats",
+      "description": "Visa systemstatus och statistik",
+      "url": "/?tab=dashboard",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "share_target": {
+    "action": "/?action=share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
 }

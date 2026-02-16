@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    container_name: gracestack-bridge
+    restart: unless-stopped
+    env_file: ./bridge/.env
+    ports:
+      - "3031:3031"
+    volumes:
+      - bridge-data:/app/bridge/data
+      - frank-training:/app/frankenstein-ai/training_data
+
+  nginx:
+    image: nginx:alpine
+    container_name: gracestack-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot-etc:/etc/letsencrypt:ro
+      - certbot-var:/var/lib/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    depends_on:
+      - bridge
+
+  certbot:
+    image: certbot/certbot
+    container_name: gracestack-certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+volumes:
+  bridge-data:
+  frank-training:
+  certbot-etc:
+  certbot-var:
+  certbot-webroot:

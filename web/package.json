@@ -1,5 +1,5 @@
 {
-  "name": "@cascade-remote/web",
+  "name": "@gracestack/ai-lab-web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
     "@tailwindcss/typography": "^0.5.19",
     "@types/react-syntax-highlighter": "^15.5.13",
     "lucide-react": "^0.468.0",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/web-bluetooth": "^0.0.21",
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",

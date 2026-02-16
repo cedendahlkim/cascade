@@ -1,0 +1,6 @@
+# Task: gen-rec-sum_digits-9538 | Score: 100% | 2026-02-15T09:18:01.049381
+
+x = int(input())
+while x >= 10:
+    x = sum(int(d) for d in str(x))
+print(x)

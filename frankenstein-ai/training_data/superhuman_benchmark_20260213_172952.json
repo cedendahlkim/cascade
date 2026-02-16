@@ -1,0 +1,889 @@
+{
+  "timestamp": "2026-02-13 17:29:52",
+  "benchmark_type": "superhuman",
+  "categories_tested": [
+    "cross_domain",
+    "massive_scale",
+    "chain_reasoning",
+    "real_world_auto",
+    "devops_debug",
+    "security_audit",
+    "adversarial"
+  ],
+  "summary": {
+    "total_tasks": 21,
+    "difficulty_range": "11-14",
+    "frankenstein": {
+      "solved": 21,
+      "solve_rate": 1.0,
+      "first_try": 20,
+      "first_try_rate": 0.952,
+      "avg_time_ms": 5604.1
+    },
+    "gemini": {
+      "model": "gemini-2.0-flash",
+      "solved": 17,
+      "solve_rate": 0.81,
+      "first_try": 14,
+      "first_try_rate": 0.667,
+      "avg_time_ms": 11768.4
+    },
+    "diff_solve_rate": 0.19,
+    "diff_first_try_rate": 0.286,
+    "winner": "frankenstein",
+    "winner_text": "Frankenstein AI vinner med 19.0% hogre losningsgrad pa SUPERHUMAN-uppgifter!"
+  },
+  "per_category": {
+    "chain_reasoning": {
+      "category": "chain_reasoning",
+      "avg_difficulty": 11.3,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      }
+    },
+    "security_audit": {
+      "category": "security_audit",
+      "avg_difficulty": 11.0,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      }
+    },
+    "devops_debug": {
+      "category": "devops_debug",
+      "avg_difficulty": 11.7,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 1
+      }
+    },
+    "massive_scale": {
+      "category": "massive_scale",
+      "avg_difficulty": 11.3,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      }
+    },
+    "cross_domain": {
+      "category": "cross_domain",
+      "avg_difficulty": 13.0,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 3,
+        "rate": 0.333,
+        "first_try": 1
+      }
+    },
+    "adversarial": {
+      "category": "adversarial",
+      "avg_difficulty": 13.0,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      }
+    },
+    "real_world_auto": {
+      "category": "real_world_auto",
+      "avg_difficulty": 11.7,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 2
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 3,
+        "rate": 0.333,
+        "first_try": 0
+      }
+    }
+  },
+  "hardest_tasks": [
+    {
+      "title": "Cross-domain: Nätverk+Krypto+Math",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "Cross-domain: Nätverk+Krypto+Math",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "Automation: JSON→CSV→Aggregering",
+      "difficulty": 12,
+      "category": "real_world_auto",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "Automation: API Retry med Backoff",
+      "difficulty": 12,
+      "category": "real_world_auto",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "Adversarial: Race Condition Detector",
+      "difficulty": 14,
+      "category": "adversarial",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": true,
+      "gemini_score": 1.0
+    },
+    {
+      "title": "Adversarial: Race Condition Detector",
+      "difficulty": 14,
+      "category": "adversarial",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": true,
+      "gemini_score": 1.0
+    },
+    {
+      "title": "Cross-domain: Linjär Regression",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": true,
+      "gemini_score": 1.0
+    },
+    {
+      "title": "DevOps: Docker Security Audit",
+      "difficulty": 12,
+      "category": "devops_debug",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": true,
+      "gemini_score": 1.0
+    },
+    {
+      "title": "Kedja: Tokenize→Parse→Evaluate",
+      "difficulty": 12,
+      "category": "chain_reasoning",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": true,
+      "gemini_score": 1.0
+    },
+    {
+      "title": "DevOps: Docker Security Audit",
+      "difficulty": 12,
+      "category": "devops_debug",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": true,
+      "gemini_score": 1.0
+    }
+  ],
+  "strategy_distribution": {
+    "system0_deterministic": 9,
+    "with_hints": 5,
+    "system1_promoted": 2,
+    "from_memory": 3,
+    "step_by_step+reflection": 1,
+    "step_by_step": 1
+  },
+  "frankenstein_stack": {
+    "hdc_concepts": 1,
+    "aif_exploration": 0.5302333806573062,
+    "aif_surprise": 0.2583984030241197,
+    "memory_active": 24,
+    "memory_stored": 24,
+    "memory_decayed": 0,
+    "strategy_stats": {
+      "direct": {
+        "attempts": 4,
+        "successes": 0
+      },
+      "with_hints": {
+        "attempts": 6,
+        "successes": 5
+      },
+      "from_memory": {
+        "attempts": 5,
+        "successes": 3
+      },
+      "step_by_step": {
+        "attempts": 2,
+        "successes": 1
+      },
+      "system0_deterministic": {
+        "attempts": 9,
+        "successes": 9
+      },
+      "system1_promoted": {
+        "attempts": 2,
+        "successes": 2
+      },
+      "step_by_step+reflection": {
+        "attempts": 0,
+        "successes": 2
+      }
+    },
+    "gut_feeling": {
+      "total_predictions": 21,
+      "accuracy": 0.762,
+      "weights": {
+        "familiarity": 0.2,
+        "track_record": 0.25,
+        "momentum": 0.15,
+        "complexity": 0.15,
+        "memory_strength": 0.15,
+        "energy": 0.1
+      },
+      "category_records": {
+        "adversarial": "3/3",
+        "chain_reasoning": "3/3",
+        "cross_domain": "3/3",
+        "devops_debug": "3/3",
+        "massive_scale": "3/3",
+        "real_world_auto": "3/3",
+        "security_audit": "3/3"
+      },
+      "difficulty_records": {
+        "11": "10/10",
+        "12": "6/6",
+        "13": "3/3",
+        "14": "2/2"
+      },
+      "history_size": 21,
+      "calibration_size": 21
+    },
+    "emotions": {
+      "state": {
+        "joy": 1.0,
+        "sadness": 0.0,
+        "anger": 0.0,
+        "fear": 0.752,
+        "disgust": 0.0,
+        "surprise": 0.0
+      },
+      "dominant": "joy",
+      "dominant_intensity": 1.0,
+      "emoji": "😊",
+      "valence": 0.142,
+      "arousal": 1.0,
+      "total_updates": 21,
+      "emotion_totals": {
+        "joy": 16.39,
+        "sadness": 0.0,
+        "anger": 0.0,
+        "fear": 8.9,
+        "disgust": 0.0,
+        "surprise": 0.28
+      },
+      "recent_events": [
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.798,
+          "detail": "nv11, 1 försök, streak=10"
+        },
+        {
+          "trigger": "high_difficulty",
+          "emotion": "fear",
+          "delta": 0.336,
+          "detail": "nv11"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.826,
+          "detail": "nv12, 1 försök, streak=11"
+        },
+        {
+          "trigger": "high_difficulty",
+          "emotion": "fear",
+          "delta": 0.42,
+          "detail": "nv12"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.826,
+          "detail": "nv12, 1 försök, streak=12"
+        },
+        {
+          "trigger": "high_difficulty",
+          "emotion": "fear",
+          "delta": 0.42,
+          "detail": "nv12"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.826,
+          "detail": "nv12, 1 försök, streak=13"
+        },
+        {
+          "trigger": "high_difficulty",
+          "emotion": "fear",
+          "delta": 0.42,
+          "detail": "nv12"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.798,
+          "detail": "nv11, 1 försök, streak=14"
+        },
+        {
+          "trigger": "high_difficulty",
+          "emotion": "fear",
+          "delta": 0.336,
+          "detail": "nv11"
+        }
+      ],
+      "behavioral_modifiers": {
+        "temperature_mod": -0.073,
+        "extra_attempts": 1,
+        "strategy_preference": "with_hints",
+        "exploration_mod": -0.038,
+        "persistence_mod": 1.1,
+        "prompt_tone": "Börja med en enkel approach. Bryt ner problemet i delar.",
+        "dominant_emotion": "joy",
+        "dominant_intensity": 1.0,
+        "valence": 0.142,
+        "arousal": 1.0
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "devops-firewall-4093",
+      "title": "DevOps: Firewall-analys",
+      "difficulty": 11,
+      "category": "devops_debug",
+      "tags": [
+        "devops",
+        "firewall",
+        "network_security"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 203.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": false,
+      "gemini_attempts": 2,
+      "gemini_time_ms": 12654.9
+    },
+    {
+      "task_id": "massive-metrics-4482",
+      "title": "Massiv: Kodbasanalys ({n_files} filer)",
+      "difficulty": 11,
+      "category": "massive_scale",
+      "tags": [
+        "massive_scale",
+        "code_analysis",
+        "metrics"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 3777.2,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 3312.7
+    },
+    {
+      "task_id": "sec-deps-4781",
+      "title": "Dependency Audit: Supply Chain",
+      "difficulty": 11,
+      "category": "security_audit",
+      "tags": [
+        "security",
+        "supply_chain",
+        "dependency_audit"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 223.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 3330.7
+    },
+    {
+      "task_id": "sec-deps-6645",
+      "title": "Dependency Audit: Supply Chain",
+      "difficulty": 11,
+      "category": "security_audit",
+      "tags": [
+        "security",
+        "supply_chain",
+        "dependency_audit"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 319.2,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 27487.1
+    },
+    {
+      "task_id": "cross-netcrypto-4790",
+      "title": "Cross-domain: Nätverk+Krypto+Math",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "tags": [
+        "cross_domain",
+        "networking",
+        "cryptography",
+        "math"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 188.5,
+      "frank_strategy": "system1_promoted",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 19611.7
+    },
+    {
+      "task_id": "auto-configmerge-1466",
+      "title": "Automation: Config Merger",
+      "difficulty": 11,
+      "category": "real_world_auto",
+      "tags": [
+        "automation",
+        "config",
+        "merge"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 26380.1,
+      "frank_strategy": "from_memory",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": false,
+      "gemini_attempts": 2,
+      "gemini_time_ms": 5354.2
+    },
+    {
+      "task_id": "cross-regression-7576",
+      "title": "Cross-domain: Linjär Regression",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "tags": [
+        "cross_domain",
+        "statistics",
+        "ml",
+        "regression"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 176.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 3157.7
+    },
+    {
+      "task_id": "auto-dataconv-9425",
+      "title": "Automation: JSON→CSV→Aggregering",
+      "difficulty": 12,
+      "category": "real_world_auto",
+      "tags": [
+        "automation",
+        "data_conversion",
+        "json",
+        "csv",
+        "aggregation"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": false,
+      "frank_attempts": 4,
+      "frank_time_ms": 19940.8,
+      "frank_strategy": "step_by_step+reflection",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 43749.1
+    },
+    {
+      "task_id": "devops-docker-9046",
+      "title": "DevOps: Docker Security Audit",
+      "difficulty": 12,
+      "category": "devops_debug",
+      "tags": [
+        "devops",
+        "docker",
+        "security",
+        "best_practices"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 210.7,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 15231.3
+    },
+    {
+      "task_id": "massive-metrics-9843",
+      "title": "Massiv: Kodbasanalys ({n_files} filer)",
+      "difficulty": 11,
+      "category": "massive_scale",
+      "tags": [
+        "massive_scale",
+        "code_analysis",
+        "metrics"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 16290.6,
+      "frank_strategy": "step_by_step",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 9727.3
+    },
+    {
+      "task_id": "adv-unicode-4803",
+      "title": "Adversarial: Unicode Edge Cases",
+      "difficulty": 11,
+      "category": "adversarial",
+      "tags": [
+        "adversarial",
+        "unicode",
+        "string"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 129.3,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1271.9
+    },
+    {
+      "task_id": "adv-race-8343",
+      "title": "Adversarial: Race Condition Detector",
+      "difficulty": 14,
+      "category": "adversarial",
+      "tags": [
+        "adversarial",
+        "concurrency",
+        "race_condition",
+        "threading"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 3052.8,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 3125.8
+    },
+    {
+      "task_id": "adv-race-4434",
+      "title": "Adversarial: Race Condition Detector",
+      "difficulty": 14,
+      "category": "adversarial",
+      "tags": [
+        "adversarial",
+        "concurrency",
+        "race_condition",
+        "threading"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 2411.5,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 9541.6
+    },
+    {
+      "task_id": "cross-netcrypto-4629",
+      "title": "Cross-domain: Nätverk+Krypto+Math",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "tags": [
+        "cross_domain",
+        "networking",
+        "cryptography",
+        "math"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 178.5,
+      "frank_strategy": "system1_promoted",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 23220.8
+    },
+    {
+      "task_id": "chain-etl-3920",
+      "title": "Kedja: ETL Pipeline (Parse→Validera→Aggregera)",
+      "difficulty": 11,
+      "category": "chain_reasoning",
+      "tags": [
+        "chain_reasoning",
+        "etl",
+        "data_pipeline"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 3998.8,
+      "frank_strategy": "from_memory",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2438.9
+    },
+    {
+      "task_id": "auto-apiretry-6722",
+      "title": "Automation: API Retry med Backoff",
+      "difficulty": 12,
+      "category": "real_world_auto",
+      "tags": [
+        "automation",
+        "api",
+        "retry",
+        "backoff"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 198.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 14123.3
+    },
+    {
+      "task_id": "chain-loganalysis-4593",
+      "title": "Kedja: Logganalys → Anomali → Diagnos",
+      "difficulty": 11,
+      "category": "chain_reasoning",
+      "tags": [
+        "chain_reasoning",
+        "log_analysis",
+        "multi_step"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 2615.6,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 9670.3
+    },
+    {
+      "task_id": "chain-compiler-3919",
+      "title": "Kedja: Tokenize→Parse→Evaluate",
+      "difficulty": 12,
+      "category": "chain_reasoning",
+      "tags": [
+        "chain_reasoning",
+        "compiler",
+        "expression_eval"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 18397.2,
+      "frank_strategy": "from_memory",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 3670.4
+    },
+    {
+      "task_id": "devops-docker-8721",
+      "title": "DevOps: Docker Security Audit",
+      "difficulty": 12,
+      "category": "devops_debug",
+      "tags": [
+        "devops",
+        "docker",
+        "security",
+        "best_practices"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 257.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": false,
+      "gemini_attempts": 2,
+      "gemini_time_ms": 6605.7
+    },
+    {
+      "task_id": "massive-slidingwin-6309",
+      "title": "Optimera: Max Subarray Sum (K=42, N=1028)",
+      "difficulty": 12,
+      "category": "massive_scale",
+      "tags": [
+        "massive_scale",
+        "optimization",
+        "sliding_window"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 18496.8,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 26348.9
+    },
+    {
+      "task_id": "sec-deps-5817",
+      "title": "Dependency Audit: Supply Chain",
+      "difficulty": 11,
+      "category": "security_audit",
+      "tags": [
+        "security",
+        "supply_chain",
+        "dependency_audit"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 239.2,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 3501.4
+    }
+  ]
+}

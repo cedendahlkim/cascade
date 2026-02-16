@@ -1,0 +1,484 @@
+{
+  "timestamp": "2026-02-10 17:39:46",
+  "num_tasks": 30,
+  "difficulties": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "frankenstein": {
+    "solved": 26,
+    "total": 30,
+    "solve_rate": 0.867,
+    "first_try_rate": 0.867,
+    "avg_time_ms": 3109.7,
+    "stack_stats": {
+      "total_tasks": 30,
+      "total_solved": 26,
+      "solve_rate": 0.8666666666666667,
+      "skills_learned": 39,
+      "skill_names": [
+        "list",
+        "range",
+        "loop",
+        "math",
+        "is_perfect_square",
+        "number_theory",
+        "sum",
+        "average",
+        "matrix",
+        "row_sum",
+        "2d",
+        "dict",
+        "string",
+        "char_count",
+        "col_sum",
+        "algorithm",
+        "two_sum",
+        "sorting",
+        "bubble_sort",
+        "advanced",
+        "compress",
+        "data_structure",
+        "linked_list",
+        "detect_cycle_sim",
+        "stack",
+        "balanced_brackets",
+        "functional",
+        "reduce_product",
+        "flatten",
+        "graph",
+        "count_components",
+        "combinatorics",
+        "recursion",
+        "subsets",
+        "permutations",
+        "dp",
+        "coin_change",
+        "max_subarray",
+        "longest_increasing"
+      ],
+      "total_attempts": 27,
+      "current_level": 1,
+      "hdc_concepts": 18,
+      "hdc_concept_names": [
+        "list_range_0",
+        "math_is_perfect_square_1",
+        "list_average_2",
+        "matrix_row_sum_3",
+        "dict_string_4",
+        "algorithm_two_sum_5",
+        "algorithm_sorting_6",
+        "string_advanced_7",
+        "data_structure_linked_list_8",
+        "data_structure_stack_9",
+        "functional_reduce_product_10",
+        "functional_flatten_11",
+        "graph_count_components_12",
+        "graph_adjacency_13",
+        "combinatorics_recursion_14",
+        "combinatorics_recursion_15",
+        "dp_algorithm_16",
+        "dp_algorithm_17"
+      ],
+      "aif_exploration_weight": 0.5038395360399217,
+      "aif_surprise": 1.681136136110909,
+      "aif_mean_efe": -1.924590592586275,
+      "memory_active": 14,
+      "memory_total_stored": 27,
+      "memory_total_decayed": 13,
+      "memory_backend": "chromadb",
+      "error_counts": {
+        "syntax": 0,
+        "logic": 1,
+        "timeout": 0,
+        "runtime": 0
+      },
+      "strategy_success_rates": {
+        "direct": 0.4,
+        "with_hints": 0.57,
+        "from_memory": 0.5,
+        "step_by_step": 0.44
+      },
+      "strategy_stats": {
+        "direct": {
+          "attempts": 5,
+          "successes": 2
+        },
+        "with_hints": {
+          "attempts": 28,
+          "successes": 16
+        },
+        "from_memory": {
+          "attempts": 8,
+          "successes": 4
+        },
+        "step_by_step": {
+          "attempts": 9,
+          "successes": 4
+        }
+      }
+    }
+  },
+  "bare_llm": {
+    "solved": 15,
+    "total": 30,
+    "solve_rate": 0.5,
+    "first_try_rate": 0.5,
+    "avg_time_ms": 4582.0
+  },
+  "difference": {
+    "solve_rate": 0.367,
+    "first_try_rate": 0.367,
+    "winner": "frankenstein"
+  },
+  "per_level": {
+    "3": {
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 1,
+        "total": 5,
+        "rate": 0.2
+      }
+    },
+    "4": {
+      "frankenstein": {
+        "solved": 4,
+        "total": 5,
+        "rate": 0.8
+      },
+      "bare_llm": {
+        "solved": 2,
+        "total": 5,
+        "rate": 0.4
+      }
+    },
+    "5": {
+      "frankenstein": {
+        "solved": 4,
+        "total": 5,
+        "rate": 0.8
+      },
+      "bare_llm": {
+        "solved": 4,
+        "total": 5,
+        "rate": 0.8
+      }
+    },
+    "6": {
+      "frankenstein": {
+        "solved": 4,
+        "total": 5,
+        "rate": 0.8
+      },
+      "bare_llm": {
+        "solved": 3,
+        "total": 5,
+        "rate": 0.6
+      }
+    },
+    "7": {
+      "frankenstein": {
+        "solved": 4,
+        "total": 5,
+        "rate": 0.8
+      },
+      "bare_llm": {
+        "solved": 2,
+        "total": 5,
+        "rate": 0.4
+      }
+    },
+    "8": {
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 3,
+        "total": 5,
+        "rate": 0.6
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "gen-list-range-7822",
+      "difficulty": 3,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 1359.5,
+      "bare_time_ms": 5065.5
+    },
+    {
+      "task_id": "gen-numtheory-is_perfect_square-4706",
+      "difficulty": 3,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 1710.7,
+      "bare_time_ms": 10325.4
+    },
+    {
+      "task_id": "gen-list-sum-8857",
+      "difficulty": 3,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1329.8,
+      "bare_time_ms": 1252.7
+    },
+    {
+      "task_id": "gen-list-average-1853",
+      "difficulty": 3,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 4566.1,
+      "bare_time_ms": 6198.1
+    },
+    {
+      "task_id": "gen-numtheory-is_perfect_square-2694",
+      "difficulty": 3,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 1329.7,
+      "bare_time_ms": 4474.9
+    },
+    {
+      "task_id": "gen-rec-sum_digits-4739",
+      "difficulty": 4,
+      "category": "generated",
+      "frankenstein_score": 0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 5002.3,
+      "bare_time_ms": 4862.9
+    },
+    {
+      "task_id": "gen-matrix-row_sum-9172",
+      "difficulty": 4,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1384.2,
+      "bare_time_ms": 1202.7
+    },
+    {
+      "task_id": "gen-dict-char_count-4382",
+      "difficulty": 4,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 1561.0,
+      "bare_time_ms": 10450.0
+    },
+    {
+      "task_id": "gen-matrix-col_sum-5063",
+      "difficulty": 4,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 3346.9,
+      "bare_time_ms": 6063.9
+    },
+    {
+      "task_id": "gen-algo-two_sum-6550",
+      "difficulty": 4,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1503.3,
+      "bare_time_ms": 1533.3
+    },
+    {
+      "task_id": "gen-sort-bubble_sort-9155",
+      "difficulty": 5,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 4308.5,
+      "bare_time_ms": 10058.2
+    },
+    {
+      "task_id": "gen-strv-anagram-1894",
+      "difficulty": 5,
+      "category": "generated",
+      "frankenstein_score": 0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 5211.1,
+      "bare_time_ms": 1594.1
+    },
+    {
+      "task_id": "gen-strv-compress-4359",
+      "difficulty": 5,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1558.8,
+      "bare_time_ms": 1853.9
+    },
+    {
+      "task_id": "gen-sort-bubble_sort-5432",
+      "difficulty": 5,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1671.1,
+      "bare_time_ms": 1520.2
+    },
+    {
+      "task_id": "gen-sort-bubble_sort-8401",
+      "difficulty": 5,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1486.0,
+      "bare_time_ms": 1592.0
+    },
+    {
+      "task_id": "gen-ds-reverse_with_stack-9559",
+      "difficulty": 6,
+      "category": "generated",
+      "frankenstein_score": 0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 5553.0,
+      "bare_time_ms": 13802.3
+    },
+    {
+      "task_id": "gen-ll-detect_cycle_sim-2753",
+      "difficulty": 6,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1497.1,
+      "bare_time_ms": 1330.7
+    },
+    {
+      "task_id": "gen-ll-detect_cycle_sim-3156",
+      "difficulty": 6,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 13065.1,
+      "bare_time_ms": 1606.5
+    },
+    {
+      "task_id": "gen-ll-detect_cycle_sim-5153",
+      "difficulty": 6,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 4576.7,
+      "bare_time_ms": 4824.4
+    },
+    {
+      "task_id": "gen-ds-balanced_brackets-5321",
+      "difficulty": 6,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 5123.3,
+      "bare_time_ms": 1663.0
+    },
+    {
+      "task_id": "gen-func-reduce_product-3218",
+      "difficulty": 7,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 2856.1,
+      "bare_time_ms": 6692.0
+    },
+    {
+      "task_id": "gen-func-flatten-2664",
+      "difficulty": 7,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 1963.5,
+      "bare_time_ms": 10578.8
+    },
+    {
+      "task_id": "gen-graph-count_components-6276",
+      "difficulty": 7,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 3394.7,
+      "bare_time_ms": 1880.2
+    },
+    {
+      "task_id": "gen-func-flatten-8453",
+      "difficulty": 7,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 1637.4,
+      "bare_time_ms": 4792.1
+    },
+    {
+      "task_id": "gen-graph-adjacency-3247",
+      "difficulty": 7,
+      "category": "generated",
+      "frankenstein_score": 0.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 4817.1,
+      "bare_time_ms": 2883.4
+    },
+    {
+      "task_id": "gen-comb-subsets-2056",
+      "difficulty": 8,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 1812.3,
+      "bare_time_ms": 6688.6
+    },
+    {
+      "task_id": "gen-comb-permutations-6036",
+      "difficulty": 8,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1323.2,
+      "bare_time_ms": 1318.6
+    },
+    {
+      "task_id": "gen-dp-coin_change-7886",
+      "difficulty": 8,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1914.2,
+      "bare_time_ms": 1697.0
+    },
+    {
+      "task_id": "gen-dp-max_subarray-7081",
+      "difficulty": 8,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 2128.4,
+      "bare_time_ms": 1784.0
+    },
+    {
+      "task_id": "gen-dp-longest_increasing-2881",
+      "difficulty": 8,
+      "category": "generated",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 4301.5,
+      "bare_time_ms": 7871.3
+    }
+  ]
+}

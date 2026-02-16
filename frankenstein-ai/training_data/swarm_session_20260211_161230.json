@@ -1,0 +1,551 @@
+{
+  "timestamp": "2026-02-11 16:12:30",
+  "type": "frankenstein_swarm",
+  "num_tasks": 18,
+  "difficulties": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "stats": {
+    "total_tasks": 18,
+    "total_solved": 18,
+    "solve_rate": 1.0,
+    "collective_wins": 0,
+    "collective_win_rate": 0.0,
+    "shared_concepts": 0,
+    "shared_insights": 49,
+    "per_node": {
+      "analytiker": {
+        "label": "Analytiker",
+        "emoji": "🔬",
+        "tasks": 19,
+        "solved": 18,
+        "rate": 0.9473684210526315
+      },
+      "kreativist": {
+        "label": "Kreativist",
+        "emoji": "🎨",
+        "tasks": 19,
+        "solved": 18,
+        "rate": 0.9473684210526315
+      },
+      "kritiker": {
+        "label": "Kritiker",
+        "emoji": "📊",
+        "tasks": 21,
+        "solved": 18,
+        "rate": 0.8571428571428571
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "gen-numtheory-count_digits-2394",
+      "difficulty": 3,
+      "category": "number_theory",
+      "title": "Tal: Skriv ut antalet siffror",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 40421.7,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.8
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.8
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "task_id": "gen-list-count_positive-3875",
+      "difficulty": 3,
+      "category": "list",
+      "title": "Lista: antalet positiva tal",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 36003.8,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.81
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.81
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.81
+        }
+      ]
+    },
+    {
+      "task_id": "gen-list-average-4980",
+      "difficulty": 3,
+      "category": "list",
+      "title": "Lista: medelvärdet (avrundat till heltal)",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 29793.6,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.81
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.81
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.81
+        }
+      ]
+    },
+    {
+      "task_id": "gen-dict-char_count-1785",
+      "difficulty": 4,
+      "category": "dict",
+      "title": "Räkna förekomster av varje tecken",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 110505.1,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.82
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.51
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.51
+        }
+      ]
+    },
+    {
+      "task_id": "gen-algo-two_sum-8155",
+      "difficulty": 4,
+      "category": "algorithm",
+      "title": "Two Sum",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 21935.4,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.82
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.82
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.82
+        }
+      ]
+    },
+    {
+      "task_id": "gen-dict-word_length-4824",
+      "difficulty": 4,
+      "category": "dict",
+      "title": "Ordlängder",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 135242.6,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.52
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.82
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.52
+        }
+      ]
+    },
+    {
+      "task_id": "gen-strv-caesar-3259",
+      "difficulty": 5,
+      "category": "string_advanced",
+      "title": "Caesar-chiffer",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 42043.6,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.83
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.83
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.82
+        }
+      ]
+    },
+    {
+      "task_id": "gen-sort-merge_sorted-4058",
+      "difficulty": 5,
+      "category": "sorting",
+      "title": "Merga två sorterade listor",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 19504.3,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.83
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.83
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.83
+        }
+      ]
+    },
+    {
+      "task_id": "gen-strv-compress-7525",
+      "difficulty": 5,
+      "category": "string_advanced",
+      "title": "Komprimera sträng (RLE)",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 25498.9,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.84
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.84
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.83
+        }
+      ]
+    },
+    {
+      "task_id": "gen-ll-reverse_list-4450",
+      "difficulty": 6,
+      "category": "linked_list",
+      "title": "Omvänd länkad lista",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 34260.8,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.84
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.84
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.84
+        }
+      ]
+    },
+    {
+      "task_id": "gen-ll-remove_nth-8498",
+      "difficulty": 6,
+      "category": "linked_list",
+      "title": "Ta bort N:te elementet",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 44468.3,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.84
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.84
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.84
+        }
+      ]
+    },
+    {
+      "task_id": "gen-ds-reverse_with_stack-9255",
+      "difficulty": 6,
+      "category": "data_structure",
+      "title": "Omvänd med stack",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 13316.2,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.84
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.85
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.84
+        }
+      ]
+    },
+    {
+      "task_id": "gen-func-reduce_product-1026",
+      "difficulty": 7,
+      "category": "functional",
+      "title": "Reduce: Produkt",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 13892.9,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.85
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.85
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "task_id": "gen-func-reduce_product-8124",
+      "difficulty": 7,
+      "category": "functional",
+      "title": "Reduce: Produkt",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 16360.4,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.85
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.85
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "task_id": "gen-func-zip_lists-1908",
+      "difficulty": 7,
+      "category": "functional",
+      "title": "Zippa två listor",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 50233.5,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.85
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.85
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.55
+        }
+      ]
+    },
+    {
+      "task_id": "gen-comb-combinations-9230",
+      "difficulty": 8,
+      "category": "combinatorics",
+      "title": "Kombinationer av K element",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 15548.6,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.85
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.86
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.86
+        }
+      ]
+    },
+    {
+      "task_id": "gen-dp-longest_increasing-6496",
+      "difficulty": 8,
+      "category": "dp",
+      "title": "Längsta ökande delföljd (LIS)",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 35106.2,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.86
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.86
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.86
+        }
+      ]
+    },
+    {
+      "task_id": "gen-comb-permutations-7642",
+      "difficulty": 8,
+      "category": "combinatorics",
+      "title": "Generera permutationer",
+      "consensus_score": 1.0,
+      "consensus_method": "best",
+      "individual_best": 1.0,
+      "collective_improvement": 0.0,
+      "time_ms": 20437.5,
+      "per_node": [
+        {
+          "id": "analytiker",
+          "score": 1.0,
+          "confidence": 0.86
+        },
+        {
+          "id": "kreativist",
+          "score": 1.0,
+          "confidence": 0.86
+        },
+        {
+          "id": "kritiker",
+          "score": 1.0,
+          "confidence": 0.86
+        }
+      ]
+    }
+  ]
+}

@@ -27,7 +27,7 @@ const LEARNING_FILE = join(__dirname, "..", "data", "worker-learning.json");
 
 // --- Types ---
 
-export type WorkerRole = "analyst" | "researcher" | "verifier" | "generalist";
+export type WorkerRole = "analyst" | "researcher" | "verifier" | "generalist" | "innovator";
 export type WorkerStatus = "online" | "offline" | "busy" | "error" | "rate_limited";
 export type TaskStatus = "queued" | "assigned" | "in_progress" | "consensus" | "completed" | "failed";
 export type TaskPriority = "low" | "normal" | "high" | "critical";

@@ -1,0 +1,851 @@
+{
+  "timestamp": "2026-02-13 15:14:43",
+  "benchmark_type": "superhuman",
+  "categories_tested": [
+    "devops_debug",
+    "chain_reasoning",
+    "cross_domain",
+    "adversarial",
+    "massive_scale",
+    "real_world_auto",
+    "security_audit"
+  ],
+  "summary": {
+    "total_tasks": 20,
+    "difficulty_range": "11-13",
+    "frankenstein": {
+      "solved": 12,
+      "solve_rate": 0.6,
+      "first_try": 11,
+      "first_try_rate": 0.55,
+      "avg_time_ms": 30827.1
+    },
+    "gemini": {
+      "model": "gemini-2.0-flash",
+      "solved": 13,
+      "solve_rate": 0.65,
+      "first_try": 11,
+      "first_try_rate": 0.55,
+      "avg_time_ms": 13717.9
+    },
+    "diff_solve_rate": -0.05,
+    "diff_first_try_rate": 0.0,
+    "winner": "gemini",
+    "winner_text": "Gemini 2.0 Flash vinner med 5.0% hogre losningsgrad pa SUPERHUMAN-uppgifter."
+  },
+  "per_category": {
+    "chain_reasoning": {
+      "category": "chain_reasoning",
+      "avg_difficulty": 11.0,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      }
+    },
+    "security_audit": {
+      "category": "security_audit",
+      "avg_difficulty": 12.0,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      }
+    },
+    "devops_debug": {
+      "category": "devops_debug",
+      "avg_difficulty": 11.5,
+      "frankenstein": {
+        "solved": 1,
+        "total": 2,
+        "rate": 0.5,
+        "first_try": 1
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 2,
+        "rate": 0.5,
+        "first_try": 1
+      }
+    },
+    "massive_scale": {
+      "category": "massive_scale",
+      "avg_difficulty": 11.7,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      }
+    },
+    "cross_domain": {
+      "category": "cross_domain",
+      "avg_difficulty": 13.0,
+      "frankenstein": {
+        "solved": 0,
+        "total": 3,
+        "rate": 0.0,
+        "first_try": 0
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 3,
+        "rate": 0.333,
+        "first_try": 0
+      }
+    },
+    "adversarial": {
+      "category": "adversarial",
+      "avg_difficulty": 11.3,
+      "frankenstein": {
+        "solved": 1,
+        "total": 3,
+        "rate": 0.333,
+        "first_try": 1
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 3,
+        "rate": 0.333,
+        "first_try": 1
+      }
+    },
+    "real_world_auto": {
+      "category": "real_world_auto",
+      "avg_difficulty": 11.7,
+      "frankenstein": {
+        "solved": 1,
+        "total": 3,
+        "rate": 0.333,
+        "first_try": 0
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 3,
+        "rate": 0.333,
+        "first_try": 0
+      }
+    }
+  },
+  "hardest_tasks": [
+    {
+      "title": "Cross-domain: Nätverk+Krypto+Math",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "frank_solved": false,
+      "frank_score": 0.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "Cross-domain: Linjär Regression",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "frank_solved": false,
+      "frank_score": 0.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "Automation: JSON→CSV→Aggregering",
+      "difficulty": 12,
+      "category": "real_world_auto",
+      "frank_solved": false,
+      "frank_score": 0.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "Automation: JSON→CSV→Aggregering",
+      "difficulty": 12,
+      "category": "real_world_auto",
+      "frank_solved": false,
+      "frank_score": 0.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "DevOps: Docker Security Audit",
+      "difficulty": 12,
+      "category": "devops_debug",
+      "frank_solved": false,
+      "frank_score": 0.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "Adversarial: Unicode Edge Cases",
+      "difficulty": 11,
+      "category": "adversarial",
+      "frank_solved": false,
+      "frank_score": 0.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "Adversarial: Unicode Edge Cases",
+      "difficulty": 11,
+      "category": "adversarial",
+      "frank_solved": false,
+      "frank_score": 0.0,
+      "gemini_solved": false,
+      "gemini_score": 0.0
+    },
+    {
+      "title": "Cross-domain: Nätverk+Krypto+Math",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "frank_solved": false,
+      "frank_score": 0.0,
+      "gemini_solved": true,
+      "gemini_score": 1.0
+    },
+    {
+      "title": "Kryptoanalys: Hitta svagheter",
+      "difficulty": 13,
+      "category": "security_audit",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": true,
+      "gemini_score": 1.0
+    },
+    {
+      "title": "Säkerhetsaudit: Hitta sårbarheter",
+      "difficulty": 12,
+      "category": "security_audit",
+      "frank_solved": true,
+      "frank_score": 1.0,
+      "gemini_solved": true,
+      "gemini_score": 1.0
+    }
+  ],
+  "strategy_distribution": {
+    "unknown": 8,
+    "with_hints": 9,
+    "from_memory": 2,
+    "step_by_step": 1
+  },
+  "frankenstein_stack": {
+    "hdc_concepts": 2,
+    "aif_exploration": 0.694860562402096,
+    "aif_surprise": 1.7397461412240802,
+    "memory_active": 41,
+    "memory_stored": 41,
+    "memory_decayed": 0,
+    "strategy_stats": {
+      "direct": {
+        "attempts": 4,
+        "successes": 0
+      },
+      "with_hints": {
+        "attempts": 26,
+        "successes": 9
+      },
+      "from_memory": {
+        "attempts": 13,
+        "successes": 2
+      },
+      "step_by_step": {
+        "attempts": 8,
+        "successes": 1
+      }
+    },
+    "gut_feeling": {
+      "total_predictions": 20,
+      "accuracy": 0.5,
+      "weights": {
+        "familiarity": 0.198,
+        "track_record": 0.233,
+        "momentum": 0.149,
+        "complexity": 0.149,
+        "memory_strength": 0.149,
+        "energy": 0.124
+      },
+      "category_records": {
+        "adversarial": "1/3",
+        "chain_reasoning": "3/3",
+        "cross_domain": "0/3",
+        "devops_debug": "1/2",
+        "massive_scale": "3/3",
+        "real_world_auto": "1/3",
+        "security_audit": "3/3"
+      },
+      "difficulty_records": {
+        "11": "7/9",
+        "12": "4/7",
+        "13": "1/4"
+      },
+      "history_size": 20,
+      "calibration_size": 20
+    },
+    "emotions": {
+      "state": {
+        "joy": 0.722,
+        "sadness": 0.993,
+        "anger": 0.392,
+        "fear": 1.0,
+        "disgust": 0.53,
+        "surprise": 0.648
+      },
+      "dominant": "fear",
+      "dominant_intensity": 1.0,
+      "emoji": "😨",
+      "valence": -0.486,
+      "arousal": 1.0,
+      "total_updates": 20,
+      "emotion_totals": {
+        "joy": 8.26,
+        "sadness": 4.13,
+        "anger": 1.23,
+        "fear": 8.74,
+        "disgust": 1.85,
+        "surprise": 3.92
+      },
+      "recent_events": [
+        {
+          "trigger": "unexpected_positivt",
+          "emotion": "surprise",
+          "delta": 0.49,
+          "detail": "score 0%→100%"
+        },
+        {
+          "trigger": "failed",
+          "emotion": "sadness",
+          "delta": 0.476,
+          "detail": "nv12, score=0%, streak=-3"
+        },
+        {
+          "trigger": "repeated_error",
+          "emotion": "anger",
+          "delta": 0.175,
+          "detail": "logikfel efter 3 försök"
+        },
+        {
+          "trigger": "high_difficulty",
+          "emotion": "fear",
+          "delta": 0.42,
+          "detail": "nv12"
+        },
+        {
+          "trigger": "zero_score",
+          "emotion": "disgust",
+          "delta": 0.21,
+          "detail": "0% efter 3 försök"
+        },
+        {
+          "trigger": "unexpected_negativt",
+          "emotion": "surprise",
+          "delta": 0.49,
+          "detail": "score 100%→0%"
+        },
+        {
+          "trigger": "failed",
+          "emotion": "sadness",
+          "delta": 0.57,
+          "detail": "nv11, score=0%, streak=-7"
+        },
+        {
+          "trigger": "repeated_error",
+          "emotion": "anger",
+          "delta": 0.175,
+          "detail": "logikfel efter 4 försök"
+        },
+        {
+          "trigger": "high_difficulty",
+          "emotion": "fear",
+          "delta": 0.336,
+          "detail": "nv11"
+        },
+        {
+          "trigger": "zero_score",
+          "emotion": "disgust",
+          "delta": 0.21,
+          "detail": "0% efter 4 försök"
+        }
+      ],
+      "behavioral_modifiers": {
+        "temperature_mod": 0.023,
+        "extra_attempts": 1,
+        "strategy_preference": "with_hints",
+        "exploration_mod": 0.064,
+        "persistence_mod": 1.15,
+        "prompt_tone": "Överraskande resultat — prova en helt annan approach.",
+        "dominant_emotion": "fear",
+        "dominant_intensity": 1.0,
+        "valence": -0.486,
+        "arousal": 1.0
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "cross-netcrypto-2245",
+      "title": "Cross-domain: Nätverk+Krypto+Math",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "tags": [
+        "cross_domain",
+        "networking",
+        "cryptography",
+        "math"
+      ],
+      "frank_score": 0.0,
+      "frank_solved": false,
+      "frank_first_try": false,
+      "frank_attempts": 3,
+      "frank_time_ms": 31477.1,
+      "frank_strategy": "",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 17086.7
+    },
+    {
+      "task_id": "sec-crypto-6284",
+      "title": "Kryptoanalys: Hitta svagheter",
+      "difficulty": 13,
+      "category": "security_audit",
+      "tags": [
+        "security",
+        "cryptography",
+        "analysis"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 3837.8,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 10808.8
+    },
+    {
+      "task_id": "chain-loganalysis-9094",
+      "title": "Kedja: Logganalys → Anomali → Diagnos",
+      "difficulty": 11,
+      "category": "chain_reasoning",
+      "tags": [
+        "chain_reasoning",
+        "log_analysis",
+        "multi_step"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 2824.8,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2541.5
+    },
+    {
+      "task_id": "adv-unicode-9470",
+      "title": "Adversarial: Unicode Edge Cases",
+      "difficulty": 11,
+      "category": "adversarial",
+      "tags": [
+        "adversarial",
+        "unicode",
+        "string"
+      ],
+      "frank_score": 0.0,
+      "frank_solved": false,
+      "frank_first_try": false,
+      "frank_attempts": 4,
+      "frank_time_ms": 12287.9,
+      "frank_strategy": "",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 4279.3
+    },
+    {
+      "task_id": "cross-regression-9821",
+      "title": "Cross-domain: Linjär Regression",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "tags": [
+        "cross_domain",
+        "statistics",
+        "ml",
+        "regression"
+      ],
+      "frank_score": 0.0,
+      "frank_solved": false,
+      "frank_first_try": false,
+      "frank_attempts": 5,
+      "frank_time_ms": 24718.3,
+      "frank_strategy": "",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 8626.5
+    },
+    {
+      "task_id": "auto-dataconv-6030",
+      "title": "Automation: JSON→CSV→Aggregering",
+      "difficulty": 12,
+      "category": "real_world_auto",
+      "tags": [
+        "automation",
+        "data_conversion",
+        "json",
+        "csv",
+        "aggregation"
+      ],
+      "frank_score": 0.0,
+      "frank_solved": false,
+      "frank_first_try": false,
+      "frank_attempts": 3,
+      "frank_time_ms": 109091.4,
+      "frank_strategy": "",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 7125.1
+    },
+    {
+      "task_id": "sec-audit-9086",
+      "title": "Säkerhetsaudit: Hitta sårbarheter",
+      "difficulty": 12,
+      "category": "security_audit",
+      "tags": [
+        "security",
+        "sql_injection",
+        "xss",
+        "crypto"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 2868.9,
+      "frank_strategy": "from_memory",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 22683.1
+    },
+    {
+      "task_id": "sec-deps-1779",
+      "title": "Dependency Audit: Supply Chain",
+      "difficulty": 11,
+      "category": "security_audit",
+      "tags": [
+        "security",
+        "supply_chain",
+        "dependency_audit"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 3662.9,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 3288.8
+    },
+    {
+      "task_id": "adv-floatprecision-1963",
+      "title": "Adversarial: Floating-point Precision",
+      "difficulty": 12,
+      "category": "adversarial",
+      "tags": [
+        "adversarial",
+        "floating_point",
+        "precision"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 2526.0,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1883.7
+    },
+    {
+      "task_id": "chain-loganalysis-1403",
+      "title": "Kedja: Logganalys → Anomali → Diagnos",
+      "difficulty": 11,
+      "category": "chain_reasoning",
+      "tags": [
+        "chain_reasoning",
+        "log_analysis",
+        "multi_step"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 49945.2,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 9390.4
+    },
+    {
+      "task_id": "chain-loganalysis-1063",
+      "title": "Kedja: Logganalys → Anomali → Diagnos",
+      "difficulty": 11,
+      "category": "chain_reasoning",
+      "tags": [
+        "chain_reasoning",
+        "log_analysis",
+        "multi_step"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 3505.0,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 22483.8
+    },
+    {
+      "task_id": "auto-dataconv-3426",
+      "title": "Automation: JSON→CSV→Aggregering",
+      "difficulty": 12,
+      "category": "real_world_auto",
+      "tags": [
+        "automation",
+        "data_conversion",
+        "json",
+        "csv",
+        "aggregation"
+      ],
+      "frank_score": 0.0,
+      "frank_solved": false,
+      "frank_first_try": false,
+      "frank_attempts": 4,
+      "frank_time_ms": 36991.9,
+      "frank_strategy": "",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 39673.1
+    },
+    {
+      "task_id": "massive-slidingwin-2642",
+      "title": "Optimera: Max Subarray Sum (K=44, N=1296)",
+      "difficulty": 12,
+      "category": "massive_scale",
+      "tags": [
+        "massive_scale",
+        "optimization",
+        "sliding_window"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 14322.2,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1706.5
+    },
+    {
+      "task_id": "devops-firewall-5212",
+      "title": "DevOps: Firewall-analys",
+      "difficulty": 11,
+      "category": "devops_debug",
+      "tags": [
+        "devops",
+        "firewall",
+        "network_security"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 7503.3,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 16161.8
+    },
+    {
+      "task_id": "auto-configmerge-1489",
+      "title": "Automation: Config Merger",
+      "difficulty": 11,
+      "category": "real_world_auto",
+      "tags": [
+        "automation",
+        "config",
+        "merge"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": false,
+      "frank_attempts": 2,
+      "frank_time_ms": 14298.9,
+      "frank_strategy": "from_memory",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 6794.0
+    },
+    {
+      "task_id": "massive-slidingwin-7344",
+      "title": "Optimera: Max Subarray Sum (K=25, N=1915)",
+      "difficulty": 12,
+      "category": "massive_scale",
+      "tags": [
+        "massive_scale",
+        "optimization",
+        "sliding_window"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 1972.2,
+      "frank_strategy": "with_hints",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2272.7
+    },
+    {
+      "task_id": "cross-netcrypto-4270",
+      "title": "Cross-domain: Nätverk+Krypto+Math",
+      "difficulty": 13,
+      "category": "cross_domain",
+      "tags": [
+        "cross_domain",
+        "networking",
+        "cryptography",
+        "math"
+      ],
+      "frank_score": 0.0,
+      "frank_solved": false,
+      "frank_first_try": false,
+      "frank_attempts": 2,
+      "frank_time_ms": 129025.9,
+      "frank_strategy": "",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 64498.0
+    },
+    {
+      "task_id": "massive-metrics-7333",
+      "title": "Massiv: Kodbasanalys ({n_files} filer)",
+      "difficulty": 11,
+      "category": "massive_scale",
+      "tags": [
+        "massive_scale",
+        "code_analysis",
+        "metrics"
+      ],
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 4054.6,
+      "frank_strategy": "step_by_step",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 4799.6
+    },
+    {
+      "task_id": "devops-docker-7844",
+      "title": "DevOps: Docker Security Audit",
+      "difficulty": 12,
+      "category": "devops_debug",
+      "tags": [
+        "devops",
+        "docker",
+        "security",
+        "best_practices"
+      ],
+      "frank_score": 0.0,
+      "frank_solved": false,
+      "frank_first_try": false,
+      "frank_attempts": 3,
+      "frank_time_ms": 117476.7,
+      "frank_strategy": "",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 23942.1
+    },
+    {
+      "task_id": "adv-unicode-8334",
+      "title": "Adversarial: Unicode Edge Cases",
+      "difficulty": 11,
+      "category": "adversarial",
+      "tags": [
+        "adversarial",
+        "unicode",
+        "string"
+      ],
+      "frank_score": 0.0,
+      "frank_solved": false,
+      "frank_first_try": false,
+      "frank_attempts": 4,
+      "frank_time_ms": 44151.2,
+      "frank_strategy": "",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 4312.9
+    }
+  ]
+}

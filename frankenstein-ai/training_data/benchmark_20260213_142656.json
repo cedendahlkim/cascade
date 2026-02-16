@@ -1,0 +1,2176 @@
+{
+  "timestamp": "2026-02-13 14:26:56",
+  "benchmark_type": "comprehensive",
+  "summary": {
+    "total_tasks": 84,
+    "categories_tested": 25,
+    "difficulty_range": "1-10",
+    "frankenstein": {
+      "solved": 84,
+      "solve_rate": 1.0,
+      "first_try": 84,
+      "first_try_rate": 1.0,
+      "avg_time_ms": 262.2
+    },
+    "gemini": {
+      "model": "gemini-2.0-flash",
+      "solved": 80,
+      "solve_rate": 0.952,
+      "first_try": 79,
+      "first_try_rate": 0.94,
+      "avg_time_ms": 14035.4
+    },
+    "diff_solve_rate": 0.048,
+    "diff_first_try_rate": 0.06,
+    "winner": "tie",
+    "winner_text": "Oavgjort (skillnad: +4.8%)"
+  },
+  "per_level": {
+    "1": {
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0
+      }
+    },
+    "2": {
+      "frankenstein": {
+        "solved": 6,
+        "total": 6,
+        "rate": 1.0
+      },
+      "gemini": {
+        "solved": 6,
+        "total": 6,
+        "rate": 1.0
+      }
+    },
+    "3": {
+      "frankenstein": {
+        "solved": 7,
+        "total": 7,
+        "rate": 1.0
+      },
+      "gemini": {
+        "solved": 7,
+        "total": 7,
+        "rate": 1.0
+      }
+    },
+    "4": {
+      "frankenstein": {
+        "solved": 8,
+        "total": 8,
+        "rate": 1.0
+      },
+      "gemini": {
+        "solved": 8,
+        "total": 8,
+        "rate": 1.0
+      }
+    },
+    "5": {
+      "frankenstein": {
+        "solved": 15,
+        "total": 15,
+        "rate": 1.0
+      },
+      "gemini": {
+        "solved": 15,
+        "total": 15,
+        "rate": 1.0
+      }
+    },
+    "6": {
+      "frankenstein": {
+        "solved": 10,
+        "total": 10,
+        "rate": 1.0
+      },
+      "gemini": {
+        "solved": 10,
+        "total": 10,
+        "rate": 1.0
+      }
+    },
+    "7": {
+      "frankenstein": {
+        "solved": 11,
+        "total": 11,
+        "rate": 1.0
+      },
+      "gemini": {
+        "solved": 7,
+        "total": 11,
+        "rate": 0.636
+      }
+    },
+    "8": {
+      "frankenstein": {
+        "solved": 6,
+        "total": 6,
+        "rate": 1.0
+      },
+      "gemini": {
+        "solved": 6,
+        "total": 6,
+        "rate": 1.0
+      }
+    },
+    "9": {
+      "frankenstein": {
+        "solved": 6,
+        "total": 6,
+        "rate": 1.0
+      },
+      "gemini": {
+        "solved": 6,
+        "total": 6,
+        "rate": 1.0
+      }
+    },
+    "10": {
+      "frankenstein": {
+        "solved": 12,
+        "total": 12,
+        "rate": 1.0
+      },
+      "gemini": {
+        "solved": 12,
+        "total": 12,
+        "rate": 1.0
+      }
+    }
+  },
+  "per_category": {
+    "algorithm": {
+      "category": "algorithm",
+      "difficulty": 3,
+      "frankenstein": {
+        "solved": 2,
+        "total": 2,
+        "rate": 1.0,
+        "first_try": 2
+      },
+      "gemini": {
+        "solved": 2,
+        "total": 2,
+        "rate": 1.0,
+        "first_try": 2
+      }
+    },
+    "api_design": {
+      "category": "api_design",
+      "difficulty": 7,
+      "frankenstein": {
+        "solved": 8,
+        "total": 8,
+        "rate": 1.0,
+        "first_try": 8
+      },
+      "gemini": {
+        "solved": 4,
+        "total": 8,
+        "rate": 0.5,
+        "first_try": 4
+      }
+    },
+    "arithmetic": {
+      "category": "arithmetic",
+      "difficulty": 1,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      }
+    },
+    "backtracking": {
+      "category": "backtracking",
+      "difficulty": 10,
+      "frankenstein": {
+        "solved": 2,
+        "total": 2,
+        "rate": 1.0,
+        "first_try": 2
+      },
+      "gemini": {
+        "solved": 2,
+        "total": 2,
+        "rate": 1.0,
+        "first_try": 2
+      }
+    },
+    "binary_search": {
+      "category": "binary_search",
+      "difficulty": 9,
+      "frankenstein": {
+        "solved": 2,
+        "total": 2,
+        "rate": 1.0,
+        "first_try": 2
+      },
+      "gemini": {
+        "solved": 2,
+        "total": 2,
+        "rate": 1.0,
+        "first_try": 2
+      }
+    },
+    "code_review": {
+      "category": "code_review",
+      "difficulty": 5,
+      "frankenstein": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      },
+      "gemini": {
+        "solved": 3,
+        "total": 3,
+        "rate": 1.0,
+        "first_try": 3
+      }
+    },
+    "combinatorics": {
+      "category": "combinatorics",
+      "difficulty": 8,
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      },
+      "gemini": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 4
+      }
+    },
+    "data_structure": {
+      "category": "data_structure",
+      "difficulty": 6,
+      "frankenstein": {
+        "solved": 6,
+        "total": 6,
+        "rate": 1.0,
+        "first_try": 6
+      },
+      "gemini": {
+        "solved": 6,
+        "total": 6,
+        "rate": 1.0,
+        "first_try": 6
+      }
+    },
+    "dict": {
+      "category": "dict",
+      "difficulty": 4,
+      "frankenstein": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      }
+    },
+    "dp": {
+      "category": "dp",
+      "difficulty": 8,
+      "frankenstein": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      }
+    },
+    "dp_advanced": {
+      "category": "dp_advanced",
+      "difficulty": 10,
+      "frankenstein": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0,
+        "first_try": 4
+      },
+      "gemini": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0,
+        "first_try": 4
+      }
+    },
+    "functional": {
+      "category": "functional",
+      "difficulty": 7,
+      "frankenstein": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      }
+    },
+    "graph": {
+      "category": "graph",
+      "difficulty": 7,
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      },
+      "gemini": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      }
+    },
+    "graph_advanced": {
+      "category": "graph_advanced",
+      "difficulty": 9,
+      "frankenstein": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0,
+        "first_try": 4
+      },
+      "gemini": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0,
+        "first_try": 4
+      }
+    },
+    "interval": {
+      "category": "interval",
+      "difficulty": 10,
+      "frankenstein": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      }
+    },
+    "list": {
+      "category": "list",
+      "difficulty": 3,
+      "frankenstein": {
+        "solved": 2,
+        "total": 2,
+        "rate": 1.0,
+        "first_try": 2
+      },
+      "gemini": {
+        "solved": 2,
+        "total": 2,
+        "rate": 1.0,
+        "first_try": 2
+      }
+    },
+    "matrix": {
+      "category": "matrix",
+      "difficulty": 4,
+      "frankenstein": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      }
+    },
+    "multi_step": {
+      "category": "multi_step",
+      "difficulty": 5,
+      "frankenstein": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0,
+        "first_try": 4
+      },
+      "gemini": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0,
+        "first_try": 4
+      }
+    },
+    "number_theory": {
+      "category": "number_theory",
+      "difficulty": 3,
+      "frankenstein": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0,
+        "first_try": 4
+      },
+      "gemini": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0,
+        "first_try": 4
+      }
+    },
+    "pattern": {
+      "category": "pattern",
+      "difficulty": 2,
+      "frankenstein": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      },
+      "gemini": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0,
+        "first_try": 1
+      }
+    },
+    "recursion": {
+      "category": "recursion",
+      "difficulty": 4,
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      },
+      "gemini": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      }
+    },
+    "sorting": {
+      "category": "sorting",
+      "difficulty": 5,
+      "frankenstein": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0,
+        "first_try": 4
+      },
+      "gemini": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0,
+        "first_try": 4
+      }
+    },
+    "string": {
+      "category": "string",
+      "difficulty": 2,
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      },
+      "gemini": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      }
+    },
+    "string_advanced": {
+      "category": "string_advanced",
+      "difficulty": 5,
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      },
+      "gemini": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      }
+    },
+    "trie": {
+      "category": "trie",
+      "difficulty": 10,
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      },
+      "gemini": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0,
+        "first_try": 5
+      }
+    }
+  },
+  "strategy_distribution": {
+    "system0_deterministic": 69,
+    "system0_promoted": 8,
+    "system1_promoted": 7
+  },
+  "frankenstein_stack": {
+    "hdc_concepts": 2,
+    "aif_exploration": 0.3325738698925018,
+    "aif_surprise": 0.0,
+    "memory_active": 84,
+    "memory_stored": 84,
+    "memory_decayed": 0,
+    "strategy_stats": {
+      "direct": {
+        "attempts": 0,
+        "successes": 0
+      },
+      "with_hints": {
+        "attempts": 0,
+        "successes": 0
+      },
+      "from_memory": {
+        "attempts": 0,
+        "successes": 0
+      },
+      "step_by_step": {
+        "attempts": 0,
+        "successes": 0
+      },
+      "system0_deterministic": {
+        "attempts": 69,
+        "successes": 69
+      },
+      "system0_promoted": {
+        "attempts": 8,
+        "successes": 8
+      },
+      "system1_promoted": {
+        "attempts": 7,
+        "successes": 7
+      }
+    },
+    "gut_feeling": {
+      "total_predictions": 84,
+      "accuracy": 0.976,
+      "weights": {
+        "familiarity": 0.173,
+        "track_record": 0.35,
+        "momentum": 0.13,
+        "complexity": 0.13,
+        "memory_strength": 0.13,
+        "energy": 0.087
+      },
+      "category_records": {
+        "algorithm": "2/2",
+        "api_design": "8/8",
+        "arithmetic": "3/3",
+        "backtracking": "2/2",
+        "binary_search": "2/2",
+        "code_review": "3/3",
+        "combinatorics": "5/5",
+        "data_structure": "6/6",
+        "dict": "1/1",
+        "dp": "1/1",
+        "dp_advanced": "4/4",
+        "functional": "1/1",
+        "graph": "5/5",
+        "graph_advanced": "4/4",
+        "interval": "1/1",
+        "list": "2/2",
+        "matrix": "1/1",
+        "multi_step": "4/4",
+        "number_theory": "4/4",
+        "pattern": "1/1",
+        "recursion": "5/5",
+        "sorting": "4/4",
+        "string": "5/5",
+        "string_advanced": "5/5",
+        "trie": "5/5"
+      },
+      "difficulty_records": {
+        "1": "3/3",
+        "2": "6/6",
+        "3": "7/7",
+        "4": "8/8",
+        "5": "15/15",
+        "6": "10/10",
+        "7": "11/11",
+        "8": "6/6",
+        "9": "6/6",
+        "10": "12/12"
+      },
+      "history_size": 84,
+      "calibration_size": 84
+    },
+    "emotions": {
+      "state": {
+        "joy": 1.0,
+        "sadness": 0.0,
+        "anger": 0.0,
+        "fear": 0.105,
+        "disgust": 0.0,
+        "surprise": 0.0
+      },
+      "dominant": "joy",
+      "dominant_intensity": 1.0,
+      "emoji": "😊",
+      "valence": 0.809,
+      "arousal": 0.605,
+      "total_updates": 84,
+      "emotion_totals": {
+        "joy": 54.85,
+        "sadness": 0.0,
+        "anger": 0.0,
+        "fear": 5.02,
+        "disgust": 0.0,
+        "surprise": 0.28
+      },
+      "recent_events": [
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.658,
+          "detail": "nv6, 1 försök, streak=76"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.658,
+          "detail": "nv6, 1 försök, streak=77"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.546,
+          "detail": "nv2, 1 försök, streak=78"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.63,
+          "detail": "nv5, 1 försök, streak=79"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.686,
+          "detail": "nv7, 1 försök, streak=80"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.63,
+          "detail": "nv5, 1 försök, streak=81"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.658,
+          "detail": "nv6, 1 försök, streak=82"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.742,
+          "detail": "nv9, 1 försök, streak=83"
+        },
+        {
+          "trigger": "high_difficulty",
+          "emotion": "fear",
+          "delta": 0.168,
+          "detail": "nv9"
+        },
+        {
+          "trigger": "solved",
+          "emotion": "joy",
+          "delta": 0.686,
+          "detail": "nv7, 1 försök, streak=84"
+        }
+      ],
+      "behavioral_modifiers": {
+        "temperature_mod": -0.05,
+        "extra_attempts": 0,
+        "strategy_preference": null,
+        "exploration_mod": 0.0,
+        "persistence_mod": 1.1,
+        "prompt_tone": "Du är i flow — skriv ren, effektiv kod.",
+        "dominant_emotion": "joy",
+        "dominant_intensity": 1.0,
+        "valence": 0.809,
+        "arousal": 0.605
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "gen-trie-ops-4506",
+      "title": "Trie-operationer (prefix-träd)",
+      "difficulty": 10,
+      "category": "trie",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 379.0,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 11178.8
+    },
+    {
+      "task_id": "gen-algo-running_sum-9908",
+      "title": "Löpande summa",
+      "difficulty": 3,
+      "category": "algorithm",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 315.2,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1577.1
+    },
+    {
+      "task_id": "gen-graph-shortest_weighted-4284",
+      "title": "Kortaste väg (viktad graf)",
+      "difficulty": 9,
+      "category": "graph_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 280.7,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2356.6
+    },
+    {
+      "task_id": "gen-str-no_spaces-8516",
+      "title": "Sträng: Ta bort alla mellanslag",
+      "difficulty": 2,
+      "category": "string",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 268.6,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 38426.6
+    },
+    {
+      "task_id": "gen-ds-reverse_with_stack-4790",
+      "title": "Omvänd med stack",
+      "difficulty": 6,
+      "category": "data_structure",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 224.7,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 10133.9
+    },
+    {
+      "task_id": "gen-numtheory-divisors-9299",
+      "title": "Tal: Skriv ut alla delare",
+      "difficulty": 3,
+      "category": "number_theory",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 260.6,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2624.5
+    },
+    {
+      "task_id": "api-lru-3931",
+      "title": "Implementera LRU Cache",
+      "difficulty": 7,
+      "category": "api_design",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 209.2,
+      "frank_strategy": "system0_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2715.7
+    },
+    {
+      "task_id": "gen-graph-adjacency-8846",
+      "title": "Bygg adjacenslista",
+      "difficulty": 7,
+      "category": "graph",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 262.2,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2369.1
+    },
+    {
+      "task_id": "gen-strv-compress-4376",
+      "title": "Komprimera sträng (RLE)",
+      "difficulty": 5,
+      "category": "string_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 219.7,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 8781.9
+    },
+    {
+      "task_id": "gen-strv-anagram-6180",
+      "title": "Kontrollera anagram",
+      "difficulty": 5,
+      "category": "string_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 264.7,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 3081.7
+    },
+    {
+      "task_id": "gen-func-flatten-1716",
+      "title": "Platta ut nästlad lista",
+      "difficulty": 7,
+      "category": "functional",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 316.7,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 10050.1
+    },
+    {
+      "task_id": "review-stable-sort-4488",
+      "title": "Stabil sortering",
+      "difficulty": 5,
+      "category": "code_review",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 157.4,
+      "frank_strategy": "system1_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1377.4
+    },
+    {
+      "task_id": "multi-grades-7901",
+      "title": "Betygsrapport: Parse, beräkna, sortera",
+      "difficulty": 5,
+      "category": "multi_step",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 169.4,
+      "frank_strategy": "system1_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2334.2
+    },
+    {
+      "task_id": "gen-graph-topo-2950",
+      "title": "Topologisk sortering",
+      "difficulty": 9,
+      "category": "graph_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 277.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2748.2
+    },
+    {
+      "task_id": "gen-ds-balanced_brackets-1612",
+      "title": "Balanserade parenteser",
+      "difficulty": 6,
+      "category": "data_structure",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 270.3,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1869.9
+    },
+    {
+      "task_id": "gen-arith-1500",
+      "title": "Beräkna subtraktion",
+      "difficulty": 1,
+      "category": "arithmetic",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 260.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 10319.7
+    },
+    {
+      "task_id": "gen-dp2-edit_distance-7464",
+      "title": "Edit Distance (Levenshtein)",
+      "difficulty": 10,
+      "category": "dp_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 241.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2220.8
+    },
+    {
+      "task_id": "gen-sort-merge_sorted-1001",
+      "title": "Merga två sorterade listor",
+      "difficulty": 5,
+      "category": "sorting",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 251.3,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 3672.8
+    },
+    {
+      "task_id": "gen-list-average-6127",
+      "title": "Lista: medelvärdet (avrundat till heltal)",
+      "difficulty": 3,
+      "category": "list",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 273.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 12031.5
+    },
+    {
+      "task_id": "gen-ds-reverse_with_stack-3066",
+      "title": "Omvänd med stack",
+      "difficulty": 6,
+      "category": "data_structure",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 278.5,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 3704.1
+    },
+    {
+      "task_id": "gen-list-average-8561",
+      "title": "Lista: medelvärdet (avrundat till heltal)",
+      "difficulty": 3,
+      "category": "list",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 308.2,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1290.6
+    },
+    {
+      "task_id": "gen-comb-permutations-6264",
+      "title": "Generera permutationer",
+      "difficulty": 8,
+      "category": "combinatorics",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 189.0,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1537.6
+    },
+    {
+      "task_id": "gen-bt-sudoku_valid-8761",
+      "title": "Validera Sudoku-rad",
+      "difficulty": 10,
+      "category": "backtracking",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 257.6,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2515.8
+    },
+    {
+      "task_id": "gen-trie-ops-2649",
+      "title": "Trie-operationer (prefix-träd)",
+      "difficulty": 10,
+      "category": "trie",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 292.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 79480.3
+    },
+    {
+      "task_id": "gen-sort-merge_sorted-9532",
+      "title": "Merga två sorterade listor",
+      "difficulty": 5,
+      "category": "sorting",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 256.6,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1997.6
+    },
+    {
+      "task_id": "gen-dp2-longest_common_subseq-6429",
+      "title": "Längsta gemensamma delföljd (LCS)",
+      "difficulty": 10,
+      "category": "dp_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 219.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 10756.1
+    },
+    {
+      "task_id": "gen-rec-sum_digits-1323",
+      "title": "Rekursiv siffersumma",
+      "difficulty": 4,
+      "category": "recursion",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 263.1,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1595.9
+    },
+    {
+      "task_id": "gen-numtheory-reverse_number-2514",
+      "title": "Tal: Skriv ut talet baklänges (som heltal)",
+      "difficulty": 3,
+      "category": "number_theory",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 278.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1225.4
+    },
+    {
+      "task_id": "gen-strv-compress-2424",
+      "title": "Komprimera sträng (RLE)",
+      "difficulty": 5,
+      "category": "string_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 238.3,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1861.2
+    },
+    {
+      "task_id": "gen-strv-anagram-2185",
+      "title": "Kontrollera anagram",
+      "difficulty": 5,
+      "category": "string_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 229.9,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 77408.1
+    },
+    {
+      "task_id": "gen-graph-path_exists-5857",
+      "title": "Finns väg?",
+      "difficulty": 7,
+      "category": "graph",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 257.9,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2341.1
+    },
+    {
+      "task_id": "review-leak-5854",
+      "title": "Hitta resursläckor",
+      "difficulty": 5,
+      "category": "code_review",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 257.6,
+      "frank_strategy": "system1_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1870.5
+    },
+    {
+      "task_id": "gen-comb-combinations-4526",
+      "title": "Kombinationer av K element",
+      "difficulty": 8,
+      "category": "combinatorics",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 307.7,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2317.4
+    },
+    {
+      "task_id": "api-ratelimit-7709",
+      "title": "Implementera Rate Limiter",
+      "difficulty": 7,
+      "category": "api_design",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 262.7,
+      "frank_strategy": "system0_promoted",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 20432.0
+    },
+    {
+      "task_id": "gen-str-uppercase-3361",
+      "title": "Sträng: Konvertera till VERSALER",
+      "difficulty": 2,
+      "category": "string",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 365.9,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 9368.0
+    },
+    {
+      "task_id": "gen-interval-max_non_overlapping-1256",
+      "title": "Max antal icke-överlappande intervall",
+      "difficulty": 10,
+      "category": "interval",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 353.0,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 20414.3
+    },
+    {
+      "task_id": "api-ratelimit-2006",
+      "title": "Implementera Rate Limiter",
+      "difficulty": 7,
+      "category": "api_design",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 299.5,
+      "frank_strategy": "system0_promoted",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 49138.2
+    },
+    {
+      "task_id": "multi-grades-3882",
+      "title": "Betygsrapport: Parse, beräkna, sortera",
+      "difficulty": 5,
+      "category": "multi_step",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 161.8,
+      "frank_strategy": "system1_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1652.1
+    },
+    {
+      "task_id": "gen-dp2-longest_common_subseq-2216",
+      "title": "Längsta gemensamma delföljd (LCS)",
+      "difficulty": 10,
+      "category": "dp_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 233.9,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 68666.0
+    },
+    {
+      "task_id": "gen-dp2-edit_distance-6982",
+      "title": "Edit Distance (Levenshtein)",
+      "difficulty": 10,
+      "category": "dp_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 305.2,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2671.6
+    },
+    {
+      "task_id": "gen-graph-adjacency-6015",
+      "title": "Bygg adjacenslista",
+      "difficulty": 7,
+      "category": "graph",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 254.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2645.8
+    },
+    {
+      "task_id": "gen-numtheory-divisors-8539",
+      "title": "Tal: Skriv ut alla delare",
+      "difficulty": 3,
+      "category": "number_theory",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 263.5,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 9113.5
+    },
+    {
+      "task_id": "gen-search-kth_smallest_matrix-3682",
+      "title": "K:te minsta i sorterad matris",
+      "difficulty": 9,
+      "category": "binary_search",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 249.1,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2415.9
+    },
+    {
+      "task_id": "gen-matrix-row_sum-7496",
+      "title": "Matris: Radsummor",
+      "difficulty": 4,
+      "category": "matrix",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 221.0,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1558.0
+    },
+    {
+      "task_id": "gen-rec-power-9514",
+      "title": "Beräkna x^n",
+      "difficulty": 4,
+      "category": "recursion",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 263.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1633.4
+    },
+    {
+      "task_id": "review-stable-sort-7183",
+      "title": "Stabil sortering",
+      "difficulty": 5,
+      "category": "code_review",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 176.4,
+      "frank_strategy": "system1_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2390.6
+    },
+    {
+      "task_id": "gen-trie-ops-2111",
+      "title": "Trie-operationer (prefix-träd)",
+      "difficulty": 10,
+      "category": "trie",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 273.9,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 23662.3
+    },
+    {
+      "task_id": "gen-algo-two_sum-8647",
+      "title": "Two Sum",
+      "difficulty": 4,
+      "category": "algorithm",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 252.0,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 21597.5
+    },
+    {
+      "task_id": "gen-str-length-3065",
+      "title": "Sträng: Skriv ut strängens längd",
+      "difficulty": 2,
+      "category": "string",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 285.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1043.9
+    },
+    {
+      "task_id": "gen-sort-insertion_sort-1171",
+      "title": "Insertion Sort",
+      "difficulty": 5,
+      "category": "sorting",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 223.9,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 9123.2
+    },
+    {
+      "task_id": "gen-comb-permutations-6671",
+      "title": "Generera permutationer",
+      "difficulty": 8,
+      "category": "combinatorics",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 185.6,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 52908.0
+    },
+    {
+      "task_id": "gen-numtheory-count_digits-4964",
+      "title": "Tal: Skriv ut antalet siffror",
+      "difficulty": 3,
+      "category": "number_theory",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 263.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1184.6
+    },
+    {
+      "task_id": "gen-ds-min_stack-9123",
+      "title": "Min-stack",
+      "difficulty": 6,
+      "category": "data_structure",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 242.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 16948.5
+    },
+    {
+      "task_id": "gen-graph-path_exists-9516",
+      "title": "Finns väg?",
+      "difficulty": 7,
+      "category": "graph",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 260.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 7813.9
+    },
+    {
+      "task_id": "gen-bt-sudoku_valid-6449",
+      "title": "Validera Sudoku-rad",
+      "difficulty": 10,
+      "category": "backtracking",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 275.2,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2608.5
+    },
+    {
+      "task_id": "gen-rec-power-8268",
+      "title": "Beräkna x^n",
+      "difficulty": 4,
+      "category": "recursion",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 267.2,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 15638.0
+    },
+    {
+      "task_id": "gen-comb-subsets-8696",
+      "title": "Generera alla delmängder",
+      "difficulty": 8,
+      "category": "combinatorics",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 200.0,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 4913.4
+    },
+    {
+      "task_id": "gen-comb-permutations-1042",
+      "title": "Generera permutationer",
+      "difficulty": 8,
+      "category": "combinatorics",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 217.1,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 19184.7
+    },
+    {
+      "task_id": "gen-dict-word_length-4701",
+      "title": "Ordlängder",
+      "difficulty": 4,
+      "category": "dict",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 243.6,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1366.1
+    },
+    {
+      "task_id": "gen-search-search_rotated-1798",
+      "title": "Sök i roterad sorterad array",
+      "difficulty": 9,
+      "category": "binary_search",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 275.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2596.8
+    },
+    {
+      "task_id": "gen-str-first_last-9161",
+      "title": "Sträng: Skriv ut första och sista tecknet med mellanslag",
+      "difficulty": 2,
+      "category": "string",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 284.0,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1967.9
+    },
+    {
+      "task_id": "gen-trie-ops-8743",
+      "title": "Trie-operationer (prefix-träd)",
+      "difficulty": 10,
+      "category": "trie",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 299.9,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 4635.9
+    },
+    {
+      "task_id": "gen-ds-reverse_with_stack-3663",
+      "title": "Omvänd med stack",
+      "difficulty": 6,
+      "category": "data_structure",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 245.0,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 14885.5
+    },
+    {
+      "task_id": "api-emitter-5694",
+      "title": "Implementera EventEmitter",
+      "difficulty": 6,
+      "category": "api_design",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 208.2,
+      "frank_strategy": "system0_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2662.3
+    },
+    {
+      "task_id": "api-emitter-6841",
+      "title": "Implementera EventEmitter",
+      "difficulty": 6,
+      "category": "api_design",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 184.3,
+      "frank_strategy": "system0_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 42475.1
+    },
+    {
+      "task_id": "gen-graph-shortest_unweighted-8308",
+      "title": "Kortaste väg (BFS)",
+      "difficulty": 9,
+      "category": "graph_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 415.1,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 54572.6
+    },
+    {
+      "task_id": "gen-arith-2268",
+      "title": "Beräkna addition",
+      "difficulty": 1,
+      "category": "arithmetic",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 337.5,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1339.6
+    },
+    {
+      "task_id": "gen-rec-sum_digits-6074",
+      "title": "Rekursiv siffersumma",
+      "difficulty": 4,
+      "category": "recursion",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 352.6,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1716.0
+    },
+    {
+      "task_id": "gen-dp-climb_stairs-2688",
+      "title": "Trappklättring",
+      "difficulty": 8,
+      "category": "dp",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 265.1,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1613.6
+    },
+    {
+      "task_id": "api-ratelimit-4907",
+      "title": "Implementera Rate Limiter",
+      "difficulty": 7,
+      "category": "api_design",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 221.8,
+      "frank_strategy": "system0_promoted",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 34533.7
+    },
+    {
+      "task_id": "multi-grades-6131",
+      "title": "Betygsrapport: Parse, beräkna, sortera",
+      "difficulty": 5,
+      "category": "multi_step",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 176.8,
+      "frank_strategy": "system1_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1652.3
+    },
+    {
+      "task_id": "gen-rec-power-9037",
+      "title": "Beräkna x^n",
+      "difficulty": 4,
+      "category": "recursion",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 272.6,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 7048.2
+    },
+    {
+      "task_id": "gen-str-title-6959",
+      "title": "Sträng: Konvertera till Title Case",
+      "difficulty": 2,
+      "category": "string",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 267.3,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 11465.2
+    },
+    {
+      "task_id": "gen-trie-ops-4178",
+      "title": "Trie-operationer (prefix-träd)",
+      "difficulty": 10,
+      "category": "trie",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 293.1,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 54278.3
+    },
+    {
+      "task_id": "gen-arith-8260",
+      "title": "Beräkna addition",
+      "difficulty": 1,
+      "category": "arithmetic",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 296.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2040.0
+    },
+    {
+      "task_id": "gen-ds-balanced_brackets-5137",
+      "title": "Balanserade parenteser",
+      "difficulty": 6,
+      "category": "data_structure",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 296.6,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1689.4
+    },
+    {
+      "task_id": "api-emitter-9516",
+      "title": "Implementera EventEmitter",
+      "difficulty": 6,
+      "category": "api_design",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 213.2,
+      "frank_strategy": "system0_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 146065.5
+    },
+    {
+      "task_id": "gen-pattern-pyramid-4340",
+      "title": "Mönster: Skriv ut en centrerad pyramid med *",
+      "difficulty": 2,
+      "category": "pattern",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 242.4,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2561.2
+    },
+    {
+      "task_id": "gen-strv-compress-7969",
+      "title": "Komprimera sträng (RLE)",
+      "difficulty": 5,
+      "category": "string_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 234.2,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1575.4
+    },
+    {
+      "task_id": "api-ratelimit-6799",
+      "title": "Implementera Rate Limiter",
+      "difficulty": 7,
+      "category": "api_design",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 197.6,
+      "frank_strategy": "system0_promoted",
+      "gemini_score": 0.0,
+      "gemini_solved": false,
+      "gemini_first_try": false,
+      "gemini_attempts": 3,
+      "gemini_time_ms": 37718.8
+    },
+    {
+      "task_id": "gen-sort-bubble_sort-8901",
+      "title": "Bubble Sort",
+      "difficulty": 5,
+      "category": "sorting",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 313.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 1631.3
+    },
+    {
+      "task_id": "multi-statemachine-4378",
+      "title": "Tillståndsmaskin",
+      "difficulty": 6,
+      "category": "multi_step",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 260.2,
+      "frank_strategy": "system1_promoted",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 53738.9
+    },
+    {
+      "task_id": "gen-graph-topo-8352",
+      "title": "Topologisk sortering",
+      "difficulty": 9,
+      "category": "graph_advanced",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 470.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2529.8
+    },
+    {
+      "task_id": "gen-graph-path_exists-3729",
+      "title": "Finns väg?",
+      "difficulty": 7,
+      "category": "graph",
+      "frank_score": 1.0,
+      "frank_solved": true,
+      "frank_first_try": true,
+      "frank_attempts": 1,
+      "frank_time_ms": 259.8,
+      "frank_strategy": "system0_deterministic",
+      "gemini_score": 1.0,
+      "gemini_solved": true,
+      "gemini_first_try": true,
+      "gemini_attempts": 1,
+      "gemini_time_ms": 2116.5
+    }
+  ]
+}

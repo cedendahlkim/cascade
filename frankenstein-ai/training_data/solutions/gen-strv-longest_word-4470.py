@@ -1,0 +1,9 @@
+# Task: gen-strv-longest_word-4470 | Score: 100% | 2026-02-12T19:17:35.174875
+
+text = input()
+words = text.split()
+longest_word = ""
+for word in words:
+    if len(word) > len(longest_word):
+        longest_word = word
+print(longest_word)

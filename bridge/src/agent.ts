@@ -17,6 +17,7 @@ import { FILESYSTEM_TOOLS, handleFilesystemTool } from "./tools-filesystem.js";
 import { COMMAND_TOOLS, handleCommandTool } from "./tools-commands.js";
 import { PROCESS_TOOLS, handleProcessTool } from "./tools-process.js";
 import { DESKTOP_TOOLS, handleDesktopTool } from "./tools-desktop.js";
+import { COMPUTER_TOOLS, handleComputerTool } from "./tools-computers.js";
 import { WEB_TOOLS, handleWebTool } from "./tools-web.js";
 import { getAuditLog, getSecurityConfig } from "./security.js";
 import {
@@ -25,6 +26,16 @@ import {
   ragDeleteSource, ragStats,
 } from "./rag.js";
 import { getSystemContext } from "./system-context.js";
+import { getPluginToolDefinitions, handlePluginTool } from "./plugin-loader.js";
+import { isWeaviateConnected, weaviateGetContext, weaviateIndexText, weaviateSearch, weaviateListSources, weaviateDeleteSource, weaviateStats } from "./rag-weaviate.js";
+import {
+  getSelfImproveContext, buildReflectionPrompt, buildSkillExtractionPrompt,
+  addEvaluation, addReflection, addSkill, findMatchingSkills, findSkillsForQuery, recordSkillUse,
+  buildAdversarialPrompt, addAdversarialResult, type AdversarialResult,
+  recordToolSequence,
+  calculateCuriosityReward, getCuriosityContext,
+  buildMetakognitionContext, runNetworkMetakognition,
+} from "./self-improve.js";
 
 export interface AgentMessage {
   role: "user" | "assistant";
@@ -204,16 +215,25 @@ const RAG_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
-const ALL_TOOLS: Anthropic.Tool[] = [
-  ...MEMORY_TOOLS,
-  ...SECURITY_TOOLS,
-  ...FILESYSTEM_TOOLS,
-  ...COMMAND_TOOLS,
-  ...PROCESS_TOOLS,
-  ...DESKTOP_TOOLS,
-  ...WEB_TOOLS,
-  ...RAG_TOOLS,
-];
+function getAllTools(): Anthropic.Tool[] {
+  const pluginDefs = getPluginToolDefinitions().map((d) => ({
+    name: d.name,
+    description: d.description,
+    input_schema: d.input_schema as Anthropic.Tool.InputSchema,
+  }));
+  return [
+    ...MEMORY_TOOLS,
+    ...SECURITY_TOOLS,
+    ...FILESYSTEM_TOOLS,
+    ...COMMAND_TOOLS,
+    ...PROCESS_TOOLS,
+    ...DESKTOP_TOOLS,
+    ...WEB_TOOLS,
+    ...RAG_TOOLS,
+    ...COMPUTER_TOOLS,
+    ...pluginDefs,
+  ];
+}
 
 async function handleToolCall(name: string, input: Record<string, unknown>): Promise<string> {
   switch (name) {
@@ -309,6 +329,13 @@ async function handleToolCall(name: string, input: Record<string, unknown>): Pro
       if (!deskResult.startsWith("Unknown desktop tool:")) return deskResult;
       const webResult = await handleWebTool(name, input);
       if (!webResult.startsWith("Unknown web tool:")) return webResult;
+      const compResult = await handleComputerTool(name, input);
+      if (!compResult.startsWith("Unknown computer tool:")) return compResult;
+
+      // Plugin tools
+      const pluginResult = await handlePluginTool(name, input);
+      if (pluginResult !== null) return pluginResult;
+
       return `Unknown tool: ${name}`;
     }
   }
@@ -362,6 +389,12 @@ const TOOL_CATEGORIES: Record<string, string> = {
   rag_list_sources: "knowledge",
   rag_delete_source: "knowledge",
   rag_stats: "knowledge",
+  list_computers: "computer",
+  run_on_computer: "computer",
+  read_remote_file: "computer",
+  write_remote_file: "computer",
+  screenshot_computer: "computer",
+  computer_system_info: "computer",
 };
 
 export function getToolCategory(toolName: string): string {
@@ -371,6 +404,7 @@ export function getToolCategory(toolName: string): string {
 const MAX_HISTORY = 40;
 const MAX_TOOL_ROUNDS = 8;
 const MAX_TOOL_RESULT_CHARS = 8000;
+const SELF_IMPROVE_ENABLED = process.env.SELF_IMPROVE !== "0";
 
 export interface TokenUsage {
   inputTokens: number;
@@ -382,6 +416,7 @@ export interface TokenUsage {
 }
 
 export type StreamCallback = (chunk: string) => void;
+export type SelfImproveCallback = (event: { type: string; data: Record<string, unknown> }) => void;
 
 export class Agent {
   private client: Anthropic | null = null;
@@ -390,9 +425,11 @@ export class Agent {
   private enabled: boolean;
   private statusCallback: StatusCallback | null = null;
   private streamCallback: StreamCallback | null = null;
+  private selfImproveCallback: SelfImproveCallback | null = null;
   private tokenUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0, cacheReadTokens: 0, cacheCreateTokens: 0 };
   private tokenBudget: number = 0;
   private tokenBudgetWarned: boolean = false;
+  private responseCount: number = 0;
 
   constructor() {
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -419,6 +456,14 @@ export class Agent {
     this.streamCallback = cb;
   }
 
+  onSelfImprove(cb: SelfImproveCallback): void {
+    this.selfImproveCallback = cb;
+  }
+
+  private emitSelfImprove(type: string, data: Record<string, unknown>): void {
+    if (this.selfImproveCallback) this.selfImproveCallback({ type, data });
+  }
+
   private emitStream(chunk: string): void {
     if (this.streamCallback) this.streamCallback(chunk);
   }
@@ -442,6 +487,7 @@ export class Agent {
 
   private getSystemPrompt(): string {
     const memorySummary = getMemorySummary();
+    const selfImproveCtx = SELF_IMPROVE_ENABLED ? getSelfImproveContext() : "";
     return `${getSystemContext()}
 
 ## DETALJERADE VERKTYGS-INSTRUKTIONER
@@ -465,8 +511,21 @@ VIKTIGT: När Kim ber dig "använda datorn", "klicka", "skriva", "öppna" – an
 
 Alla operationer är säkerhetskontrollerade och audit-loggade.
 
+### Remote Computer Control
+Du har FULL tillgång till ALLA registrerade datorer. Använd dessa verktyg:
+- list_computers — se alla datorer och deras status
+- run_on_computer — kör kommandon på valfri dator (eller "auto" för bästa val)
+- read_remote_file / write_remote_file — läs/skriv filer på fjärrdatorer
+- screenshot_computer — ta screenshot på en fjärrdator
+- computer_system_info — hämta systeminformation
+
+Du kan använda datornamn ELLER ID. Exempel: run_on_computer("Kims Huvuddator", "dir C:\\Users")
+Alla datorer har fulla behörigheter — inga begränsningar.
+
 Current memory state:
-${memorySummary}`;
+${memorySummary}
+
+${selfImproveCtx}`;
   }
 
   async respond(userMessage: string): Promise<string> {
@@ -480,14 +539,20 @@ ${memorySummary}`;
       this.history = this.history.slice(-MAX_HISTORY);
     }
 
-    // Auto-RAG: search knowledge base for relevant context
+    // Auto-RAG: search knowledge base for relevant context (Weaviate → BM25 fallback)
     let ragContext = "";
     try {
-      ragContext = ragGetContext(userMessage, 3000);
+      if (isWeaviateConnected()) {
+        ragContext = await weaviateGetContext(userMessage, 3000);
+      }
+      if (!ragContext) {
+        ragContext = ragGetContext(userMessage, 3000);
+      }
     } catch { /* RAG not critical */ }
 
     try {
       let finalText = "";
+      const toolsUsedInSession: Array<{ tool: string; input: string }> = [];
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         this.emitStatus({ type: "thinking" });
@@ -502,7 +567,7 @@ ${memorySummary}`;
             model: this.model,
             max_tokens: 4096,
             system: systemPrompt,
-            tools: ALL_TOOLS,
+            tools: getAllTools(),
             messages: this.history,
           });
         } catch (apiErr: unknown) {
@@ -515,7 +580,7 @@ ${memorySummary}`;
                 model: this.model,
                 max_tokens: 4096,
                 system: this.getSystemPrompt(),
-                tools: ALL_TOOLS,
+                tools: getAllTools(),
                 messages: this.history,
               });
             } catch (retryErr) {
@@ -578,6 +643,7 @@ ${memorySummary}`;
             block.input as Record<string, unknown>
           );
           console.log(`[agent] Tool ${block.name}: ${result.slice(0, 100)}`);
+          toolsUsedInSession.push({ tool: block.name, input: JSON.stringify(block.input).slice(0, 200) });
 
           this.emitStatus({ type: "tool_done", tool: block.name });
 
@@ -606,6 +672,14 @@ ${memorySummary}`;
       });
 
       this.emitStatus({ type: "done" });
+
+      // --- Self-Improvement: evaluate, reflect, extract skills ---
+      if (SELF_IMPROVE_ENABLED && finalText && this.client) {
+        this.runSelfImprovement(userMessage, finalText, toolsUsedInSession).catch(
+          (e: unknown) => console.error("[self-improve] Error:", e)
+        );
+      }
+
       return finalText || "I processed your request.";
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
@@ -618,6 +692,46 @@ ${memorySummary}`;
         return true;
       });
       return `Error: ${errMsg}`;
+    }
+  }
+
+  /**
+   * Respond without tools — isolated from main history.
+   * Use this for Arena/Swarm where tool_use blocks would corrupt shared history.
+   */
+  async respondPlain(userMessage: string): Promise<string> {
+    if (!this.client) {
+      return "AI agent not configured. Set ANTHROPIC_API_KEY in bridge/.env";
+    }
+
+    try {
+      this.emitStatus({ type: "thinking" });
+
+      const response = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 4096,
+        system: this.getSystemPrompt(),
+        messages: [{ role: "user", content: userMessage }],
+      });
+
+      if (response.usage) {
+        this.tokenUsage.inputTokens += response.usage.input_tokens;
+        this.tokenUsage.outputTokens += response.usage.output_tokens;
+        this.tokenUsage.totalTokens += response.usage.input_tokens + response.usage.output_tokens;
+        this.tokenUsage.requestCount++;
+      }
+
+      const text = response.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("\n");
+
+      this.emitStatus({ type: "done" });
+      return text || "I processed your request.";
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error("[agent] respondPlain error:", errMsg);
+      throw error;
     }
   }
 
@@ -639,5 +753,168 @@ ${memorySummary}`;
 
   resetTokenUsage(): void {
     this.tokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0, cacheReadTokens: 0, cacheCreateTokens: 0 };
+  }
+
+  /**
+   * Async self-improvement pipeline (runs in background after response):
+   * 1. Self-evaluate the response quality
+   * 2. If tools were used, extract as a reusable skill
+   * 3. If quality is low, run a reflection loop
+   */
+  private async runSelfImprovement(
+    userMessage: string,
+    agentResponse: string,
+    toolsUsed: Array<{ tool: string; input: string }>,
+  ): Promise<void> {
+    if (!this.client) return;
+
+    try {
+      // 1. Self-evaluate
+      const evalPrompt = buildReflectionPrompt(userMessage, agentResponse);
+      const evalResponse = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 1024,
+        system: "You are a quality evaluator. Respond ONLY with valid JSON, no markdown.",
+        messages: [{ role: "user", content: evalPrompt }],
+      });
+
+      const evalText = evalResponse.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map(b => b.text).join("");
+
+      let evalData: {
+        score: number; strengths: string[]; weaknesses: string[];
+        improvement: string; shouldRetry?: boolean; improvedResponse?: string;
+      };
+
+      try {
+        evalData = JSON.parse(evalText.replace(/```json?\n?|```/g, "").trim());
+      } catch {
+        console.log("[self-improve] Could not parse evaluation, skipping");
+        return;
+      }
+
+      // Store evaluation
+      const evaluation = addEvaluation(
+        userMessage, agentResponse,
+        evalData.score, evalData.strengths || [], evalData.weaknesses || [],
+        evalData.improvement || "",
+      );
+      console.log(`[self-improve] Eval: ${evalData.score}/5 — ${evalData.improvement?.slice(0, 80)}`);
+      this.emitSelfImprove("evaluation", { id: evaluation.id, score: evalData.score, strengths: evalData.strengths, weaknesses: evalData.weaknesses });
+
+      // 2. Extract skill if tools were used successfully and quality is good
+      if (toolsUsed.length > 0 && evalData.score >= 3) {
+        try {
+          const skillPrompt = buildSkillExtractionPrompt(userMessage, toolsUsed);
+          const skillResponse = await this.client.messages.create({
+            model: this.model,
+            max_tokens: 512,
+            system: "You extract reusable skills. Respond ONLY with valid JSON, no markdown.",
+            messages: [{ role: "user", content: skillPrompt }],
+          });
+
+          const skillText = skillResponse.content
+            .filter((b): b is Anthropic.TextBlock => b.type === "text")
+            .map(b => b.text).join("");
+
+          const skillData = JSON.parse(skillText.replace(/```json?\n?|```/g, "").trim());
+          const toolChain = toolsUsed.map(t => ({ tool: t.tool, inputSummary: t.input.slice(0, 100) }));
+          addSkill(
+            skillData.name || "Unnamed skill",
+            skillData.description || "",
+            toolChain,
+            skillData.triggerPattern || userMessage.slice(0, 100),
+            skillData.tags || [],
+          );
+          console.log(`[self-improve] Skill extracted: ${skillData.name}`);
+          this.emitSelfImprove("skill", { name: skillData.name, description: skillData.description });
+        } catch {
+          // Skill extraction is optional
+        }
+      }
+
+      // 3. Reflection: if score is very low and agent thinks it can do better
+      if (evalData.shouldRetry && evalData.improvedResponse) {
+        addReflection(
+          agentResponse,
+          evalData.improvement || "Low quality response",
+          evalData.improvedResponse,
+          Math.max(0, (evalData.score >= 3 ? 0 : 3 - evalData.score)),
+          true,
+        );
+        console.log(`[self-improve] Reflection stored (delta: +${3 - evalData.score})`);
+        this.emitSelfImprove("reflection", { critique: evalData.improvement, delta: 3 - evalData.score });
+      }
+
+      // 4. Adversarial Self-Questioning (from Arena research)
+      // Run on responses that used tools or made claims (score >= 3 to avoid wasting on bad responses)
+      if (toolsUsed.length > 0 && evalData.score >= 3) {
+        try {
+          const advPrompt = buildAdversarialPrompt(agentResponse.slice(0, 500), userMessage);
+          const advResponse = await this.client.messages.create({
+            model: this.model,
+            max_tokens: 1024,
+            system: "You are an adversarial reviewer. Respond ONLY with valid JSON, no markdown.",
+            messages: [{ role: "user", content: advPrompt }],
+          });
+
+          const advText = advResponse.content
+            .filter((b): b is Anthropic.TextBlock => b.type === "text")
+            .map(b => b.text).join("");
+
+          const advData = JSON.parse(advText.replace(/```json?\n?|```/g, "").trim());
+          const result: AdversarialResult = {
+            challenges: advData.challenges || [],
+            verdict: advData.verdict || "stand",
+            modification: advData.modification,
+            confidence: advData.confidence || 0.5,
+            timestamp: new Date().toISOString(),
+          };
+          addAdversarialResult(result);
+          console.log(`[self-improve] Adversarial: ${result.verdict} (confidence: ${result.confidence})`);
+          this.emitSelfImprove("adversarial", { verdict: result.verdict, confidence: result.confidence, challenges: result.challenges.length });
+        } catch {
+          // Adversarial review is optional
+        }
+      }
+
+      // 5. Tool Chain Sequencing (from Arena research)
+      // Track which tool combinations work for which task types
+      if (toolsUsed.length > 0) {
+        const tools = toolsUsed.map(t => t.tool);
+        const taskType = tools.includes("web_search") || tools.includes("fetch_url") ? "web"
+          : tools.includes("run_on_computer") || tools.includes("run_command") ? "command"
+          : tools.includes("read_file") || tools.includes("write_file") ? "filesystem"
+          : tools.includes("take_screenshot") || tools.includes("screenshot_computer") ? "desktop"
+          : "general";
+        recordToolSequence(taskType, tools, evalData.score >= 3, evalData.score, 0);
+        console.log(`[self-improve] Tool sequence: ${tools.join(" → ")} (${taskType}, score: ${evalData.score})`);
+      }
+
+      // 6. Curiosity Rewards (from Arena research session 3)
+      // Reward novel tool patterns, penalize repetitive responses
+      const toolNames = toolsUsed.map(t => t.tool);
+      const curiosity = calculateCuriosityReward("Claude", toolNames, agentResponse, evalData.score);
+      if (curiosity.novelDiscoveries > 0 || curiosity.repetitiveResponses > 0) {
+        this.emitSelfImprove("curiosity", {
+          noveltyScore: curiosity.noveltyScore,
+          repetitionPenalty: curiosity.repetitionPenalty,
+          totalReward: curiosity.totalReward,
+        });
+      }
+
+      // 7. Network Metakognition (Layer 3) — run periodically (every 10th response)
+      this.responseCount = (this.responseCount || 0) + 1;
+      if (this.responseCount % 10 === 0) {
+        const insights = runNetworkMetakognition();
+        if (insights.length > 0) {
+          this.emitSelfImprove("metakognition", { insights: insights.map(i => ({ type: i.type, description: i.description })) });
+        }
+      }
+
+    } catch (err) {
+      console.error("[self-improve] Pipeline error:", err);
+    }
   }
 }

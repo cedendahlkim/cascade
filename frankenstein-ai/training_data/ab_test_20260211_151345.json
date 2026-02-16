@@ -1,0 +1,636 @@
+{
+  "timestamp": "2026-02-11 15:13:45",
+  "num_tasks": 30,
+  "difficulties": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "frankenstein": {
+    "solved": 30,
+    "total": 30,
+    "solve_rate": 1.0,
+    "first_try_rate": 1.0,
+    "avg_time_ms": 3955.7,
+    "stack_stats": {
+      "total_tasks": 30,
+      "total_solved": 30,
+      "solve_rate": 1.0,
+      "skills_learned": 42,
+      "skill_names": [
+        "list",
+        "average",
+        "loop",
+        "range",
+        "math",
+        "reverse_number",
+        "number_theory",
+        "digit_sum",
+        "divisors",
+        "dict",
+        "string",
+        "word_length",
+        "matrix",
+        "row_sum",
+        "2d",
+        "char_count",
+        "algorithm",
+        "remove_duplicates",
+        "advanced",
+        "longest_word",
+        "sorting",
+        "bubble_sort",
+        "merge_sorted",
+        "data_structure",
+        "linked_list",
+        "reverse_list",
+        "stack",
+        "balanced_brackets",
+        "min_stack",
+        "functional",
+        "map_filter",
+        "flatten",
+        "zip_lists",
+        "reduce_product",
+        "graph",
+        "count_components",
+        "combinatorics",
+        "recursion",
+        "permutations",
+        "combinations",
+        "dp",
+        "climb_stairs"
+      ],
+      "total_attempts": 30,
+      "current_level": 1,
+      "hdc_concepts": 20,
+      "hdc_concept_names": [
+        "list_average_0",
+        "list_range_1",
+        "math_reverse_number_2",
+        "math_digit_sum_3",
+        "math_divisors_4",
+        "dict_string_5",
+        "matrix_row_sum_6",
+        "dict_string_7",
+        "algorithm_remove_duplicates_8",
+        "string_advanced_9",
+        "algorithm_sorting_10",
+        "data_structure_linked_list_11",
+        "data_structure_stack_12",
+        "data_structure_stack_13",
+        "functional_map_filter_14",
+        "functional_flatten_15",
+        "functional_reduce_product_16",
+        "graph_count_components_17",
+        "combinatorics_recursion_18",
+        "dp_algorithm_19"
+      ],
+      "aif_exploration_weight": 0.48599153551217744,
+      "aif_surprise": 1.52018369871074,
+      "aif_mean_efe": -2.250337396314514,
+      "memory_active": 15,
+      "memory_total_stored": 30,
+      "memory_total_decayed": 15,
+      "memory_backend": "chromadb",
+      "error_counts": {
+        "syntax": 0,
+        "logic": 0,
+        "timeout": 0,
+        "runtime": 0
+      },
+      "strategy_success_rates": {
+        "direct": 0.33,
+        "with_hints": 0.92,
+        "from_memory": 1.0,
+        "step_by_step": 1.0
+      },
+      "strategy_stats": {
+        "direct": {
+          "attempts": 6,
+          "successes": 2
+        },
+        "with_hints": {
+          "attempts": 12,
+          "successes": 11
+        },
+        "from_memory": {
+          "attempts": 9,
+          "successes": 9
+        },
+        "step_by_step": {
+          "attempts": 8,
+          "successes": 8
+        }
+      },
+      "gut_feeling": {
+        "total_predictions": 30,
+        "accuracy": 0.867,
+        "weights": {
+          "familiarity": 0.174,
+          "track_record": 0.349,
+          "momentum": 0.13,
+          "complexity": 0.13,
+          "memory_strength": 0.13,
+          "energy": 0.087
+        },
+        "category_records": {
+          "algorithm": "1/1",
+          "combinatorics": "3/3",
+          "data_structure": "3/3",
+          "dict": "3/3",
+          "dp": "2/2",
+          "functional": "4/4",
+          "graph": "1/1",
+          "linked_list": "2/2",
+          "list": "2/2",
+          "matrix": "1/1",
+          "number_theory": "3/3",
+          "sorting": "4/4",
+          "string_advanced": "1/1"
+        },
+        "difficulty_records": {
+          "3": "6/6",
+          "4": "4/4",
+          "5": "5/5",
+          "6": "5/5",
+          "7": "5/5",
+          "8": "5/5"
+        },
+        "history_size": 30,
+        "calibration_size": 30
+      },
+      "llm_stats": {
+        "calls": 44,
+        "successes": 30,
+        "failures": 1,
+        "rate_limits": 13,
+        "timeouts": 0,
+        "empty_responses": 0,
+        "total_latency_ms": 74780.29417991638,
+        "retries": 13,
+        "avg_latency_ms": 1699.6,
+        "success_rate": 0.682
+      },
+      "emotions": {
+        "state": {
+          "joy": 1.0,
+          "sadness": 0.0,
+          "anger": 0.0,
+          "fear": 0.389,
+          "disgust": 0.0,
+          "surprise": 0.324
+        },
+        "dominant": "joy",
+        "dominant_intensity": 1.0,
+        "emoji": "😊",
+        "valence": 0.476,
+        "arousal": 1.0,
+        "total_updates": 30,
+        "emotion_totals": {
+          "joy": 18.93,
+          "sadness": 0.0,
+          "anger": 0.0,
+          "fear": 4.66,
+          "disgust": 0.0,
+          "surprise": 1.68
+        },
+        "recent_events": [
+          {
+            "trigger": "solved",
+            "emotion": "joy",
+            "delta": 0.714,
+            "detail": "nv8, 1 försök, streak=27"
+          },
+          {
+            "trigger": "high_difficulty",
+            "emotion": "fear",
+            "delta": 0.084,
+            "detail": "nv8"
+          },
+          {
+            "trigger": "solved",
+            "emotion": "joy",
+            "delta": 0.714,
+            "detail": "nv8, 1 försök, streak=28"
+          },
+          {
+            "trigger": "high_difficulty",
+            "emotion": "fear",
+            "delta": 0.084,
+            "detail": "nv8"
+          },
+          {
+            "trigger": "solved",
+            "emotion": "joy",
+            "delta": 0.714,
+            "detail": "nv8, 1 försök, streak=29"
+          },
+          {
+            "trigger": "new_pattern",
+            "emotion": "fear",
+            "delta": 0.273,
+            "detail": "okänt mönster, nv8"
+          },
+          {
+            "trigger": "high_difficulty",
+            "emotion": "fear",
+            "delta": 0.084,
+            "detail": "nv8"
+          },
+          {
+            "trigger": "solved_novel",
+            "emotion": "surprise",
+            "delta": 0.28,
+            "detail": "löste nytt svårt problem (nv8)"
+          },
+          {
+            "trigger": "solved",
+            "emotion": "joy",
+            "delta": 0.714,
+            "detail": "nv8, 1 försök, streak=30"
+          },
+          {
+            "trigger": "high_difficulty",
+            "emotion": "fear",
+            "delta": 0.084,
+            "detail": "nv8"
+          }
+        ],
+        "behavioral_modifiers": {
+          "temperature_mod": -0.045,
+          "extra_attempts": 0,
+          "strategy_preference": "with_hints",
+          "exploration_mod": 0.013,
+          "persistence_mod": 1.1,
+          "prompt_tone": "Du är i flow — skriv ren, effektiv kod.",
+          "dominant_emotion": "joy",
+          "dominant_intensity": 1.0,
+          "valence": 0.476,
+          "arousal": 1.0
+        }
+      }
+    }
+  },
+  "bare_llm": {
+    "solved": 26,
+    "total": 30,
+    "solve_rate": 0.867,
+    "first_try_rate": 0.867,
+    "avg_time_ms": 2812.6
+  },
+  "difference": {
+    "solve_rate": 0.133,
+    "first_try_rate": 0.133,
+    "winner": "frankenstein"
+  },
+  "per_level": {
+    "3": {
+      "frankenstein": {
+        "solved": 6,
+        "total": 6,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 6,
+        "total": 6,
+        "rate": 1.0
+      }
+    },
+    "4": {
+      "frankenstein": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 4,
+        "total": 4,
+        "rate": 1.0
+      }
+    },
+    "5": {
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 4,
+        "total": 5,
+        "rate": 0.8
+      }
+    },
+    "6": {
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 4,
+        "total": 5,
+        "rate": 0.8
+      }
+    },
+    "7": {
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 4,
+        "total": 5,
+        "rate": 0.8
+      }
+    },
+    "8": {
+      "frankenstein": {
+        "solved": 5,
+        "total": 5,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 4,
+        "total": 5,
+        "rate": 0.8
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "gen-list-average-8032",
+      "difficulty": 3,
+      "category": "list",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 12494.1,
+      "bare_time_ms": 2618.7
+    },
+    {
+      "task_id": "gen-list-range-7395",
+      "difficulty": 3,
+      "category": "list",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1401.3,
+      "bare_time_ms": 1062.5
+    },
+    {
+      "task_id": "gen-numtheory-reverse_number-9231",
+      "difficulty": 3,
+      "category": "number_theory",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1215.5,
+      "bare_time_ms": 1166.1
+    },
+    {
+      "task_id": "gen-numtheory-digit_sum-8069",
+      "difficulty": 3,
+      "category": "number_theory",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 6299.1,
+      "bare_time_ms": 1151.1
+    },
+    {
+      "task_id": "gen-numtheory-divisors-2398",
+      "difficulty": 3,
+      "category": "number_theory",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1453.7,
+      "bare_time_ms": 5264.3
+    },
+    {
+      "task_id": "gen-dict-word_length-7567",
+      "difficulty": 4,
+      "category": "dict",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 3570.2,
+      "bare_time_ms": 1686.7
+    },
+    {
+      "task_id": "gen-dict-word_length-6512",
+      "difficulty": 4,
+      "category": "dict",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 2200.3,
+      "bare_time_ms": 1672.5
+    },
+    {
+      "task_id": "gen-matrix-row_sum-3655",
+      "difficulty": 4,
+      "category": "matrix",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1705.5,
+      "bare_time_ms": 2901.4
+    },
+    {
+      "task_id": "gen-dict-char_count-3206",
+      "difficulty": 4,
+      "category": "dict",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1700.9,
+      "bare_time_ms": 5842.3
+    },
+    {
+      "task_id": "gen-algo-remove_duplicates-4774",
+      "difficulty": 3,
+      "category": "algorithm",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1708.1,
+      "bare_time_ms": 1378.7
+    },
+    {
+      "task_id": "gen-strv-longest_word-7988",
+      "difficulty": 5,
+      "category": "string_advanced",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1213.8,
+      "bare_time_ms": 2814.4
+    },
+    {
+      "task_id": "gen-sort-bubble_sort-2626",
+      "difficulty": 5,
+      "category": "sorting",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 1907.5,
+      "bare_time_ms": 7547.2
+    },
+    {
+      "task_id": "gen-sort-merge_sorted-4122",
+      "difficulty": 5,
+      "category": "sorting",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1750.7,
+      "bare_time_ms": 2016.4
+    },
+    {
+      "task_id": "gen-sort-merge_sorted-8209",
+      "difficulty": 5,
+      "category": "sorting",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 2505.0,
+      "bare_time_ms": 2034.8
+    },
+    {
+      "task_id": "gen-sort-merge_sorted-4897",
+      "difficulty": 5,
+      "category": "sorting",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 5711.9,
+      "bare_time_ms": 1739.3
+    },
+    {
+      "task_id": "gen-ll-reverse_list-3953",
+      "difficulty": 6,
+      "category": "linked_list",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1962.1,
+      "bare_time_ms": 1322.8
+    },
+    {
+      "task_id": "gen-ds-balanced_brackets-2251",
+      "difficulty": 6,
+      "category": "data_structure",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1736.2,
+      "bare_time_ms": 1790.0
+    },
+    {
+      "task_id": "gen-ll-reverse_list-6923",
+      "difficulty": 6,
+      "category": "linked_list",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 7650.7,
+      "bare_time_ms": 4650.4
+    },
+    {
+      "task_id": "gen-ds-min_stack-6191",
+      "difficulty": 6,
+      "category": "data_structure",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 12309.4,
+      "bare_time_ms": 4782.0
+    },
+    {
+      "task_id": "gen-ds-balanced_brackets-1040",
+      "difficulty": 6,
+      "category": "data_structure",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1996.9,
+      "bare_time_ms": 3820.0
+    },
+    {
+      "task_id": "gen-func-map_filter-2652",
+      "difficulty": 7,
+      "category": "functional",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 5127.6,
+      "bare_time_ms": 2276.7
+    },
+    {
+      "task_id": "gen-func-flatten-7340",
+      "difficulty": 7,
+      "category": "functional",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 5770.5,
+      "bare_time_ms": 2021.5
+    },
+    {
+      "task_id": "gen-func-zip_lists-9643",
+      "difficulty": 7,
+      "category": "functional",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1571.8,
+      "bare_time_ms": 1535.3
+    },
+    {
+      "task_id": "gen-func-reduce_product-7224",
+      "difficulty": 7,
+      "category": "functional",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1266.4,
+      "bare_time_ms": 4603.5
+    },
+    {
+      "task_id": "gen-graph-count_components-7594",
+      "difficulty": 7,
+      "category": "graph",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 2024.8,
+      "bare_time_ms": 4036.8
+    },
+    {
+      "task_id": "gen-comb-permutations-9088",
+      "difficulty": 8,
+      "category": "combinatorics",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1404.0,
+      "bare_time_ms": 2790.4
+    },
+    {
+      "task_id": "gen-comb-combinations-6836",
+      "difficulty": 8,
+      "category": "combinatorics",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 19557.2,
+      "bare_time_ms": 4942.7
+    },
+    {
+      "task_id": "gen-comb-permutations-9044",
+      "difficulty": 8,
+      "category": "combinatorics",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 2775.2,
+      "bare_time_ms": 1410.1
+    },
+    {
+      "task_id": "gen-dp-climb_stairs-3554",
+      "difficulty": 8,
+      "category": "dp",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1510.3,
+      "bare_time_ms": 1404.6
+    },
+    {
+      "task_id": "gen-dp-climb_stairs-1757",
+      "difficulty": 8,
+      "category": "dp",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 5169.0,
+      "bare_time_ms": 2093.7
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+# Task: gen-ll-reverse_list-9379 | Score: 100% | 2026-02-14T13:26:11.329416
+
+n = int(input())
+lst = [int(input()) for _ in range(n)]
+print(' '.join(str(x) for x in reversed(lst)))

@@ -1,0 +1,29 @@
+# Task: gen-dp-coin_change-6371 | Score: 100% | 2026-02-10T17:25:47.838446
+
+def solve():
+    amount = int(input())
+    num_coins = int(input())
+    
+    if amount == 0:
+        print(0)
+        return
+
+    coins = []
+    for _ in range(num_coins):
+        coins.append(int(input()))
+    
+    coins.sort(reverse=True)
+    
+    dp = [float('inf')] * (amount + 1)
+    dp[0] = 0
+    
+    for coin in coins:
+        for i in range(coin, amount + 1):
+            dp[i] = min(dp[i], dp[i - coin] + 1)
+            
+    if dp[amount] == float('inf'):
+        print(-1)
+    else:
+        print(dp[amount])
+
+solve()

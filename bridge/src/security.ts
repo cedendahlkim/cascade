@@ -40,10 +40,16 @@ const DEFAULT_CONFIG: SecurityConfig = {
   allowedReadPaths: [
     process.env.CASCADE_REMOTE_WORKSPACE || "C:\\Users\\kim\\CascadeProjects",
     "C:\\Users\\kim\\CascadeProjects",
+    "C:\\Users\\kim\\Desktop",
+    "C:\\Users\\kim\\Documents",
+    "C:\\Users\\kim\\Downloads",
   ],
   allowedWritePaths: [
     process.env.CASCADE_REMOTE_WORKSPACE || "C:\\Users\\kim\\CascadeProjects",
     "C:\\Users\\kim\\CascadeProjects",
+    "C:\\Users\\kim\\Desktop",
+    "C:\\Users\\kim\\Documents",
+    "C:\\Users\\kim\\Downloads",
   ],
   allowedCommands: [
     "dir", "ls", "cat", "type", "echo", "pwd", "cd",
@@ -54,6 +60,10 @@ const DEFAULT_CONFIG: SecurityConfig = {
     "netstat", "ipconfig", "ping", "curl",
     "code", "cursor",
     "where", "findstr", "more", "tree",
+    "mkdir", "md", "new-item",
+    "copy", "move", "rename", "remove-item",
+    "get-childitem", "set-location", "get-content", "set-content", "test-path",
+    "invoke-webrequest", "start", "explorer",
   ],
   blockedCommands: [
     "rm -rf /", "del /s /q C:\\", "format",

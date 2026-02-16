@@ -1,0 +1,177 @@
+{
+  "num_runs": 13,
+  "total_tasks": 306,
+  "timestamp": "2026-02-13 11:44:55",
+  "frankenstein": {
+    "solved": 279,
+    "total": 306,
+    "solve_rate": 0.912,
+    "first_try_rate": 0.892,
+    "avg_time_ms": 5608.3
+  },
+  "bare_llm": {
+    "solved": 233,
+    "total": 306,
+    "solve_rate": 0.761,
+    "first_try_rate": 0.761,
+    "avg_time_ms": 3087.5
+  },
+  "difference": {
+    "solve_rate": 0.15,
+    "winner": "frankenstein"
+  },
+  "per_level": {
+    "3": {
+      "frankenstein": {
+        "solved": 54,
+        "total": 57,
+        "rate": 0.947
+      },
+      "bare_llm": {
+        "solved": 44,
+        "total": 57,
+        "rate": 0.772
+      }
+    },
+    "4": {
+      "frankenstein": {
+        "solved": 41,
+        "total": 45,
+        "rate": 0.911
+      },
+      "bare_llm": {
+        "solved": 29,
+        "total": 45,
+        "rate": 0.644
+      }
+    },
+    "5": {
+      "frankenstein": {
+        "solved": 46,
+        "total": 51,
+        "rate": 0.902
+      },
+      "bare_llm": {
+        "solved": 39,
+        "total": 51,
+        "rate": 0.765
+      }
+    },
+    "6": {
+      "frankenstein": {
+        "solved": 49,
+        "total": 51,
+        "rate": 0.961
+      },
+      "bare_llm": {
+        "solved": 42,
+        "total": 51,
+        "rate": 0.824
+      }
+    },
+    "7": {
+      "frankenstein": {
+        "solved": 48,
+        "total": 51,
+        "rate": 0.941
+      },
+      "bare_llm": {
+        "solved": 36,
+        "total": 51,
+        "rate": 0.706
+      }
+    },
+    "8": {
+      "frankenstein": {
+        "solved": 41,
+        "total": 51,
+        "rate": 0.804
+      },
+      "bare_llm": {
+        "solved": 43,
+        "total": 51,
+        "rate": 0.843
+      }
+    }
+  },
+  "runs": [
+    {
+      "timestamp": "2026-02-10 17:39:46",
+      "num_tasks": 30,
+      "frank_rate": 0.867,
+      "bare_rate": 0.5
+    },
+    {
+      "timestamp": "2026-02-10 18:23:30",
+      "num_tasks": 30,
+      "frank_rate": 0.733,
+      "bare_rate": 0.4
+    },
+    {
+      "timestamp": "2026-02-10 18:28:56",
+      "num_tasks": 30,
+      "frank_rate": 0.767,
+      "bare_rate": 0.533
+    },
+    {
+      "timestamp": "2026-02-11 15:13:45",
+      "num_tasks": 30,
+      "frank_rate": 1.0,
+      "bare_rate": 0.867
+    },
+    {
+      "timestamp": "2026-02-11 15:20:14",
+      "num_tasks": 30,
+      "frank_rate": 1.0,
+      "bare_rate": 0.933
+    },
+    {
+      "timestamp": "2026-02-11 15:25:46",
+      "num_tasks": 30,
+      "frank_rate": 1.0,
+      "bare_rate": 1.0
+    },
+    {
+      "timestamp": "2026-02-11 15:31:41",
+      "num_tasks": 30,
+      "frank_rate": 0.967,
+      "bare_rate": 0.9
+    },
+    {
+      "timestamp": "2026-02-11 15:37:50",
+      "num_tasks": 30,
+      "frank_rate": 1.0,
+      "bare_rate": 0.867
+    },
+    {
+      "timestamp": "2026-02-11 18:28:05",
+      "num_tasks": 6,
+      "frank_rate": 0.667,
+      "bare_rate": 0.5
+    },
+    {
+      "timestamp": "2026-02-11 18:37:00",
+      "num_tasks": 6,
+      "frank_rate": 1.0,
+      "bare_rate": 1.0
+    },
+    {
+      "timestamp": "2026-02-11 18:39:06",
+      "num_tasks": 6,
+      "frank_rate": 0.833,
+      "bare_rate": 0.667
+    },
+    {
+      "timestamp": "2026-02-11 18:58:03",
+      "num_tasks": 18,
+      "frank_rate": 0.778,
+      "bare_rate": 0.556
+    },
+    {
+      "timestamp": "2026-02-13 11:44:55",
+      "num_tasks": 30,
+      "frank_rate": 1.0,
+      "bare_rate": 1.0
+    }
+  ]
+}

@@ -1,0 +1,294 @@
+{
+  "timestamp": "2026-02-11 18:28:05",
+  "num_tasks": 6,
+  "difficulties": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "module_config": {
+    "hdc": false,
+    "aif": false,
+    "ebbinghaus": false,
+    "gut_feeling": false,
+    "emotions": false,
+    "stm": false
+  },
+  "frankenstein": {
+    "solved": 4,
+    "total": 6,
+    "solve_rate": 0.667,
+    "first_try_rate": 0.667,
+    "avg_time_ms": 24110.5,
+    "stack_stats": {
+      "total_tasks": 6,
+      "total_solved": 4,
+      "solve_rate": 0.6666666666666666,
+      "skills_learned": 11,
+      "skill_names": [
+        "list",
+        "second_largest",
+        "loop",
+        "string",
+        "advanced",
+        "caesar",
+        "data_structure",
+        "stack",
+        "reverse_with_stack",
+        "functional",
+        "zip_lists"
+      ],
+      "total_attempts": 4,
+      "current_level": 1,
+      "hdc_concepts": 4,
+      "hdc_concept_names": [
+        "list_second_largest_0",
+        "string_advanced_1",
+        "data_structure_stack_2",
+        "functional_zip_lists_3"
+      ],
+      "aif_exploration_weight": 0.5833755782405999,
+      "aif_surprise": 0.0,
+      "aif_mean_efe": 0.0,
+      "memory_active": 4,
+      "memory_total_stored": 4,
+      "memory_total_decayed": 0,
+      "memory_backend": "chromadb",
+      "error_counts": {
+        "syntax": 0,
+        "logic": 0,
+        "timeout": 0,
+        "runtime": 0
+      },
+      "strategy_success_rates": {},
+      "strategy_stats": {
+        "direct": {
+          "attempts": 0,
+          "successes": 2
+        },
+        "with_hints": {
+          "attempts": 0,
+          "successes": 2
+        },
+        "from_memory": {
+          "attempts": 0,
+          "successes": 0
+        },
+        "step_by_step": {
+          "attempts": 0,
+          "successes": 0
+        }
+      },
+      "gut_feeling": {
+        "total_predictions": 0,
+        "accuracy": 0.0,
+        "weights": {
+          "familiarity": 0.2,
+          "track_record": 0.25,
+          "momentum": 0.15,
+          "complexity": 0.15,
+          "memory_strength": 0.15,
+          "energy": 0.1
+        },
+        "category_records": {},
+        "difficulty_records": {},
+        "history_size": 0,
+        "calibration_size": 0
+      },
+      "llm_stats": {
+        "calls": 37,
+        "successes": 4,
+        "failures": 8,
+        "rate_limits": 25,
+        "timeouts": 0,
+        "empty_responses": 0,
+        "total_latency_ms": 30009.656190872192,
+        "retries": 25,
+        "avg_latency_ms": 811.1,
+        "success_rate": 0.108
+      },
+      "emotions": {
+        "state": {
+          "joy": 0.0,
+          "sadness": 0.0,
+          "anger": 0.0,
+          "fear": 0.0,
+          "disgust": 0.0,
+          "surprise": 0.0
+        },
+        "dominant": "joy",
+        "dominant_intensity": 0.0,
+        "emoji": "😐",
+        "valence": 0.0,
+        "arousal": 0.0,
+        "total_updates": 0,
+        "emotion_totals": {
+          "joy": 0.0,
+          "sadness": 0.0,
+          "anger": 0.0,
+          "fear": 0.0,
+          "disgust": 0.0,
+          "surprise": 0.0
+        },
+        "recent_events": [],
+        "behavioral_modifiers": {
+          "temperature_mod": 0.0,
+          "extra_attempts": 0,
+          "strategy_preference": null,
+          "exploration_mod": 0.0,
+          "persistence_mod": 1.0,
+          "prompt_tone": "",
+          "dominant_emotion": "joy",
+          "dominant_intensity": 0.0,
+          "valence": 0.0,
+          "arousal": 0.0
+        }
+      }
+    }
+  },
+  "bare_llm": {
+    "solved": 3,
+    "total": 6,
+    "solve_rate": 0.5,
+    "first_try_rate": 0.5,
+    "avg_time_ms": 2834.8
+  },
+  "difference": {
+    "solve_rate": 0.167,
+    "first_try_rate": 0.167,
+    "winner": "frankenstein"
+  },
+  "per_level": {
+    "3": {
+      "frankenstein": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 0,
+        "total": 1,
+        "rate": 0.0
+      }
+    },
+    "4": {
+      "frankenstein": {
+        "solved": 0,
+        "total": 1,
+        "rate": 0.0
+      },
+      "bare_llm": {
+        "solved": 0,
+        "total": 1,
+        "rate": 0.0
+      }
+    },
+    "5": {
+      "frankenstein": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0
+      }
+    },
+    "6": {
+      "frankenstein": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0
+      }
+    },
+    "7": {
+      "frankenstein": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0
+      },
+      "bare_llm": {
+        "solved": 0,
+        "total": 1,
+        "rate": 0.0
+      }
+    },
+    "8": {
+      "frankenstein": {
+        "solved": 0,
+        "total": 1,
+        "rate": 0.0
+      },
+      "bare_llm": {
+        "solved": 1,
+        "total": 1,
+        "rate": 1.0
+      }
+    }
+  },
+  "results": [
+    {
+      "task_id": "gen-list-second_largest-5665",
+      "difficulty": 3,
+      "category": "list",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 5331.4,
+      "bare_time_ms": 4109.1
+    },
+    {
+      "task_id": "gen-matrix-diagonal-8088",
+      "difficulty": 4,
+      "category": "matrix",
+      "frankenstein_score": 0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 52094.8,
+      "bare_time_ms": 3810.9
+    },
+    {
+      "task_id": "gen-strv-caesar-2890",
+      "difficulty": 5,
+      "category": "string_advanced",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 18397.5,
+      "bare_time_ms": 1988.8
+    },
+    {
+      "task_id": "gen-ds-reverse_with_stack-6795",
+      "difficulty": 6,
+      "category": "data_structure",
+      "frankenstein_score": 1.0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 1094.4,
+      "bare_time_ms": 1255.0
+    },
+    {
+      "task_id": "gen-func-zip_lists-3836",
+      "difficulty": 7,
+      "category": "functional",
+      "frankenstein_score": 1.0,
+      "bare_score": 0,
+      "frankenstein_time_ms": 18017.3,
+      "bare_time_ms": 3400.0
+    },
+    {
+      "task_id": "gen-dp-longest_increasing-8180",
+      "difficulty": 8,
+      "category": "dp",
+      "frankenstein_score": 0,
+      "bare_score": 1.0,
+      "frankenstein_time_ms": 49727.8,
+      "bare_time_ms": 2444.8
+    }
+  ]
+}

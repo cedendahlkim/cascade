@@ -23,7 +23,7 @@ function audit(tool: string, input: string, allowed: boolean, reason?: string) {
 
 const SCREENSHOTS_DIR = join(
   process.env.CASCADE_REMOTE_WORKSPACE ||
-    new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1").replace(/\/src\/tools-desktop\.ts$/, ""),
+    new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1").replace(/\/(src|dist)\/tools-desktop\.(ts|js)$/, ""),
   "data",
   "screenshots"
 );

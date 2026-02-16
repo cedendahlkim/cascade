@@ -1,0 +1,34 @@
+{
+  "modules": {
+    "hdc": {
+      "enabled": true,
+      "label": "hdc",
+      "description": ""
+    },
+    "aif": {
+      "enabled": true,
+      "label": "aif",
+      "description": ""
+    },
+    "ebbinghaus": {
+      "enabled": true,
+      "label": "ebbinghaus",
+      "description": ""
+    },
+    "gut_feeling": {
+      "enabled": true,
+      "label": "gut_feeling",
+      "description": ""
+    },
+    "emotions": {
+      "enabled": true,
+      "label": "emotions",
+      "description": ""
+    },
+    "stm": {
+      "enabled": true,
+      "label": "stm",
+      "description": ""
+    }
+  }
+}

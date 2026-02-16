@@ -1,0 +1,11 @@
+# Task: gen-algo-two_sum-8796 | Score: 100% | 2026-02-14T12:03:07.122468
+
+n = int(input())
+lst = [int(input()) for _ in range(n)]
+target = int(input())
+for i in range(n):
+    for j in range(i+1, n):
+        if lst[i] + lst[j] == target:
+            print(i, j)
+            exit()
+print(-1)
