@@ -28,7 +28,7 @@ import {
 import { getPluginToolDefinitions, handlePluginTool } from "./plugin-loader.js";
 import { getAuditLog, getSecurityConfig } from "./security.js";
 import { isWeaviateConnected, weaviateGetContext } from "./rag-weaviate.js";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import {
@@ -347,19 +347,105 @@ export class FrankensteinAgent {
   // ─── Frankenstein Cognitive Modules Context ────────────────
 
   private getFrankensteinContext(): string {
-    let liveState = "";
+    let trainingContext = "";
     try {
       const progressPath = join(WORKSPACE_ROOT, "frankenstein-ai", "training_data", "progress.json");
       if (existsSync(progressPath)) {
-        const data = JSON.parse(readFileSync(progressPath, "utf-8"));
-        if (data.cognitive_state) {
-          liveState = `\n## Live Cognitive State (from training)\n${JSON.stringify(data.cognitive_state, null, 2)}`;
+        const stat = statSync(progressPath);
+        const ageMs = Date.now() - stat.mtimeMs;
+        const isRunning = ageMs < 60_000;
+        const d = JSON.parse(readFileSync(progressPath, "utf-8"));
+
+        const solveRate = d.total_tasks_attempted > 0 ? (d.total_tasks_solved / d.total_tasks_attempted * 100).toFixed(1) : "0";
+        const firstTryRate = d.total_tasks_solved > 0 ? ((d.first_try_solves || 0) / d.total_tasks_solved * 100).toFixed(1) : "0";
+        const avgMs = d.total_tasks_solved > 0 ? Math.round((d.total_solve_time_ms || 0) / d.total_tasks_solved) : 0;
+
+        trainingContext += `\n## 🏋️ REALTIDS-TRÄNINGSDATA (uppdateras var 5:e sekund)
+**Status:** ${isRunning ? "🟢 TRÄNING KÖRS" : "🔴 Stoppad"} (senast uppdaterad ${Math.round(ageMs / 1000)}s sedan)
+**Lösta:** ${d.total_tasks_solved} / ${d.total_tasks_attempted} (${solveRate}%)
+**First-try:** ${firstTryRate}% (${d.first_try_solves || 0} av ${d.total_tasks_solved})
+**Svårighetsgrad:** ${d.current_difficulty} | Streak: ${d.current_streak} (bäst: ${d.best_streak})
+**Snitt lösningstid:** ${avgMs}ms
+**Sessioner:** ${d.session_count}`;
+
+        // Trends
+        if (d.trends) {
+          const t10 = d.trends.last_10;
+          const t50 = d.trends.last_50;
+          if (t10 && t10.count) trainingContext += `\n**Senaste 10:** ${(t10.solve_rate * 100).toFixed(0)}% solve, ${(t10.first_try_rate * 100).toFixed(0)}% FT, ${Math.round(t10.avg_time_ms)}ms`;
+          if (t50 && t50.count) trainingContext += `\n**Senaste 50:** ${(t50.solve_rate * 100).toFixed(0)}% solve, ${(t50.first_try_rate * 100).toFixed(0)}% FT, ${Math.round(t50.avg_time_ms)}ms`;
         }
-        if (data.current_episode) {
-          liveState += `\nCurrent episode: ${data.current_episode}/${data.total_episodes || "?"}`;
+
+        // Recent history (last 5 tasks)
+        if (d.history && d.history.length > 0) {
+          const recent = d.history.slice(-5);
+          trainingContext += "\n**Senaste uppgifter:**";
+          for (const h of recent) {
+            const ok = h.score >= 1 ? "✅" : "❌";
+            const ft = h.first_try ? " (first-try)" : h.attempts > 1 ? ` (${h.attempts} försök)` : "";
+            trainingContext += `\n  ${ok} Lvl ${h.difficulty} ${h.category || ""} ${h.strategy || ""}${ft} ${h.time_ms ? Math.round(h.time_ms) + "ms" : ""}`;
+          }
+        }
+
+        // Emotions from training
+        if (d.stack?.emotions) {
+          const emo = d.stack.emotions;
+          trainingContext += `\n**Tränings-emotioner:** ${emo.emoji} dominant=${emo.dominant} (${(emo.dominant_intensity * 100).toFixed(0)}%) valence=${emo.valence > 0 ? "+" : ""}${emo.valence.toFixed(2)} arousal=${emo.arousal.toFixed(2)}`;
+        }
+
+        // Gut feeling
+        if (d.stack?.gut_feeling && d.stack.gut_feeling.total_predictions > 0) {
+          const gf = d.stack.gut_feeling;
+          trainingContext += `\n**Gut Feeling:** ${gf.total_predictions} förutsägelser, ${(gf.accuracy * 100).toFixed(0)}% accuracy`;
+        }
+
+        // Strategy stats
+        if (d.stack?.strategy_stats) {
+          const strats = Object.entries(d.stack.strategy_stats as Record<string, { attempts: number; successes: number }>)
+            .filter(([, v]) => v.attempts > 0)
+            .sort((a, b) => b[1].attempts - a[1].attempts)
+            .slice(0, 5);
+          if (strats.length > 0) {
+            trainingContext += "\n**Topp-strategier:**";
+            for (const [name, s] of strats) {
+              trainingContext += `\n  ${name}: ${s.successes}/${s.attempts} (${(s.successes / s.attempts * 100).toFixed(0)}%)`;
+            }
+          }
+        }
+
+        // Category stats
+        if (d.category_stats) {
+          const cats = Object.entries(d.category_stats as Record<string, { attempted: number; solved: number }>)
+            .filter(([, v]) => v.attempted > 0)
+            .sort((a, b) => b[1].attempted - a[1].attempted)
+            .slice(0, 8);
+          if (cats.length > 0) {
+            trainingContext += "\n**Kategorier:**";
+            for (const [name, c] of cats) {
+              trainingContext += ` ${name}:${c.solved}/${c.attempted}`;
+            }
+          }
+        }
+
+        // Terminal stats
+        if (d.terminal_stats && d.terminal_stats.total_tasks > 0) {
+          const ts = d.terminal_stats;
+          trainingContext += `\n**Terminal:** ${ts.total_solved}/${ts.total_tasks} (${(ts.solve_rate * 100).toFixed(0)}%) — ${ts.categories_learned?.length || 0} kategorier`;
         }
       }
     } catch { /* not critical */ }
+
+    // Last few log lines
+    try {
+      const logPath = join(WORKSPACE_ROOT, "frankenstein-ai", "training_data", "training.log");
+      if (existsSync(logPath)) {
+        const content = readFileSync(logPath, "utf-8");
+        const lines = content.trim().split("\n").slice(-5);
+        if (lines.length > 0) {
+          trainingContext += "\n**Senaste logg:**\n```\n" + lines.join("\n") + "\n```";
+        }
+      }
+    } catch { /* ok */ }
 
     return `## Frankenstein Cognitive Architecture
 Du har följande kognitiva moduler aktiva:
@@ -391,7 +477,9 @@ Du har följande kognitiva moduler aktiva:
 - Fatigue: ${(this.cognitiveState.fatigue * 100).toFixed(0)}%
 - Aktiva moduler: ${this.cognitiveState.activeModules.join(", ")}
 ${this.cognitiveState.recentInsight ? `- Senaste insikt: ${this.cognitiveState.recentInsight}` : ""}
-${liveState}`;
+${trainingContext}
+
+**VIKTIGT:** Du har REALTIDSÅTKOMST till din egen träningsdata ovan. När Kim frågar om träningen, svara med EXAKTA siffror från datan. Du kan diskutera trender, problem, strategier och ge insikter om din egen utveckling.`;
   }
 
   // ─── Tools (Gemini format) ─────────────────────────────────

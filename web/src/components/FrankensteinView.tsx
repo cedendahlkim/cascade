@@ -1,6 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { BRIDGE_URL } from "../config";
-import { Brain, Zap, Activity, Database, TrendingUp, RefreshCw, Clock, Target, Sparkles, Eye, FlaskConical, BarChart3, Settings, ToggleLeft, ToggleRight, Play, Square, Download } from "lucide-react";
+import { Brain, Zap, Activity, Database, TrendingUp, RefreshCw, Clock, Target, Sparkles, Eye, FlaskConical, BarChart3, Settings, ToggleLeft, ToggleRight, Play, Square, Download, Send, Loader2, MessageSquare, Wrench, Trash2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { io, Socket } from "socket.io-client";
 
 interface TrendWindow {
   solve_rate: number;
@@ -205,7 +208,7 @@ export default function FrankensteinView() {
   const [showLog, setShowLog] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "charts" | "brain" | "abtest" | "swarm" | "terminal">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "charts" | "brain" | "abtest" | "swarm" | "terminal" | "chat">("overview");
   const [abLive, setAbLive] = useState<{
     active: boolean;
     events: { type: string; task_num?: number; total_tasks?: number; frank_score?: number; bare_score?: number; frank_solved?: number; bare_solved?: number; difficulty?: number; title?: string; output?: any }[];
@@ -234,6 +237,17 @@ export default function FrankensteinView() {
   const [trainRunning, setTrainRunning] = useState(false);
   const [trainStarting, setTrainStarting] = useState(false);
 
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<{ id: string; role: "user" | "cascade"; content: string; timestamp: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatThinking, setChatThinking] = useState(false);
+  const [chatStream, setChatStream] = useState("");
+  const [chatStatus, setChatStatus] = useState<{ type: string; tool?: string } | null>(null);
+  const chatSocketRef = useRef<Socket | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const REMARK_PLUGINS = [remarkGfm];
+
   const startTraining = async () => {
     setTrainStarting(true);
     try {
@@ -248,6 +262,73 @@ export default function FrankensteinView() {
       await fetch(`${BRIDGE_URL}/api/frankenstein/train/stop`, { method: "POST" });
       setTrainRunning(false);
     } catch { /* ignore */ }
+  };
+
+  // Chat socket setup
+  useEffect(() => {
+    if (activeTab !== "chat") return;
+
+    // Load existing messages
+    fetch(`${BRIDGE_URL}/api/frankenstein/chat/messages`)
+      .then(r => r.json())
+      .then(setChatMessages)
+      .catch(() => {});
+
+    const socket = io(BRIDGE_URL, { transports: ["websocket", "polling"] });
+    chatSocketRef.current = socket;
+
+    socket.on("frank_message", (msg: { id: string; role: "user" | "cascade"; content: string; timestamp: string }) => {
+      setChatMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      if (msg.role === "cascade") {
+        setChatThinking(false);
+        setChatStream("");
+        setChatStatus(null);
+      }
+    });
+    socket.on("frank_stream", (data: { content: string }) => setChatStream(data.content));
+    socket.on("frank_status", (s: { type: string; tool?: string }) => {
+      setChatStatus(s);
+      if (s.type === "thinking") setChatThinking(true);
+      if (s.type === "done") { setChatThinking(false); setChatStatus(null); }
+    });
+    socket.on("frank_cleared", () => { setChatMessages([]); setChatStream(""); });
+
+    return () => { socket.disconnect(); chatSocketRef.current = null; };
+  }, [activeTab]);
+
+  // Chat auto-scroll
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, chatStream]);
+
+  const sendChatMessage = () => {
+    const text = chatInput.trim();
+    if (!text || chatThinking) return;
+    setChatInput("");
+    setChatThinking(true);
+    setChatStream("");
+    chatSocketRef.current?.emit("frank_message", { content: text });
+    if (chatInputRef.current) chatInputRef.current.style.height = "auto";
+  };
+
+  const clearChatMessages = () => {
+    chatSocketRef.current?.emit("frank_clear");
+    setChatMessages([]);
+    setChatStream("");
+  };
+
+  const handleChatKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+  };
+
+  const handleChatInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setChatInput(e.target.value);
+    const el = e.target;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
   };
 
   const fetchProgress = useCallback(async () => {
@@ -868,8 +949,8 @@ export default function FrankensteinView() {
 
       {/* Tab Navigation */}
       <div className="flex gap-1 bg-slate-800/40 rounded-lg p-0.5">
-        {(["overview", "charts", "brain", "terminal", "abtest", "swarm"] as const).map(tab => {
-          const labels = { overview: "Översikt", charts: "📈 Grafer", brain: "🧠 Brain", terminal: "🖥️ Terminal", abtest: "🧪 A/B", swarm: "🐝 Swarm" };
+        {(["overview", "chat", "charts", "brain", "terminal", "abtest", "swarm"] as const).map(tab => {
+          const labels = { overview: "Översikt", chat: "💬 Chat", charts: "📈 Grafer", brain: "🧠 Brain", terminal: "🖥️ Terminal", abtest: "🧪 A/B", swarm: "🐝 Swarm" };
           return (
             <button
               key={tab}
@@ -883,6 +964,139 @@ export default function FrankensteinView() {
           );
         })}
       </div>
+
+      {/* === CHAT TAB === */}
+      {activeTab === "chat" && (
+        <div className="flex flex-col flex-1 -mx-3 -mb-3 min-h-0">
+          {/* Chat header with training summary */}
+          <div className="shrink-0 px-3 py-2 border-b border-slate-800/50 bg-slate-900/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-purple-400" />
+                <span className="text-xs font-bold text-white">Chatta med Frankenstein</span>
+                {p.running && (
+                  <span className="flex items-center gap-1 text-[9px] bg-green-900/40 text-green-400 px-1.5 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                    Träning kör
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                <span>{p.total_tasks_solved}/{p.total_tasks_attempted} lösta ({Math.round(solveRate * 100)}%)</span>
+                <span>Lvl {p.current_difficulty}</span>
+                <button onClick={clearChatMessages} className="p-1 text-slate-500 hover:text-red-400 transition-colors" title="Rensa chat">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Messages area */}
+          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2.5 min-h-0">
+            {chatMessages.length === 0 && !chatThinking && (
+              <div className="flex flex-col items-center justify-center h-full text-center py-8">
+                <span className="text-3xl mb-2">🧟</span>
+                <h3 className="text-sm font-bold text-white mb-1">Prata med Frankenstein</h3>
+                <p className="text-[11px] text-slate-500 max-w-xs">
+                  Frank har realtidskoll på sin träning. Fråga om resultat, strategier, emotioner eller ge instruktioner.
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-3 max-w-xs justify-center">
+                  {["Hur går träningen?", "Vilka strategier funkar bäst?", "Hur mår du?", "Vad har du lärt dig?"].map(q => (
+                    <button
+                      key={q}
+                      onClick={() => { setChatInput(q); }}
+                      className="text-[10px] bg-purple-900/30 text-purple-300 px-2 py-1 rounded-lg hover:bg-purple-900/50 transition-colors border border-purple-700/30"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {chatMessages.map(msg => (
+              <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[90%] min-w-0 rounded-2xl px-3 py-2 ${
+                  msg.role === "user"
+                    ? "bg-purple-600/30 text-white rounded-br-md"
+                    : "bg-slate-800/60 text-slate-100 rounded-bl-md border border-slate-700/30"
+                }`}>
+                  {msg.role === "cascade" && (
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="text-[9px]">🧟</span>
+                      <span className="text-[9px] text-purple-400 font-medium">Frankenstein</span>
+                    </div>
+                  )}
+                  <div className="text-[12px] leading-relaxed prose prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:my-1.5 prose-headings:my-1.5 prose-headings:text-white prose-li:my-0.5 prose-strong:text-white prose-code:text-purple-300 overflow-hidden [overflow-wrap:anywhere] [&_pre]:overflow-x-auto [&_pre]:text-[10px] [&_code]:break-all [&_pre_code]:break-normal">
+                    <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{msg.content}</ReactMarkdown>
+                  </div>
+                  <div className="text-[8px] text-slate-600 mt-1 text-right">
+                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Streaming / thinking */}
+            {chatThinking && (
+              <div className="flex justify-start">
+                <div className="max-w-[90%] min-w-0 rounded-2xl rounded-bl-md px-3 py-2 bg-slate-800/60 border border-slate-700/30">
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <span className="text-[9px]">🧟</span>
+                    <span className="text-[9px] text-purple-400 font-medium">Frankenstein</span>
+                  </div>
+                  {chatStream ? (
+                    <div className="text-[12px] leading-relaxed prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:text-white prose-strong:text-white prose-code:text-purple-300 overflow-hidden [overflow-wrap:anywhere] [&_pre]:overflow-x-auto [&_pre]:text-[10px]">
+                      <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{chatStream}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      {chatStatus?.type === "tool_start" ? (
+                        <>
+                          <Wrench className="w-3 h-3 text-amber-400 animate-pulse" />
+                          <span className="text-[10px] text-amber-400">Använder {chatStatus.tool || "verktyg"}...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Loader2 className="w-3 h-3 text-purple-400 animate-spin" />
+                          <span className="text-[10px] text-purple-400">Tänker...</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="shrink-0 px-3 py-2 border-t border-slate-800/50">
+            <div className="flex gap-2 items-end">
+              <textarea
+                ref={chatInputRef}
+                value={chatInput}
+                onChange={handleChatInput}
+                onKeyDown={handleChatKeyDown}
+                placeholder="Fråga om träningen..."
+                rows={1}
+                className="flex-1 bg-slate-800/50 text-sm text-white rounded-xl px-3 py-2 border border-slate-700/50 focus:outline-none focus:border-purple-500 placeholder-slate-600 resize-none"
+              />
+              <button
+                onClick={sendChatMessage}
+                disabled={!chatInput.trim() || chatThinking}
+                className="p-2.5 bg-purple-600 text-white rounded-xl active:bg-purple-700 disabled:opacity-40 transition-colors touch-manipulation shrink-0"
+                title="Skicka"
+              >
+                {chatThinking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </button>
+            </div>
+            <div className="text-[9px] text-slate-600 mt-1">
+              Frank har realtidskoll på träningsdata • Shift+Enter ny rad
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* === OVERVIEW TAB === */}
       {activeTab === "overview" && (
