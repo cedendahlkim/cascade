@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gracestack — Frankenstein AI | Nästa generations AI-plattform</title>
+  <meta name="description" content="Frankenstein AI kombinerar neurovetenskap, kognitiv arkitektur och maskininlärning till en AI som tänker, minns och förbättras — autonomt. 99% lösningsgrad, 127 inlärda skills, persistent minne.">
+  <meta name="keywords" content="AI, artificiell intelligens, Frankenstein AI, kognitiv arkitektur, neurovetenskap, Sverige, Gracestack">
+  <meta property="og:title" content="Gracestack — Frankenstein AI">
+  <meta property="og:description" content="En AI-plattform som kombinerar neurovetenskap och maskininlärning. 99% lösningsgrad. Byggd i Sverige.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.gracestack.se">
+  <link rel="canonical" href="https://www.gracestack.se">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-primary: #020617;
+      --bg-secondary: #0f172a;
+      --bg-card: rgba(15, 23, 42, 0.6);
+      --border: rgba(51, 65, 85, 0.4);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-blue: #3b82f6;
+      --accent-violet: #8b5cf6;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Gradient background */
+    .bg-gradient {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.15), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 60%, rgba(139, 92, 246, 0.1), transparent),
+        radial-gradient(ellipse 50% 30% at 20% 80%, rgba(16, 185, 129, 0.08), transparent),
+        var(--bg-primary);
+    }
+
+    /* Grid pattern overlay */
+    .grid-pattern {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background-image:
+        linear-gradient(rgba(51, 65, 85, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(51, 65, 85, 0.08) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 0;
+      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(20px);
+      background: rgba(2, 6, 23, 0.8);
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-size: 1.25rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-links { display: flex; align-items: center; gap: 32px; }
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text-primary); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      border-radius: 12px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.3s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet));
+      color: white;
+      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(59, 130, 246, 0.4);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover {
+      border-color: var(--accent-blue);
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    .btn-sm { padding: 8px 16px; font-size: 0.8rem; border-radius: 10px; }
+
+    /* Hero */
+    .hero {
+      padding: 160px 0 100px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 100px;
+      font-size: 0.8rem;
+      color: var(--accent-blue);
+      font-weight: 500;
+      margin-bottom: 32px;
+    }
+
+    .hero-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet), var(--accent-emerald));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      color: var(--text-secondary);
+      max-width: 640px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+
+    .hero-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+
+    /* Stats bar */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-top: 80px;
+    }
+
+    .stat {
+      background: var(--bg-secondary);
+      padding: 28px 24px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .stat-value.blue { color: var(--accent-blue); }
+    .stat-value.violet { color: var(--accent-violet); }
+    .stat-value.emerald { color: var(--accent-emerald); }
+    .stat-value.amber { color: var(--accent-amber); }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Sections */
+    section { padding: 100px 0; }
+
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent-blue);
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      line-height: 1.2;
+    }
+
+    .section-desc {
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      max-width: 600px;
+      line-height: 1.7;
+      margin-bottom: 48px;
+    }
+
+    /* Feature cards */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 20px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(59, 130, 246, 0.3);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: -0.01em;
+    }
+
+    .feature-card p {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* Architecture */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+    }
+
+    .arch-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .arch-card .tag {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .arch-card h4 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .arch-card p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Comparison table */
+    .comparison-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      padding: 16px 24px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .comparison-table th {
+      background: var(--bg-secondary);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .comparison-table td {
+      background: var(--bg-card);
+      font-size: 0.9rem;
+    }
+
+    .comparison-table tr:last-child td { border-bottom: none; }
+
+    .check { color: var(--accent-emerald); font-weight: 700; }
+    .cross { color: var(--text-muted); }
+
+    /* Timeline */
+    .timeline { position: relative; padding-left: 32px; }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--accent-blue), var(--accent-violet), var(--accent-emerald));
+      border-radius: 2px;
+    }
+
+    .timeline-item {
+      position: relative;
+      padding-bottom: 40px;
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -37px;
+      top: 4px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent-blue);
+      border: 3px solid var(--bg-primary);
+    }
+
+    .timeline-item.active::before {
+      background: var(--accent-emerald);
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+    }
+
+    .timeline-date {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .timeline-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .timeline-desc {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Team */
+    .team-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 500px;
+    }
+
+    .team-card h4 { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+    .team-card .role { color: var(--accent-blue); font-size: 0.85rem; font-weight: 500; margin-bottom: 16px; }
+    .team-card p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; }
+
+    /* CTA */
+    .cta {
+      text-align: center;
+      padding: 100px 0 120px;
+    }
+
+    .cta h2 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+    }
+
+    .cta p {
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+    }
+
+    footer .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    footer .copy {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    footer .links { display: flex; gap: 24px; }
+    footer .links a {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    footer .links a:hover { color: var(--text-primary); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-links a:not(.btn) { display: none; }
+      .hero { padding: 120px 0 60px; }
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .features-grid { grid-template-columns: 1fr; }
+      .arch-grid { grid-template-columns: 1fr; }
+      section { padding: 60px 0; }
+      .comparison-table { font-size: 0.8rem; }
+      .comparison-table th, .comparison-table td { padding: 12px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-gradient"></div>
+  <div class="grid-pattern"></div>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="container">
+      <div class="logo">Gracestack</div>
+      <div class="nav-links">
+        <a href="#technology">Teknologi</a>
+        <a href="#architecture">Arkitektur</a>
+        <a href="#comparison">Jämförelse</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="https://app.gracestack.se" class="btn btn-primary btn-sm">Öppna appen →</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">
+        <span class="dot"></span>
+        Live — tränar autonomt just nu
+      </div>
+      <h1>
+        AI som <span class="gradient">tänker, minns<br>och förbättras</span> — autonomt
+      </h1>
+      <p>
+        Frankenstein AI kombinerar neurovetenskap, kognitiv arkitektur och maskininlärning
+        till en plattform som löser uppgifter med 99% precision — och lär sig av varje misstag.
+      </p>
+      <div class="hero-buttons">
+        <a href="https://app.gracestack.se" class="btn btn-primary">Testa live demo →</a>
+        <a href="#technology" class="btn btn-outline">Läs mer om teknologin</a>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-bar">
+        <div class="stat">
+          <div class="stat-value blue">99%</div>
+          <div class="stat-label">Lösningsgrad</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value violet">31 500+</div>
+          <div class="stat-label">Uppgifter lösta</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value emerald">127</div>
+          <div class="stat-label">Inlärda skills</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value amber">21/21</div>
+          <div class="stat-label">Superhuman benchmark</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- What is Frankenstein AI -->
+  <section id="technology">
+    <div class="container">
+      <div class="section-label">⚡ Teknologi</div>
+      <h2 class="section-title">Vad är Frankenstein AI?</h2>
+      <p class="section-desc">
+        En kognitiv AI-arkitektur inspirerad av neurovetenskap — inte bara ännu en LLM-wrapper.
+        Frankenstein kombinerar sex specialiserade moduler till ett system som tänker, känner och minns.
+      </p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(59, 130, 246, 0.1);">🧠</div>
+          <h3>Hyperdimensionell kognition</h3>
+          <p>4096-dimensionella vektorer för symbolisk och sub-symbolisk bearbetning. Inspirerat av Pentti Kanervas arbete med Sparse Distributed Memory.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(139, 92, 246, 0.1);">🎯</div>
+          <h3>Active Inference</h3>
+          <p>Bayesiansk beslutsfattning via pymdp — minimerar Expected Free Energy för optimal strategival. AI:n agerar proaktivt, inte bara reaktivt.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(16, 185, 129, 0.1);">💭</div>
+          <h3>Ebbinghaus-minne</h3>
+          <p>Episodiskt minne med glömskekurva — precis som människor. ChromaDB-baserat med persistent lagring. 4 800+ minnen och växande.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(245, 158, 11, 0.1);">🫀</div>
+          <h3>Magkänsla (Gut Feeling)</h3>
+          <p>Sub-symbolisk intuition baserad på Damasios Somatic Marker-hypotes. Snabba beslut utan fullständig analys — precis som mänsklig intuition.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(244, 63, 94, 0.1);">😊</div>
+          <h3>Emotionell motor</h3>
+          <p>Ekmans 6 grundemotioner påverkar beteende och beslutsfattning. Nyfikenhet driver utforskning, frustration triggar strategibyte.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(99, 102, 241, 0.1);">🌙</div>
+          <h3>Dygnsrytm & drömmar</h3>
+          <p>Circadian clock med sömnarkitektur och drömmotor. Under "sömn" konsolideras minnen och kunskaper — precis som i biologiska hjärnor.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section id="architecture" style="background: rgba(15, 23, 42, 0.4);">
+    <div class="container">
+      <div class="section-label">🏗️ Arkitektur</div>
+      <h2 class="section-title">Tre-nivå bearbetning</h2>
+      <p class="section-desc">
+        Inspirerat av Daniel Kahnemans System 1 & 2, med ett tillägg: System 0 — deterministisk precision.
+      </p>
+
+      <div class="arch-grid">
+        <div class="arch-card">
+          <div class="tag" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald);">System 0</div>
+          <h4>Deterministisk lösare</h4>
+          <p>Exakta, regelbaserade lösningar. ~270ms svarstid. Hanterar kända uppgiftstyper med 100% precision. Ingen LLM behövs.</p>
+        </div>
+        <div class="arch-card">
+          <div class="tag" style="background: rgba(59, 130, 246, 0.15); color: var(--accent-blue);">System 1</div>
+          <h4>Snabb intuition</h4>
+          <p>Pattern-matching via HDC-vektorer och magkänsla. Snabba, automatiska svar baserade på tidigare erfarenhet.</p>
+        </div>
+        <div class="arch-card">
+          <div class="tag" style="background: rgba(139, 92, 246, 0.15); color: var(--accent-violet);">System 2</div>
+          <h4>Djup analys</h4>
+          <p>LLM-baserad resonering för nya, komplexa problem. Active Inference styr strategival. Reflexionsloop för självförbättring.</p>
+        </div>
+        <div class="arch-card">
+          <div class="tag" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber);">Promotion Pipeline</div>
+          <h4>Automatisk optimering</h4>
+          <p>Uppgifter som löses ofta i System 2 promoteras till System 1, sedan till System 0. AI:n blir snabbare över tid — automatiskt.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison -->
+  <section id="comparison">
+    <div class="container">
+      <div class="section-label">📊 Jämförelse</div>
+      <h2 class="section-title">Frankenstein vs traditionella LLM:er</h2>
+      <p class="section-desc">
+        Frankenstein är inte en wrapper runt GPT — det är en helt ny kognitiv arkitektur.
+      </p>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Egenskap</th>
+            <th>Frankenstein AI</th>
+            <th>Traditionell LLM</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Persistent minne</td>
+            <td class="check">✅ Ebbinghaus + ChromaDB</td>
+            <td class="cross">❌ Kontextfönster</td>
+          </tr>
+          <tr>
+            <td>Lär sig av misstag</td>
+            <td class="check">✅ Reflexionsloop + spaced repetition</td>
+            <td class="cross">❌ Statisk modell</td>
+          </tr>
+          <tr>
+            <td>Emotionell intelligens</td>
+            <td class="check">✅ 6 grundemotioner påverkar beteende</td>
+            <td class="cross">❌ Ingen</td>
+          </tr>
+          <tr>
+            <td>Deterministisk precision</td>
+            <td class="check">✅ System 0 — 100% för kända typer</td>
+            <td class="cross">❌ Alltid probabilistisk</td>
+          </tr>
+          <tr>
+            <td>Autonom förbättring</td>
+            <td class="check">✅ Tränar 24/7 med dygnsrytm</td>
+            <td class="cross">❌ Kräver manuell finetuning</td>
+          </tr>
+          <tr>
+            <td>Multi-modal</td>
+            <td class="check">✅ Kod, terminal, git, text, analys</td>
+            <td>⚠️ Begränsat</td>
+          </tr>
+          <tr>
+            <td>Superhuman benchmark</td>
+            <td class="check">✅ 21/21 (100%)</td>
+            <td class="cross">Gemini 2.0: 17/21 (81%)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Platform -->
+  <section style="background: rgba(15, 23, 42, 0.4);">
+    <div class="container">
+      <div class="section-label">🚀 Plattform</div>
+      <h2 class="section-title">Full-stack AI Lab</h2>
+      <p class="section-desc">
+        Inte bara en AI-modell — en komplett plattform för AI-forskning och produktivitet.
+      </p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(59, 130, 246, 0.1);">🔬</div>
+          <h3>AI Research Lab</h3>
+          <p>Multi-agent forskningssessioner med 5 AI-deltagare. Steel Man / Red Team-faser. Adversarial protokoll som bryter groupthink.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(139, 92, 246, 0.1);">⚔️</div>
+          <h3>Battle Arena</h3>
+          <p>Live-tävlingar mellan Frankenstein och kommersiella LLM:er. Realtids-events, ranking och statistik.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(16, 185, 129, 0.1);">🔗</div>
+          <h3>Agent Chains</h3>
+          <p>Visuell drag-and-drop workflow-byggare. Villkorlig logik, loopar, retry-mekanismer. Schemalägg och automatisera AI-flöden.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(245, 158, 11, 0.1);">🔒</div>
+          <h3>Multi-user & roller</h3>
+          <p>Supabase-autentisering med JWT. Admin/User/Viewer-roller. Delad workspace med granulära permissions.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(244, 63, 94, 0.1);">📊</div>
+          <h3>Realtids-dashboard</h3>
+          <p>Gauges, sparklines, historiska trender. Kostnadsbudget med alerts. Komplett överblick av alla AI-operationer.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background: rgba(99, 102, 241, 0.1);">🌐</div>
+          <h3>Deployad & live</h3>
+          <p>Docker + Nginx + SSL + Cloudflare Tunnel. Persistent träningsdata. Frankenstein tränar autonomt 24/7 på servern.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech stack -->
+  <section>
+    <div class="container">
+      <div class="section-label">🛠️ Tech Stack</div>
+      <h2 class="section-title">Byggt med moderna verktyg</h2>
+      <p class="section-desc">
+        Produktionsklar arkitektur med 44 backend-moduler, 25 frontend-views och 80+ API-endpoints.
+      </p>
+
+      <div class="arch-grid">
+        <div class="arch-card">
+          <div class="tag" style="background: rgba(59, 130, 246, 0.15); color: var(--accent-blue);">Backend</div>
+          <h4>Node.js + TypeScript</h4>
+          <p>Express + Socket.IO. 44 moduler. Multi-LLM orchestrator (Claude, Gemini, DeepSeek, Grok, Ollama).</p>
+        </div>
+        <div class="arch-card">
+          <div class="tag" style="background: rgba(139, 92, 246, 0.15); color: var(--accent-violet);">Frontend</div>
+          <h4>React + Tailwind CSS</h4>
+          <p>25 views. Responsiv design. Dark mode. PWA-stöd. Haptic feedback på mobil.</p>
+        </div>
+        <div class="arch-card">
+          <div class="tag" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald);">AI Engine</div>
+          <h4>Python (35 moduler)</h4>
+          <p>pymdp, ChromaDB, numpy. Kognitiv arkitektur med 6 specialiserade moduler.</p>
+        </div>
+        <div class="arch-card">
+          <div class="tag" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber);">Infrastruktur</div>
+          <h4>Docker + Supabase</h4>
+          <p>Multi-stage builds. Named volumes. Nginx SSL. Supabase auth + Postgres. Cloudflare Tunnel.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Roadmap -->
+  <section id="roadmap" style="background: rgba(15, 23, 42, 0.4);">
+    <div class="container">
+      <div class="section-label">🗺️ Roadmap</div>
+      <h2 class="section-title">Vägen framåt</h2>
+      <p class="section-desc">
+        Frankenstein AI är live och tränar. Här är vad som kommer härnäst.
+      </p>
+
+      <div class="timeline">
+        <div class="timeline-item active">
+          <div class="timeline-date">Nu — Q1 2026</div>
+          <div class="timeline-title">✅ Full-stack plattform live</div>
+          <div class="timeline-desc">99% lösningsgrad. 31 500+ uppgifter. Multi-user. Deployad på app.gracestack.se. Autonom träning 24/7.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">Q2 2026</div>
+          <div class="timeline-title">Skalning & API</div>
+          <div class="timeline-desc">Publik API för tredjepartsutvecklare. Fler uppgiftsdomäner. 100 000+ lösta uppgifter. Vision-integration.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">Q3 2026</div>
+          <div class="timeline-title">Enterprise & SaaS</div>
+          <div class="timeline-desc">Multi-tenant SaaS-plattform. Enterprise-grade säkerhet. Custom training pipelines. On-premise deployment.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">Q4 2026</div>
+          <div class="timeline-title">Omnipotens-mål</div>
+          <div class="timeline-desc">1 000 000+ uppgifter. 99,99% lösningsgrad. 500+ skills. Svarstid under 100ms. Full autonom agent.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Team -->
+  <section>
+    <div class="container">
+      <div class="section-label">👤 Team</div>
+      <h2 class="section-title">Grundare</h2>
+      <div class="team-card">
+        <h4>Kim Cedendahl</h4>
+        <div class="role">Grundare & CTO — Gracestack AB</div>
+        <p>
+          Bygger Frankenstein AI från grunden — från kognitiv arkitektur till produktionsinfrastruktur.
+          Bakgrund inom mjukvaruutveckling och AI-forskning.
+          Baserad i Sverige.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <div class="container">
+      <h2>Redo att se framtidens AI?</h2>
+      <p>Testa Frankenstein AI live eller kontakta oss för en djupare demo.</p>
+      <div class="cta-buttons">
+        <a href="https://app.gracestack.se" class="btn btn-primary">Öppna appen →</a>
+        <a href="mailto:kim@gracestack.se" class="btn btn-outline">Kontakta oss</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="copy">© 2026 Gracestack AB. Alla rättigheter förbehållna.</div>
+      <div class="links">
+        <a href="https://app.gracestack.se">App</a>
+        <a href="mailto:kim@gracestack.se">Kontakt</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
