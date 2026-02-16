@@ -543,7 +543,7 @@ export default function FrankensteinView() {
   const recentSolveRate = recent.length > 0 ? recent.filter(h => h.score >= 1).length / recent.length : 0;
 
   return (
-    <div className={`flex-1 flex flex-col gap-3 p-3 min-h-0 ${activeTab === "chat" ? "overflow-hidden" : "overflow-y-auto"}`} style={activeTab === "chat" ? { height: "calc(100dvh - 120px)" } : undefined}>
+    <div className={`flex-1 flex flex-col gap-3 p-3 min-h-0 ${activeTab === "chat" ? "overflow-hidden" : "overflow-y-auto"}`}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -636,7 +636,8 @@ export default function FrankensteinView() {
         </div>
       )}
 
-      {/* Top Stats Grid */}
+      {/* Top Stats Grid — hidden in chat mode */}
+      {activeTab !== "chat" && <>
       <div className="grid grid-cols-2 gap-2">
         <StatCard icon={Target} label="Lösta" value={p.total_tasks_solved} sub={`av ${p.total_tasks_attempted} (${Math.round(solveRate * 100)}%)`} color="text-green-400" />
         <StatCard icon={TrendingUp} label="Svårighet" value={p.current_difficulty} sub={`Streak: ${p.current_streak} (bäst: ${p.best_streak})`} color="text-amber-400" />
@@ -946,6 +947,8 @@ export default function FrankensteinView() {
           </div>
         </div>
       )}
+
+      </>}
 
       {/* Tab Navigation */}
       <div className="flex gap-1 bg-slate-800/40 rounded-lg p-0.5">
