@@ -1,8 +1,9 @@
 # Cascade Remote — Feature Roadmap & Status
 
-## Status: ✅ Full-stack implementerat (2026-02-09)
+## Status: ✅ Full-stack implementerat & deployat (2026-02-16)
 
-> Backend + Frontend + Prestanda-optimeringar klara. 30+ backend-moduler, 16 frontend-views, 80+ API-endpoints.
+> Backend + Frontend + Frankenstein AI + Deploy. 44 backend-moduler, 25 frontend-views, 80+ API-endpoints.
+> Live på **https://app.gracestack.se/** — Docker + Nginx + SSL + Cloudflare Tunnel.
 
 ---
 
@@ -116,6 +117,50 @@
 - [x] URL via Socket.IO `tunnel_url` event + `GET /api/tunnel`
 - [x] `NO_TUNNEL=1` i .env för att stänga av
 
+### 22. Deploy & Infrastruktur ✅
+
+- [x] `Dockerfile` — Multi-stage Node 22 + Python 3 + git, bridge + web build
+- [x] `docker-compose.yml` — Bridge-service med named volumes (`bridge-data`, `frank-training`)
+- [x] `deploy/nginx-ssl.conf` — Nginx reverse proxy med SSL (Let's Encrypt)
+- [x] `deploy/setup-server.sh` — Server setup-skript
+- [x] Certbot auto-renewal
+- [x] Live på `https://app.gracestack.se/` (89.167.57.244)
+
+### 23. Autentisering (Supabase) ✅
+
+- [x] `bridge/src/supabase.ts` — Supabase-klient
+- [x] `bridge/src/auth-middleware.ts` — JWT-validering (soft middleware)
+- [x] `bridge/src/auth-routes.ts` — Login/register/logout endpoints
+- [x] `web/src/contexts/AuthContext.tsx` — React auth context
+- [x] `web/src/components/LoginView.tsx` — Login/register UI
+- [x] `web/src/lib/supabase.ts` — Frontend Supabase-klient
+
+### 24. Adversarial Research Protocol ✅
+
+- [x] Steel Man + Red Team faser i arena-sessioner
+- [x] Random Seed bank (15 prompts) för att bryta groupthink
+- [x] Surprise Score — kvantifierar nyhet, motsägelse, frågedensitet per meddelande
+- [x] 4 forskningsprotokoll: Standard, Quick, Adversarial, Deepdive
+- [x] `GET /api/arena/protocols` endpoint
+- [x] Frontend: Protokollväljare + surprise score badge (färgkodad) i `ResearchLabView.tsx`
+
+### 25. Frankenstein Terminal-Bench ✅
+
+- [x] `terminal_env.py` — Sandboxad bash-miljö med blocked commands
+- [x] `terminal_tasks.py` — 17 uppgiftsgeneratorer (fil, text, git, script, pipeline) nivå 1-10
+- [x] `terminal_solver.py` — Deterministisk lösare för alla terminaluppgiftstyper
+- [x] `terminal_agent.py` — Sekventiell agent med LLM-fallback och recovery
+- [x] Git installerat i Docker-containern (git init, branch, merge, commit)
+- [x] Terminal-batch var 5:e batch i träningsloopen
+
+### 26. Frankenstein Persistent Memory ✅
+
+- [x] Docker volume `frank-training` → `/app/frankenstein-ai/training_data/`
+- [x] `memory.py` — ChromaDB PersistentClient + JSON-fallback (`ebbinghaus_memory.json`)
+- [x] Automatisk sparning var 50:e store + vid garbage collect
+- [x] Backup av 134MB träningsdata på host
+- [x] Minne överlever container-restarts och rebuilds
+
 ### 21. Prestanda-optimeringar ✅
 - [x] Socket.IO throttling (agent_stream 50ms, gemini_stream 50ms, orchestrator_worker 200ms)
 - [x] Meddelandebegränsning (max 200 per chatt)
@@ -138,8 +183,8 @@
 - [ ] Klistra in bilder från clipboard
 - [ ] Kamera-knapp i mobilen för att fota och fråga AI
 
-#### B. Multi-user stöd
-- [ ] Autentisering (JWT eller passkeys)
+#### B. Multi-user stöd (delvis ✅)
+- [x] Autentisering (Supabase JWT — se §23)
 - [ ] Separata sessioner per användare
 - [ ] Roller: admin, user, viewer
 - [ ] Delad workspace med permissions
@@ -149,11 +194,14 @@
 - [ ] Konfigurerbart: vilka events triggar push
 - [ ] Webhook-registrering för externa integrationer
 
-#### D. Förbättrad Arena
+#### D. Förbättrad Arena ✅
 - [x] Fler AI-deltagare — Ollama (lokal LLM) tillagd som 5:e deltagare med "Lokal Expert / Djävulens advokat"-roll
 - [x] Röstning/ranking av AI-svar — 👍/👎 per meddelande, ranking-API (`/api/arena/ranking`)
 - [x] Automatisk sammanfattning av forskningssessioner (fanns redan)
 - [x] Export av Arena-resultat till Markdown — `/api/arena/export` + Export-knapp i UI
+- [x] Steel Man + Red Team faser (se §24)
+- [x] Random Seed bank + Surprise Score
+- [x] 4 protokolllägen: Standard, Quick, Adversarial, Deepdive
 
 ### ⚡ Medium prioritet
 
@@ -289,90 +337,121 @@
 - [ ] Kontextuella features (svårighetsgrad, uppgiftstyp, kodlängd)
 - [ ] Temporal features (tid på dygnet, session-position)
 
-### 📊 Nuvarande Prestanda vs Mål (från PDF)
+### 📊 Nuvarande Prestanda vs Mål (uppdaterad 2026-02-16)
 
 | Metrik | Aktuellt | Mål för Omnipotens |
 |---|---|---|
-| Totalt antal försök | 20 489 | > 1 000 000 |
-| Övergripande lösningsgrad | 91,8% | 99,99% |
-| System 0 utnyttjande | 83,6% | > 95% |
-| System 2 utnyttjande | 15,2% | < 2% |
-| LLM Success Rate | 57% | 95% (via lokala modeller) |
-| Rate Limit Hits (S2) | 27/72 | 0 |
-| Genomsnittlig svarstid | 401 ms | < 100 ms |
+| Totalt antal försök | 31 549 | > 1 000 000 |
+| Övergripande lösningsgrad | 99% | 99,99% |
+| Alla 10 nivåer | 100% | 100% ✅ |
+| Skills inlärda | 127 | > 500 |
+| Superhuman benchmark | 21/21 (100%) | 100% ✅ |
+| System 0 utnyttjande | ~95% | > 95% ✅ |
+| Terminal/Git solve rate | 100% | 100% ✅ |
+| Genomsnittlig svarstid | ~270 ms | < 100 ms |
+| Ebbinghaus minnen | 4 800+ | Persistent ✅ |
+| Träningsdata | 134 MB | Persistent ✅ |
 
 ---
 
 ## Alla filer i projektet
 
-### Bridge (Backend)
+### Bridge (Backend — 44 filer)
 
 | Fil | Beskrivning |
 |---|---|
 | `bridge/src/index.ts` | Huvudserver (Express + Socket.IO + 80+ routes) |
 | `bridge/src/agent.ts` | Claude AI-agent med 40+ verktyg |
 | `bridge/src/agent-gemini.ts` | Gemini AI-agent |
+| `bridge/src/agent-deepseek.ts` | DeepSeek AI-agent |
+| `bridge/src/agent-frankenstein.ts` | Frankenstein AI bridge-integration |
+| `bridge/src/agent-grok.ts` | Grok (xAI) AI-agent |
 | `bridge/src/agent-ollama.ts` | Ollama lokal LLM-agent |
-| `bridge/src/llm-orchestrator.ts` | Multi-LLM coordinator med consensus |
+| `bridge/src/agent-chains.ts` | AI Agent Chains — DAG-baserad kedjeexekvering |
+| `bridge/src/auth-middleware.ts` | Supabase JWT-validering (soft middleware) |
+| `bridge/src/auth-routes.ts` | Login/register/logout endpoints |
 | `bridge/src/bot-network.ts` | Autonomt AI bot-nätverk |
-| `bridge/src/shared-memory.ts` | Delat minne för AI-samarbete |
-| `bridge/src/self-improve.ts` | Reflexion, skills, self-evaluation |
-| `bridge/src/workflows.ts` | Automation workflow engine |
-| `bridge/src/agent-chains.ts` | AI Agent Chains — DAG-baserad kedjeexekvering med villkor, loopar, retry |
-| `bridge/src/scheduler.ts` | Cron-baserad task scheduler |
-| `bridge/src/computer-registry.ts` | Remote dator-hantering |
+| `bridge/src/cascade-client.ts` | Cascade MCP-klient |
+| `bridge/src/clipboard.ts` | Clipboard-synk |
 | `bridge/src/computer-agent.ts` | Remote agent (körs på varje PC) |
+| `bridge/src/computer-registry.ts` | Remote dator-hantering |
 | `bridge/src/dashboard.ts` | Realtids-metrics |
-| `bridge/src/rag.ts` | RAG knowledge base |
+| `bridge/src/file-sharing.ts` | Fildelning |
+| `bridge/src/frank-learning.ts` | Frankenstein learning bridge |
+| `bridge/src/hierarchy.ts` | Hierarkisk agent-koordinering (Planner/Executor/Critic/Validator) |
+| `bridge/src/llm-orchestrator.ts` | Multi-LLM coordinator med consensus |
 | `bridge/src/memory.ts` | Persistenta AI-minnen |
+| `bridge/src/plugin-loader.ts` | Dynamiskt plugin-system |
+| `bridge/src/plugin-marketplace.ts` | Plugin marketplace med sökbar katalog |
+| `bridge/src/projects.ts` | Projekthantering |
+| `bridge/src/rag.ts` | RAG knowledge base |
+| `bridge/src/rag-weaviate.ts` | Weaviate vektor-DB integration |
+| `bridge/src/sandbox.ts` | Kod-sandbox för säker exekvering |
+| `bridge/src/scheduler.ts` | Cron-baserad task scheduler |
 | `bridge/src/search.ts` | Konversationssök och export |
 | `bridge/src/security.ts` | Säkerhetskonfig och audit |
-| `bridge/src/projects.ts` | Projekthantering |
-| `bridge/src/file-sharing.ts` | Fildelning |
-| `bridge/src/clipboard.ts` | Clipboard-synk |
-| `bridge/src/plugin-loader.ts` | Dynamiskt plugin-system |
-| `bridge/src/tools-web.ts` | Web-verktyg (sök, fetch, download) |
+| `bridge/src/self-improve.ts` | Reflexion, skills, self-evaluation |
+| `bridge/src/shared-memory.ts` | Delat minne för AI-samarbete |
+| `bridge/src/supabase.ts` | Supabase-klient |
+| `bridge/src/swarm.ts` | Frankenstein swarm-integration |
+| `bridge/src/system-context.ts` | System-kontext för AI |
+| `bridge/src/tools-commands.ts` | Kommando-verktyg |
+| `bridge/src/tools-computers.ts` | Multi-dator verktyg |
 | `bridge/src/tools-desktop.ts` | Desktop-verktyg (screenshot, klick, tangentbord) |
 | `bridge/src/tools-filesystem.ts` | Filsystem-verktyg |
-| `bridge/src/tools-commands.ts` | Kommando-verktyg |
 | `bridge/src/tools-process.ts` | Process-verktyg |
-| `bridge/src/tools-computers.ts` | Multi-dator verktyg |
+| `bridge/src/workflows.ts` | Automation workflow engine |
 | `bridge/src/api-cascade.ts` | Cascade MCP API routes |
-| `bridge/src/system-context.ts` | System-kontext för AI |
-| `bridge/plugins/example-plugin.ts` | Exempelplugin |
+| `bridge/plugins/` | 20 community-plugins (math, crypto, network, etc.) |
 
-### Web (Frontend)
+### Web (Frontend — 25 views + lib)
 
 | Fil | Beskrivning |
 |---|---|
 | `web/src/App.tsx` | Huvudapp (2200+ rader, alla tabs) |
+| `web/src/main.tsx` | Entry point |
 | `web/src/config.ts` | Delad BRIDGE_URL-konfiguration |
-| `web/src/components/DashboardView.tsx` | Dashboard med gauges, sparklines |
-| `web/src/components/ComputersView.tsx` | Remote dator-hantering |
-| `web/src/components/SchedulerView.tsx` | Schemalagda uppgifter |
-| `web/src/components/FilesView.tsx` | Fildelning |
-| `web/src/components/SearchView.tsx` | Konversationssök |
-| `web/src/components/ProjectsView.tsx` | Projekthantering |
-| `web/src/components/ClipboardView.tsx` | Clipboard-synk |
-| `web/src/components/PluginsView.tsx` | Plugin-hantering |
-| `web/src/components/ToolsView.tsx` | Verktyg och snabbkommandon |
-| `web/src/components/SettingsView.tsx` | Inställningar (rules, memories, RAG, security) |
-| `web/src/components/WorkflowsView.tsx` | Workflow-builder |
+| `web/src/index.css` | Global CSS (Tailwind) |
 | `web/src/components/AgentChainsView.tsx` | AI Agent Chains — visuell drag-and-drop kedjebyggare |
-| `web/src/components/NetworkView.tsx` | Bot-nätverk visualisering |
-| `web/src/components/SelfImproveView.tsx` | Self-improvement dashboard |
-| `web/src/components/InstallView.tsx` | Installationsguide |
+| `web/src/components/BattleArenaView.tsx` | Frankenstein Battle Arena |
+| `web/src/components/ClipboardView.tsx` | Clipboard-synk |
+| `web/src/components/ComputersView.tsx` | Remote dator-hantering |
 | `web/src/components/ConversationSidebar.tsx` | Konversationshistorik sidebar |
+| `web/src/components/DashboardView.tsx` | Dashboard med gauges, sparklines |
+| `web/src/components/FilesView.tsx` | Fildelning |
+| `web/src/components/FlipperZeroView.tsx` | Flipper Zero BLE-integration |
+| `web/src/components/FrankensteinChatView.tsx` | Frankenstein AI chatt |
+| `web/src/components/FrankensteinView.tsx` | Frankenstein AI träning & stats |
+| `web/src/components/HierarchyView.tsx` | Hierarkisk agent-koordinering |
+| `web/src/components/InstallView.tsx` | Installationsguide |
+| `web/src/components/LoginView.tsx` | Login/register (Supabase) |
+| `web/src/components/NetworkView.tsx` | Bot-nätverk visualisering |
+| `web/src/components/PluginsView.tsx` | Plugin-hantering |
+| `web/src/components/ProjectsView.tsx` | Projekthantering |
+| `web/src/components/ResearchLabView.tsx` | AI Research Lab med protokollväljare + surprise score |
+| `web/src/components/SchedulerView.tsx` | Schemalagda uppgifter |
+| `web/src/components/SearchView.tsx` | Konversationssök |
+| `web/src/components/SelfImproveView.tsx` | Self-improvement dashboard |
+| `web/src/components/SettingsView.tsx` | Inställningar (rules, memories, RAG, security) |
+| `web/src/components/SwarmView.tsx` | Frankenstein Swarm visualisering |
+| `web/src/components/ToolsView.tsx` | Verktyg och snabbkommandon |
 | `web/src/components/VoiceButton.tsx` | Röstinput/output |
+| `web/src/components/WorkflowsView.tsx` | Workflow-builder |
+| `web/src/contexts/AuthContext.tsx` | React auth context (Supabase) |
+| `web/src/hooks/useMobile.ts` | Haptic feedback + mobil-detection |
+| `web/src/lib/api.ts` | API-klient |
+| `web/src/lib/supabase.ts` | Supabase-klient |
+| `web/src/lib/bleScanner.ts` | BLE scanner |
+| `web/src/lib/flipperBle.ts` | Flipper Zero BLE-protokoll |
 
-### Frankenstein AI (Python)
+### Frankenstein AI (Python — 35 filer)
 
 | Fil | Beskrivning |
 |---|---|
-| `frankenstein-ai/code_agent.py` | FrankensteinCodeAgent — full stack-integration (HDC+AIF+Ebbinghaus+Gut+Emotions) |
+| `frankenstein-ai/code_agent.py` | FrankensteinCodeAgent — full stack (HDC+AIF+Ebbinghaus+Gut+Emotions) |
 | `frankenstein-ai/cognition.py` | NeuroSymbolicBridge — HDC projektion, bundling, klassificering (4096D) |
 | `frankenstein-ai/agency.py` | ActiveInferenceAgent — pymdp, EFE-minimering, strategival |
-| `frankenstein-ai/memory.py` | EbbinghausMemory — ChromaDB + glömskekurva + ShortTermBuffer |
+| `frankenstein-ai/memory.py` | EbbinghausMemory — ChromaDB PersistentClient + JSON-fallback |
 | `frankenstein-ai/perception.py` | LiquidPerceptionUnit — feature extraction |
 | `frankenstein-ai/gut_feeling.py` | GutFeelingEngine — sub-symbolisk intuition (Damasios Somatic Markers) |
 | `frankenstein-ai/emotions.py` | EkmanEmotionEngine — 6 grundemotioner som påverkar beteende |
@@ -380,20 +459,40 @@
 | `frankenstein-ai/promotion_pipeline.py` | S2→S1→S0 Promotion Pipeline med loggning |
 | `frankenstein-ai/chaos_monkey.py` | Självkorrigeringsträning via bugg-injektion |
 | `frankenstein-ai/frankenstein_swarm.py` | Multi-agent swarm med Mycelium-protokoll |
-| `frankenstein-ai/spaced_repetition.py` | SpacedRepetitionScheduler — SM-2 baserad schemaläggning av svaga kategorier |
+| `frankenstein-ai/frankenstein_agent.py` | Frankenstein agent-wrapper |
+| `frankenstein-ai/spaced_repetition.py` | SpacedRepetitionScheduler — SM-2 baserad |
 | `frankenstein-ai/ablation_runner.py` | Ablationsstudier — systematisk komponentanalys |
 | `frankenstein-ai/ab_test.py` | A/B-test: Frankenstein vs ren LLM |
+| `frankenstein-ai/run_10_ab_tests.py` | Batch-körning av 10 A/B-tester |
 | `frankenstein-ai/battle_arena.py` | Live-tävling med realtids-events till bridge |
-| `frankenstein-ai/continuous_train.py` | Huvudträningsloop |
-| `frankenstein-ai/task_generator.py` | Uppgiftsgenerator (17+ typer, 8 svårighetsnivåer) |
+| `frankenstein-ai/continuous_train.py` | Huvudträningsloop (circadian, terminal, spaced rep) |
+| `frankenstein-ai/train.py` | Enkel träningsentry-point |
+| `frankenstein-ai/task_generator.py` | Uppgiftsgenerator (17+ typer, 10 svårighetsnivåer) |
 | `frankenstein-ai/task_generator_v2.py` | V2-uppgifter (software engineering, API-design) |
+| `frankenstein-ai/task_generator_v3.py` | V3-uppgifter (avancerade) |
 | `frankenstein-ai/code_solver.py` | Deterministisk kodlösare (System 0) |
 | `frankenstein-ai/curriculum.py` | Progressiv läroplan (5 nivåer × 6 uppgifter) |
 | `frankenstein-ai/programming_env.py` | Sandbox-miljö för kodexekvering |
-| `frankenstein-ai/terminal_tasks.py` | Terminal-baserade uppgifter |
-| `frankenstein-ai/terminal_solver.py` | Terminal-uppgiftslösare |
-| `frankenstein-ai/terminal_agent.py` | Terminal-agent |
-| `frankenstein-ai/terminal_env.py` | Terminal-sandbox |
+| `frankenstein-ai/terminal_tasks.py` | Terminal-uppgifter (17 generatorer, nivå 1-10) |
+| `frankenstein-ai/terminal_solver.py` | Deterministisk terminal-lösare |
+| `frankenstein-ai/terminal_agent.py` | Terminal-agent med LLM-fallback |
+| `frankenstein-ai/terminal_env.py` | Terminal-sandbox (bash) |
+| `frankenstein-ai/reflection_loop.py` | Reflexionsloop för självförbättring |
+| `frankenstein-ai/cross_domain_bridge.py` | Cross-domain kunskapsöverföring |
+| `frankenstein-ai/symbolic_regression.py` | Symbolisk regression |
+| `frankenstein-ai/comprehensive_benchmark.py` | Omfattande benchmark-svit |
+| `frankenstein-ai/superhuman_benchmark.py` | Superhuman benchmark (21/21 ✅) |
+| `frankenstein-ai/analyze_training.py` | Träningsdata-analysverktyg |
+
+### Deploy & Infrastruktur
+
+| Fil | Beskrivning |
+|---|---|
+| `Dockerfile` | Multi-stage: Node 22 + Python 3 + git → bridge + web build |
+| `docker-compose.yml` | Bridge-service, named volumes (bridge-data, frank-training) |
+| `deploy/nginx-ssl.conf` | Nginx reverse proxy med SSL (Let's Encrypt) |
+| `deploy/nginx.conf` | Nginx base-konfiguration |
+| `deploy/setup-server.sh` | Server provisioning-skript |
 
 ### MCP Server
 
