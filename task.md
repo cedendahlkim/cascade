@@ -2,7 +2,7 @@
 
 ## Status: ✅ Full-stack implementerat & deployat (2026-02-16)
 
-> Backend + Frontend + Frankenstein AI + Deploy. 45 backend-moduler, 26 frontend-views, 80+ API-endpoints.
+> Backend + Frontend + Frankenstein AI + Deploy. 46 backend-moduler, 27 frontend-views, 80+ API-endpoints.
 > Live på **https://app.gracestack.se/** — Docker + Nginx + SSL + Cloudflare Tunnel.
 > Landningssida på **https://www.gracestack.se/** — Investor-fokuserad.
 
@@ -233,10 +233,12 @@
 - [ ] Klickbar overlay — styr datorn från mobilen
 - [ ] Annoterings-verktyg (rita på skärmen)
 
-#### F. Git-integration
-- [ ] Visa git status, diff, log i frontend
-- [ ] AI-genererade commit messages
-- [ ] Branch-hantering och PR-review
+#### F. Git-integration ✅
+- [x] Visa git status, diff, log i frontend (`GitView.tsx` — 3 sub-tabs: Status, Historik, Branches)
+- [x] AI-genererade commit messages (Claude/Gemini via `POST /api/git/ai-commit-message`)
+- [x] Branch-hantering: checkout, push, pull, stash
+- [x] Stage/unstage/discard filer, inline diff-vy
+- [x] Backend: `git-routes.ts` — 14 endpoints (status, diff, log, branches, stage, unstage, commit, push, pull, checkout, discard, stash, ai-commit-message)
 
 #### G. Förbättrad RAG ✅
 - [x] PDF-indexering (`ragIndexPdf()` via pdf-parse, base64-upload från frontend, temp-fil-hantering)
@@ -379,7 +381,7 @@
 
 ## Alla filer i projektet
 
-### Bridge (Backend — 45 filer)
+### Bridge (Backend — 46 filer)
 
 | Fil | Beskrivning |
 |---|---|
@@ -425,10 +427,11 @@
 | `bridge/src/tools-process.ts` | Process-verktyg |
 | `bridge/src/workflows.ts` | Automation workflow engine |
 | `bridge/src/user-data.ts` | Per-user konversationer, meddelanden, workspace-delning (15 endpoints) |
+| `bridge/src/git-routes.ts` | Git-integration: status, diff, log, branches, commit, push, AI commit msg (14 endpoints) |
 | `bridge/src/api-cascade.ts` | Cascade MCP API routes |
 | `bridge/plugins/` | 20 community-plugins (math, crypto, network, etc.) |
 
-### Web (Frontend — 26 views + lib)
+### Web (Frontend — 27 views + lib)
 
 | Fil | Beskrivning |
 |---|---|
@@ -457,6 +460,7 @@
 | `web/src/components/SearchView.tsx` | Konversationssök |
 | `web/src/components/SelfImproveView.tsx` | Self-improvement dashboard |
 | `web/src/components/AdminPanel.tsx` | Admin-panel: användarhantering, roller, ta bort |
+| `web/src/components/GitView.tsx` | Git-integration: status, diff, log, branches, AI commit, stage/commit/push |
 | `web/src/components/SettingsView.tsx` | Inställningar (rules, memories, RAG, security, admin) |
 | `web/src/components/SwarmView.tsx` | Frankenstein Swarm visualisering |
 | `web/src/components/ToolsView.tsx` | Verktyg och snabbkommandon |
