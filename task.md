@@ -183,11 +183,11 @@
 - [ ] Klistra in bilder från clipboard
 - [ ] Kamera-knapp i mobilen för att fota och fråga AI
 
-#### B. Multi-user stöd (delvis ✅)
+#### B. Multi-user stöd ✅
 - [x] Autentisering (Supabase JWT — se §23)
-- [ ] Separata sessioner per användare
-- [ ] Roller: admin, user, viewer
-- [ ] Delad workspace med permissions
+- [x] Separata sessioner per användare (Supabase `conversations` + `messages` tabeller med RLS, `user-data.ts`)
+- [x] Roller: admin, user, viewer (`profiles.role` check constraint, `requireRole()` middleware, `AdminPanel.tsx`)
+- [x] Delad workspace med permissions (`workspace_shares` tabell, read/write/admin, share via email)
 
 #### C. Push-notifikationer
 - [ ] Web Push API (VAPID keys) — notiser även när appen är stängd

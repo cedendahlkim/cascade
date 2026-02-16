@@ -10,11 +10,16 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { getSupabase, isAuthEnabled } from "../lib/supabase";
 import type { User, Session } from "@supabase/supabase-js";
 
+type UserRole = "admin" | "user" | "viewer";
+
 interface AuthState {
   user: User | null;
   session: Session | null;
   loading: boolean;
   authEnabled: boolean;
+  role: UserRole;
+  isAdmin: boolean;
+  isViewer: boolean;
   login: (email: string, password: string) => Promise<string | null>;
   register: (email: string, password: string) => Promise<string | null>;
   logout: () => Promise<void>;
@@ -26,6 +31,9 @@ const AuthContext = createContext<AuthState>({
   session: null,
   loading: true,
   authEnabled: false,
+  role: "user",
+  isAdmin: false,
+  isViewer: false,
   login: async () => "Not initialized",
   register: async () => "Not initialized",
   logout: async () => {},
@@ -40,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<UserRole>("user");
 
   // On mount: check for existing session
   useEffect(() => {
@@ -55,17 +64,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
+      if (s?.access_token) {
+        await fetchRole(s.access_token);
+      }
       setLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, s) => {
+      async (_event, s) => {
         setSession(s);
         setUser(s?.user ?? null);
+        if (s?.access_token) {
+          await fetchRole(s.access_token);
+        } else {
+          setRole("user");
+        }
       },
     );
 
@@ -88,11 +105,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return error ? error.message : null;
   }, []);
 
+  const fetchRole = useCallback(async (token: string) => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_BRIDGE_URL || ""}/api/auth/me`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setRole((data.user?.role || "user") as UserRole);
+      }
+    } catch { /* keep default */ }
+  }, []);
+
   const logout = useCallback(async () => {
     const supabase = getSupabase();
     if (supabase) await supabase.auth.signOut();
     setUser(null);
     setSession(null);
+    setRole("user");
   }, []);
 
   const getAccessToken = useCallback((): string | null => {
@@ -106,6 +137,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         loading,
         authEnabled: isAuthEnabled,
+        role,
+        isAdmin: role === "admin",
+        isViewer: role === "viewer",
         login,
         register,
         logout,

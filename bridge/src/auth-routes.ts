@@ -16,7 +16,12 @@ import {
   loginUser,
   verifyToken,
   getUserProfile,
+  listUsers,
+  updateUserRole,
+  deleteUser,
+  getUserCount,
 } from "./supabase.js";
+import { requireAdmin } from "./auth-middleware.js";
 
 const router = Router();
 
@@ -114,6 +119,78 @@ router.get("/api/auth/me", async (req, res) => {
       role: profile?.role || "user",
     },
   });
+});
+
+// -------------------------------------------------------------------------
+// Admin endpoints (require admin role)
+// -------------------------------------------------------------------------
+
+// List all users
+router.get("/api/admin/users", requireAdmin, async (_req, res) => {
+  if (!isSupabaseEnabled()) {
+    res.json({ users: [], mode: "single-user" });
+    return;
+  }
+  const users = await listUsers();
+  res.json({ users });
+});
+
+// Get user count
+router.get("/api/admin/users/count", requireAdmin, async (_req, res) => {
+  if (!isSupabaseEnabled()) {
+    res.json({ count: 1, mode: "single-user" });
+    return;
+  }
+  const count = await getUserCount();
+  res.json({ count });
+});
+
+// Update user role
+router.patch("/api/admin/users/:id/role", requireAdmin, async (req, res) => {
+  if (!isSupabaseEnabled()) {
+    res.status(400).json({ error: "Auth not enabled" });
+    return;
+  }
+
+  const { role } = req.body;
+  if (!role || !["admin", "user", "viewer"].includes(role)) {
+    res.status(400).json({ error: "Invalid role. Must be: admin, user, or viewer" });
+    return;
+  }
+
+  // Prevent removing own admin
+  if (req.params.id === req.userId && role !== "admin") {
+    res.status(400).json({ error: "Cannot remove your own admin role" });
+    return;
+  }
+
+  const result = await updateUserRole(req.params.id as string, role);
+  if (!result.ok) {
+    res.status(500).json({ error: result.error });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+// Delete a user
+router.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
+  if (!isSupabaseEnabled()) {
+    res.status(400).json({ error: "Auth not enabled" });
+    return;
+  }
+
+  // Prevent self-deletion
+  if (req.params.id === req.userId) {
+    res.status(400).json({ error: "Cannot delete yourself" });
+    return;
+  }
+
+  const result = await deleteUser(req.params.id as string);
+  if (!result.ok) {
+    res.status(500).json({ error: result.error });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 export default router;

@@ -156,6 +156,76 @@ export async function getUserProfile(
   return data as { role: string; email: string };
 }
 
+// ---------------------------------------------------------------------------
+// Admin helpers
+// ---------------------------------------------------------------------------
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: string;
+  display_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** List all user profiles (admin only). */
+export async function listUsers(): Promise<UserProfile[]> {
+  const client = getServiceClient();
+  if (!client) return [];
+
+  const { data, error } = await client
+    .from("profiles")
+    .select("id, email, role, display_name, created_at, updated_at")
+    .order("created_at", { ascending: true });
+
+  if (error) return [];
+  return (data || []) as UserProfile[];
+}
+
+/** Update a user's role (admin only). */
+export async function updateUserRole(
+  userId: string,
+  role: "admin" | "user" | "viewer",
+): Promise<{ ok: boolean; error?: string }> {
+  const client = getServiceClient();
+  if (!client) return { ok: false, error: "Supabase not configured" };
+
+  const { error } = await client
+    .from("profiles")
+    .update({ role, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Delete a user and their data (admin only). */
+export async function deleteUser(
+  userId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const client = getServiceClient();
+  if (!client) return { ok: false, error: "Supabase not configured" };
+
+  // Delete auth user (cascades to profiles via FK)
+  const { error } = await client.auth.admin.deleteUser(userId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Get total user count. */
+export async function getUserCount(): Promise<number> {
+  const client = getServiceClient();
+  if (!client) return 0;
+
+  const { count, error } = await client
+    .from("profiles")
+    .select("id", { count: "exact", head: true });
+
+  if (error) return 0;
+  return count || 0;
+}
+
 console.log(
   isSupabaseEnabled()
     ? "[supabase] ✅ Supabase enabled"

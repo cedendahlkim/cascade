@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import {
   Save, FileText, Brain, Trash2, Plus, Shield, ScrollText, ChevronDown, ChevronUp, Database, Download,
-  Globe, Upload, Zap, Eye, RefreshCw, Smartphone, Vibrate, ArrowRight,
+  Globe, Upload, Zap, Eye, RefreshCw, Smartphone, Vibrate, ArrowRight, Crown,
 } from "lucide-react";
 import { loadHapticSettings, saveHapticSettings, hapticFeedback, type HapticSettings } from "../hooks/useMobile";
+import { useAuth } from "../contexts/AuthContext";
 import { BRIDGE_URL } from "../config";
+import AdminPanel from "./AdminPanel";
 
 interface Memory {
   id: string;
@@ -15,7 +17,8 @@ interface Memory {
 }
 
 export default function SettingsView() {
-  const [tab, setTab] = useState<"rules" | "memories" | "knowledge" | "security" | "install" | "mobile">("rules");
+  const { isAdmin } = useAuth();
+  const [tab, setTab] = useState<"rules" | "memories" | "knowledge" | "security" | "install" | "mobile" | "admin">("rules");
   const [hapticSettings, setHapticSettings] = useState<HapticSettings>(loadHapticSettings);
   const [downloading, setDownloading] = useState(false);
   const [rules, setRules] = useState("");
@@ -217,6 +220,7 @@ export default function SettingsView() {
     { id: "security" as const, label: "Säkerhet", icon: Shield },
     { id: "mobile" as const, label: "Mobil", icon: Smartphone },
     { id: "install" as const, label: "Installera", icon: Download },
+    ...(isAdmin ? [{ id: "admin" as const, label: "Admin", icon: Crown }] : []),
   ];
 
   return (
@@ -776,6 +780,9 @@ export default function SettingsView() {
             </div>
           </div>
         )}
+
+        {/* Admin Panel */}
+        {tab === "admin" && isAdmin && <AdminPanel />}
       </div>
     </div>
   );

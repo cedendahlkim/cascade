@@ -80,6 +80,7 @@ import {
 import { setComputerToolsIO } from "./tools-computers.js";
 import { authMiddleware } from "./auth-middleware.js";
 import authRoutes from "./auth-routes.js";
+import userDataRoutes from "./user-data.js";
 import "./supabase.js"; // initializes Supabase + prints status
 import {
   initWorkflows, createWorkflow, updateWorkflow, deleteWorkflow,
@@ -448,6 +449,7 @@ app.use(express.json({ limit: "50mb" }));
 // Auth: routes + middleware (no-op when Supabase is not configured)
 app.use(authRoutes);
 app.use(authMiddleware);
+app.use(userDataRoutes);
 
 // Mount Cascade API
 app.use("/cascade", cascadeApi);

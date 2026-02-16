@@ -119,3 +119,45 @@ export async function verifySocketToken(token: string | undefined): Promise<stri
   const user = await verifyToken(token);
   return user?.id || null;
 }
+
+// ---------------------------------------------------------------------------
+// Role-based access guards
+// ---------------------------------------------------------------------------
+
+type Role = "admin" | "user" | "viewer";
+
+/**
+ * Require a valid authenticated user. Returns 401 if not logged in.
+ */
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  if (!isSupabaseEnabled()) return next(); // single-user mode
+  if (!req.userId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  next();
+}
+
+/**
+ * Require one of the specified roles. Returns 403 if insufficient.
+ */
+export function requireRole(...roles: Role[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!isSupabaseEnabled()) return next(); // single-user mode
+    if (!req.userId) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    const userRole = (req.userRole || "user") as Role;
+    if (!roles.includes(userRole)) {
+      res.status(403).json({ error: `Requires role: ${roles.join(" or ")}` });
+      return;
+    }
+    next();
+  };
+}
+
+/**
+ * Shorthand: require admin role.
+ */
+export const requireAdmin = requireRole("admin");
