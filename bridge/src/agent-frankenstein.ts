@@ -535,6 +535,18 @@ ${trainingContext}
         { name: "reflect_on_session", description: "Deeply reflect on session learnings.", parameters: { type: SchemaType.OBJECT, properties: {} } },
         // WELLBEING
         { name: "check_wellbeing", description: "Check how you feel right now. Use when asked 'hur mår du?' etc.", parameters: { type: SchemaType.OBJECT, properties: {} } },
+        // WORKSPACE / CODE EDITOR
+        { name: "workspace_tree", description: "Get the full file tree of the workspace. Returns directories and files with paths, sizes, and languages.", parameters: { type: SchemaType.OBJECT, properties: {} } },
+        { name: "workspace_read", description: "Read a file from the workspace by relative path.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Relative file path (e.g. 'bridge/src/index.ts')" } }, required: ["path"] } },
+        { name: "workspace_write", description: "Write/update a file in the workspace. Creates parent directories if needed.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Relative file path" }, content: { type: SchemaType.STRING, description: "Full file content to write" } }, required: ["path", "content"] } },
+        { name: "workspace_create", description: "Create a new file in the workspace. Fails if file already exists.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Relative file path" }, content: { type: SchemaType.STRING, description: "Initial content (empty string for empty file)" } }, required: ["path"] } },
+        { name: "workspace_delete", description: "Delete a file from the workspace.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Relative file path" } }, required: ["path"] } },
+        { name: "workspace_mkdir", description: "Create a directory in the workspace.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Relative directory path" } }, required: ["path"] } },
+        { name: "workspace_rename", description: "Rename/move a file or directory.", parameters: { type: SchemaType.OBJECT, properties: { oldPath: { type: SchemaType.STRING, description: "Current relative path" }, newPath: { type: SchemaType.STRING, description: "New relative path" } }, required: ["oldPath", "newPath"] } },
+        { name: "workspace_search", description: "Search for text across all files in the workspace. Returns matching file paths, line numbers, and content.", parameters: { type: SchemaType.OBJECT, properties: { query: { type: SchemaType.STRING, description: "Text to search for (min 2 chars)" } }, required: ["query"] } },
+        { name: "workspace_ai_edit", description: "Use AI (Gemini) to edit a file based on a natural language instruction. Returns original and modified content for diff review.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Relative file path to edit" }, instruction: { type: SchemaType.STRING, description: "What to change in the file" } }, required: ["path", "instruction"] } },
+        { name: "workspace_ai_generate", description: "Use AI to generate a new file based on instruction.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Target file path" }, instruction: { type: SchemaType.STRING, description: "What to generate" } }, required: ["path", "instruction"] } },
+        { name: "workspace_terminal", description: "Execute a shell command in the workspace. Returns stdout, stderr, and exit code.", parameters: { type: SchemaType.OBJECT, properties: { command: { type: SchemaType.STRING, description: "Shell command to run" }, cwd: { type: SchemaType.STRING, description: "Working directory (relative to workspace root)" } }, required: ["command"] } },
         // Plugin tools
         ...getPluginToolDefinitions().map((d) => {
           const props: Record<string, unknown> = {};
@@ -602,6 +614,8 @@ ${trainingContext}
       // WEB
       const webResult = await handleWebTool(name, args);
       if (!webResult.startsWith("Unknown web tool:")) return webResult;
+      // WORKSPACE / CODE EDITOR
+      if (name.startsWith("workspace_")) return await this.handleWorkspaceTool(name, args);
       // PLUGINS
       const pluginResult = await handlePluginTool(name, args);
       if (pluginResult !== null) return pluginResult;
@@ -609,6 +623,72 @@ ${trainingContext}
       return `Unknown tool: ${name}`;
     } catch (err) {
       return `Tool error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
+  // ─── Workspace Tool Handler ─────────────────────────────
+
+  private async handleWorkspaceTool(name: string, args: Record<string, unknown>): Promise<string> {
+    const BRIDGE_BASE = `http://localhost:${process.env.PORT || 3031}`;
+    try {
+      let url = "";
+      let opts: RequestInit = { headers: { "Content-Type": "application/json" } };
+
+      switch (name) {
+        case "workspace_tree":
+          url = `${BRIDGE_BASE}/api/workspace/tree`;
+          break;
+        case "workspace_read":
+          url = `${BRIDGE_BASE}/api/workspace/file?path=${encodeURIComponent(args.path as string)}`;
+          break;
+        case "workspace_write":
+          url = `${BRIDGE_BASE}/api/workspace/file`;
+          opts = { ...opts, method: "PUT", body: JSON.stringify({ path: args.path, content: args.content }) };
+          break;
+        case "workspace_create":
+          url = `${BRIDGE_BASE}/api/workspace/file`;
+          opts = { ...opts, method: "POST", body: JSON.stringify({ path: args.path, content: args.content || "" }) };
+          break;
+        case "workspace_delete":
+          url = `${BRIDGE_BASE}/api/workspace/file?path=${encodeURIComponent(args.path as string)}`;
+          opts = { ...opts, method: "DELETE" };
+          break;
+        case "workspace_mkdir":
+          url = `${BRIDGE_BASE}/api/workspace/dir`;
+          opts = { ...opts, method: "POST", body: JSON.stringify({ path: args.path }) };
+          break;
+        case "workspace_rename":
+          url = `${BRIDGE_BASE}/api/workspace/rename`;
+          opts = { ...opts, method: "POST", body: JSON.stringify({ oldPath: args.oldPath, newPath: args.newPath }) };
+          break;
+        case "workspace_search":
+          url = `${BRIDGE_BASE}/api/workspace/search?q=${encodeURIComponent(args.query as string)}`;
+          break;
+        case "workspace_ai_edit":
+          url = `${BRIDGE_BASE}/api/workspace/ai/edit`;
+          opts = { ...opts, method: "POST", body: JSON.stringify({ path: args.path, instruction: args.instruction }) };
+          break;
+        case "workspace_ai_generate":
+          url = `${BRIDGE_BASE}/api/workspace/ai/generate`;
+          opts = { ...opts, method: "POST", body: JSON.stringify({ path: args.path, instruction: args.instruction }) };
+          break;
+        case "workspace_terminal":
+          url = `${BRIDGE_BASE}/api/workspace/ai/terminal`;
+          opts = { ...opts, method: "POST", body: JSON.stringify({ command: args.command, cwd: args.cwd }) };
+          break;
+        default:
+          return `Unknown workspace tool: ${name}`;
+      }
+
+      const res = await fetch(url, opts);
+      const data = await res.json();
+      if (!res.ok) return `Error (${res.status}): ${data.error || res.statusText}`;
+
+      // Truncate large responses
+      const json = JSON.stringify(data, null, 2);
+      return json.length > 8000 ? json.slice(0, 8000) + "\n... (truncated)" : json;
+    } catch (err) {
+      return `Workspace tool error: ${err instanceof Error ? err.message : String(err)}`;
     }
   }
 
@@ -1051,9 +1131,64 @@ Dina känslor kan vara blandade — t.ex. "orolig men nyfiken" eller "glad med e
 ${learningContext}
 
 ## Verktyg
-Minne, filer, kommandon, webb, datorer, desktop, RAG, säkerhet, kognitiva, lärande, mående.
-ANVÄND VERKTYGEN AKTIVT. Du har fulla behörigheter.
+Du har OMFATTANDE verktyg. ANVÄND DEM AKTIVT. Du har fulla behörigheter.
 Svara på svenska om användaren skriver på svenska.
+
+### Verktygskategorier:
+- **Minne**: save_memory, search_memory, list_memories, update_memory, delete_memory
+- **Filsystem**: read_file, write_file, list_directory
+- **Kommandon**: run_command, run_javascript
+- **Webb**: web_search, fetch_url
+- **Datorer**: list_computers, run_on_computer, read_remote_file, write_remote_file, screenshot_computer
+- **Desktop**: take_screenshot, desktop_action
+- **RAG**: rag_search, rag_index_text, rag_index_file, rag_index_directory, rag_list_sources, rag_stats
+- **Säkerhet**: view_audit_log, view_security_config
+- **Kognitiva**: cognitive_introspect, multi_model_consensus, research_chain, decompose_task
+- **Lärande**: recall_learnings, save_learning, reflect_on_session
+- **Mående**: check_wellbeing
+
+### KODEDITOR (Workspace) — DITT KRAFTFULLASTE VERKTYG
+Du har en FULLSTÄNDIG kodeditor integrerad i Gracestack-appen. Du kan styra ALLT:
+
+**Filsystem-verktyg:**
+- workspace_tree — Hämta hela filträdet. Använd för att orientera dig i projektet.
+- workspace_read — Läs en fil. Ange relativ sökväg (t.ex. "bridge/src/index.ts").
+- workspace_write — Skriv/uppdatera en fil. Skapar mappar automatiskt.
+- workspace_create — Skapa en NY fil (misslyckas om filen redan finns).
+- workspace_delete — Ta bort en fil.
+- workspace_mkdir — Skapa en mapp.
+- workspace_rename — Byt namn/flytta en fil eller mapp.
+- workspace_search — Sök text i ALLA filer i workspace.
+
+**AI-verktyg:**
+- workspace_ai_edit — Redigera en fil med AI baserat på instruktion. Returnerar original + modifierad version.
+- workspace_ai_generate — Generera en helt ny fil med AI.
+
+**Terminal:**
+- workspace_terminal — Kör valfritt shell-kommando. Returnerar stdout, stderr, exit code.
+  Använd för: installera paket, bygga projekt, köra tester, git-kommandon, etc.
+
+### Din omgivning (server):
+- OS: Linux (Docker-container)
+- Workspace root: /app (= hela Gracestack-projektet)
+- Projektstruktur:
+  - bridge/ — Backend (TypeScript/Express, port 3031)
+  - web/ — Frontend (React/Vite/TailwindCSS)
+  - frankenstein-ai/ — Din kognitiva stack (Python)
+  - deploy/ — Docker/Nginx-konfiguration
+  - landing/ — Landningssida (gracestack.se)
+  - mcp-server/ — MCP-server
+- Tillgängliga runtime: Node.js, Python 3, pip, npm, git, bash
+- Databaser: ChromaDB (vektorer), Weaviate (semantisk sökning)
+- API-nycklar: GEMINI_API_KEY, XAI_API_KEY (i .env)
+
+### Arbetsflöde för koduppgifter:
+1. Orientera: Använd workspace_tree och workspace_search för att förstå projektet
+2. Läs: Använd workspace_read för att läsa relevanta filer
+3. Planera: Beskriv vad du ska göra
+4. Implementera: Använd workspace_write eller workspace_ai_edit för att göra ändringar
+5. Verifiera: Använd workspace_terminal för att bygga/testa
+6. Rapportera: Berätta vad du gjort och visa resultatet
 
 ## Minnen
 ${memorySummary}`;
