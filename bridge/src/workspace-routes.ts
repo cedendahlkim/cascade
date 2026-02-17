@@ -474,34 +474,45 @@ Return ONLY the file content. No explanations, no markdown fences.`;
   }
 });
 
-/** POST /api/workspace/ai/explain — AI explains code */
+/** POST /api/workspace/ai/explain — AI explains code or answers general questions */
 router.post("/ai/explain", async (req: Request, res: Response) => {
   const { path: relPath, selection } = req.body;
-  if (!relPath) return res.status(400).json({ error: "path required" });
-
-  const abs = safePath(relPath);
-  if (!abs) return res.status(403).json({ error: "Path outside workspace" });
-  if (!existsSync(abs)) return res.status(404).json({ error: "File not found" });
 
   try {
-    const fullContent = readFileSync(abs, "utf-8");
-    const codeToExplain = selection || fullContent;
-    const ext = extname(abs);
-    const language = langFromExt(ext);
-
     const apiKey = process.env.GEMINI_API_KEY || "";
     if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
 
-    const prompt = `You are an expert programmer. Explain the following ${language} code clearly and concisely in Swedish.
+    let prompt: string;
+    let language = "plaintext";
+
+    if (selection) {
+      // General chat / question with context provided by the frontend
+      prompt = `Du är en expert-programmerare och AI-assistent som heter Frankenstein. Svara på svenska, koncist och hjälpsamt.
+
+${selection}`;
+    } else if (relPath && relPath !== ".") {
+      // Explain a specific file
+      const abs = safePath(relPath);
+      if (!abs) return res.status(403).json({ error: "Path outside workspace" });
+      if (!existsSync(abs)) return res.status(404).json({ error: "File not found" });
+
+      const fullContent = readFileSync(abs, "utf-8");
+      const ext = extname(abs);
+      language = langFromExt(ext);
+
+      prompt = `Du är en expert-programmerare. Förklara följande ${language}-kod tydligt och koncist på svenska.
 
 \`\`\`${language}
-${codeToExplain}
+${fullContent}
 \`\`\`
 
-Explain:
-1. What the code does (overview)
-2. Key functions/classes and their purpose
-3. Any notable patterns or potential issues`;
+Förklara:
+1. Vad koden gör (översikt)
+2. Viktiga funktioner/klasser och deras syfte
+3. Anmärkningsvärda mönster eller potentiella problem`;
+    } else {
+      return res.status(400).json({ error: "path or selection required" });
+    }
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
@@ -516,9 +527,9 @@ Explain:
     );
 
     const data = await response.json() as any;
-    const explanation = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Kunde inte förklara koden.";
+    const explanation = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Kunde inte svara just nu.";
 
-    res.json({ path: relPath, explanation, language });
+    res.json({ path: relPath || ".", explanation, language });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
