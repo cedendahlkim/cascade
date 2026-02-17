@@ -31,6 +31,13 @@ const PUBLIC_ROUTES = [
   "/api/status",
   "/api/tunnel",
   "/api/qr",
+  "/api/public/stats",
+  "/api/frankenstein/train/status",
+  "/api/frankenstein/train/start",
+  "/api/frankenstein/train/stop",
+  "/api/frankenstein/progress",
+  "/api/frankenstein/log",
+  "/api/frankenstein/config",
 ];
 
 // Routes that STRICTLY require a valid token (401 if missing/invalid)
@@ -58,6 +65,14 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     !req.path.startsWith("/socket.io/") &&
     !req.path.startsWith("/cascade/")
   ) {
+    return next();
+  }
+
+  // Public routes: always pass through without auth
+  const isPublic = PUBLIC_ROUTES.some(
+    (r) => req.path === r || req.path.startsWith(r + "/"),
+  );
+  if (isPublic) {
     return next();
   }
 
