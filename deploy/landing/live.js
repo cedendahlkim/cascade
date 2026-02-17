@@ -326,12 +326,22 @@ var revealObserver = new IntersectionObserver(function(entries) {
       revealObserver.unobserve(e.target);
     }
   });
-}, { threshold: 0.1 });
+}, { threshold: 0.05, rootMargin: '0px 0px 50px 0px' });
 
-document.querySelectorAll('.feature-card, .arch-card, .team-card, .stat, .section-title, .section-desc, .dash-card').forEach(function(el) {
+var revealEls = document.querySelectorAll('.feature-card:not(.clickable), .arch-card, .team-card, .stat, .section-title, .section-desc, .dash-card');
+revealEls.forEach(function(el) {
   el.classList.add('reveal');
   revealObserver.observe(el);
 });
+
+// Fallback: force-reveal all elements after 2s in case observer doesn't trigger
+setTimeout(function() {
+  revealEls.forEach(function(el) {
+    if (!el.classList.contains('visible')) {
+      el.classList.add('visible');
+    }
+  });
+}, 2000);
 
 // Close mobile menu on link click
 document.querySelectorAll('.nav-links a').forEach(function(a) {
