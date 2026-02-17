@@ -121,12 +121,42 @@
       <h2 class="section-title">Vad är Frankenstein AI?</h2>
       <p class="section-desc">En kognitiv AI-arkitektur inspirerad av neurovetenskap — inte bara ännu en LLM-wrapper.</p>
       <div class="features-grid">
-        <div class="feature-card"><div class="feature-icon fi-blue">🧠</div><h3>Hyperdimensionell kognition</h3><p>4096-dimensionella vektorer för symbolisk och sub-symbolisk bearbetning. Sparse Distributed Memory.</p></div>
-        <div class="feature-card"><div class="feature-icon fi-violet">🎯</div><h3>Active Inference</h3><p>Bayesiansk beslutsfattning via pymdp — minimerar Expected Free Energy. Proaktiv, inte reaktiv.</p></div>
-        <div class="feature-card"><div class="feature-icon fi-emerald">💭</div><h3>Ebbinghaus-minne</h3><p>Episodiskt minne med glömskekurva. ChromaDB-baserat med persistent lagring.</p></div>
-        <div class="feature-card"><div class="feature-icon fi-amber">🫀</div><h3>Magkänsla (Gut Feeling)</h3><p>Sub-symbolisk intuition baserad på Damasios Somatic Marker-hypotes.</p></div>
-        <div class="feature-card"><div class="feature-icon fi-rose">😊</div><h3>Emotionell motor</h3><p>Ekmans 6 grundemotioner påverkar beteende. Nyfikenhet driver utforskning.</p></div>
-        <div class="feature-card"><div class="feature-icon fi-indigo">🌙</div><h3>Dygnsrytm & drömmar</h3><p>Circadian clock med sömnarkitektur. Under "sömn" konsolideras minnen.</p></div>
+        <div class="feature-card clickable" data-detail="hdc">
+          <div class="feature-icon fi-blue">🧠</div>
+          <h3>Hyperdimensionell kognition</h3>
+          <p>4096-dimensionella vektorer för symbolisk och sub-symbolisk bearbetning. Sparse Distributed Memory.</p>
+          <span class="card-hint">Klicka för att läsa mer →</span>
+        </div>
+        <div class="feature-card clickable" data-detail="active-inference">
+          <div class="feature-icon fi-violet">🎯</div>
+          <h3>Active Inference</h3>
+          <p>Bayesiansk beslutsfattning via pymdp — minimerar Expected Free Energy. Proaktiv, inte reaktiv.</p>
+          <span class="card-hint">Klicka för att läsa mer →</span>
+        </div>
+        <div class="feature-card clickable" data-detail="ebbinghaus">
+          <div class="feature-icon fi-emerald">💭</div>
+          <h3>Ebbinghaus-minne</h3>
+          <p>Episodiskt minne med glömskekurva. ChromaDB-baserat med persistent lagring.</p>
+          <span class="card-hint">Klicka för att läsa mer →</span>
+        </div>
+        <div class="feature-card clickable" data-detail="gut-feeling">
+          <div class="feature-icon fi-amber">🫀</div>
+          <h3>Magkänsla (Gut Feeling)</h3>
+          <p>Sub-symbolisk intuition baserad på Damasios Somatic Marker-hypotes.</p>
+          <span class="card-hint">Klicka för att läsa mer →</span>
+        </div>
+        <div class="feature-card clickable" data-detail="emotion">
+          <div class="feature-icon fi-rose">😊</div>
+          <h3>Emotionell motor</h3>
+          <p>Ekmans 6 grundemotioner påverkar beteende. Nyfikenhet driver utforskning.</p>
+          <span class="card-hint">Klicka för att läsa mer →</span>
+        </div>
+        <div class="feature-card clickable" data-detail="circadian">
+          <div class="feature-icon fi-indigo">🌙</div>
+          <h3>Dygnsrytm & drömmar</h3>
+          <p>Circadian clock med sömnarkitektur. Under "sömn" konsolideras minnen.</p>
+          <span class="card-hint">Klicka för att läsa mer →</span>
+        </div>
       </div>
     </div>
   </section>
@@ -190,6 +220,16 @@
       </div>
     </div>
   </section>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal">
+      <button class="modal-close" id="modalClose" aria-label="Stäng">&times;</button>
+      <div class="modal-icon" id="modalIcon"></div>
+      <h2 class="modal-title" id="modalTitle"></h2>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
 
   <footer>
     <div class="container">
