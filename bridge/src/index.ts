@@ -448,6 +448,48 @@ app.use(compression());
 app.use(cors({ origin: ALLOWED_ORIGINS === "*" ? true : ALLOWED_ORIGINS }));
 app.use(express.json({ limit: "50mb" }));
 
+// Public stats endpoint for landing page (no auth required)
+app.get("/api/public/stats", (_req, res) => {
+  try {
+    const progressPath = join(WORKSPACE_ROOT, "frankenstein-ai", "training_data", "progress.json");
+    let progress = { total_tasks_attempted: 0, total_tasks_solved: 0, current_difficulty: 0, skills: {} };
+    if (existsSync(progressPath)) {
+      progress = JSON.parse(readFileSync(progressPath, "utf-8"));
+    }
+    const skillCount = Object.keys(progress.skills || {}).length;
+    const successRate = progress.total_tasks_attempted > 0
+      ? ((progress.total_tasks_solved / progress.total_tasks_attempted) * 100).toFixed(1)
+      : "0";
+    const wellbeing = frankAgent.getWellbeing();
+    const learningStats = getLearningStats();
+    res.json({
+      tasks_attempted: progress.total_tasks_attempted,
+      tasks_solved: progress.total_tasks_solved,
+      success_rate: parseFloat(successRate),
+      skill_count: skillCount,
+      current_difficulty: progress.current_difficulty,
+      training_running: frankTrainState.running,
+      training_started_at: frankTrainState.started_at,
+      wellbeing: {
+        overall: wellbeing.overall,
+        mood: wellbeing.mood,
+        moodEmoji: wellbeing.moodEmoji,
+        energy: wellbeing.energy,
+        satisfaction: wellbeing.satisfaction,
+      },
+      learnings: {
+        total: learningStats.totalLearnings,
+        today: learningStats.todayCount,
+        sessions: learningStats.totalSessions,
+      },
+      debate_parties: 8,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // Auth: routes + middleware (no-op when Supabase is not configured)
 app.use(authRoutes);
 app.use(authMiddleware);
