@@ -118,6 +118,7 @@ import {
 } from "./hierarchy.js";
 import { FrankensteinAgent } from "./agent-frankenstein.js";
 import { getTodaysLearnings, getRecentLearnings, getLearningStats, searchLearnings as searchFrankLearnings } from "./frank-learning.js";
+import debateRoutes, { initDebateSocket } from "./debate-routes.js";
 
 const PORT = parseInt(process.env.PORT || "3031", 10);
 const WORKSPACE_ROOT = process.env.CASCADE_REMOTE_WORKSPACE || join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")), "..", "..");
@@ -452,6 +453,7 @@ app.use(authRoutes);
 app.use(authMiddleware);
 app.use(userDataRoutes);
 app.use(gitRoutes);
+app.use("/api/debate", debateRoutes);
 
 // Mount Cascade API
 app.use("/cascade", cascadeApi);
@@ -4088,6 +4090,9 @@ httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`[bridge] Schedules active: ${listSchedules().filter(s => s.enabled).length}`);
   console.log(`[bridge] Waiting for mobile/web clients...`);
   startTunnel();
+
+  // Initialize debate socket
+  initDebateSocket(io);
 
   // Initialize Weaviate vector database (non-blocking, falls back to BM25)
   initWeaviate().then((ok) => {
