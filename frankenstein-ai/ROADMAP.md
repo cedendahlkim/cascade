@@ -42,14 +42,14 @@ Bygga en **generell meta-lärande agent** som kan appliceras på godtyckliga dom
 
 ---
 
-## Fas 3: Djupare Inlärning 🔄 (Pågående)
+## Fas 3: Djupare Inlärning ✅ (Klar)
 
 **Mål:** Förbättra inlärningskvaliteten och minnesanvändningen
 
-### 3.1 Spaced Repetition
-- [ ] Återbesök misslyckade uppgiftstyper med ökande intervall
-- [ ] Prioritera uppgifter där lösningsgraden är 30-70% (inlärningszonen)
-- [ ] Ebbinghaus-driven schemaläggning av repetitioner
+### 3.1 Spaced Repetition ✅
+- [x] Återbesök misslyckade uppgiftstyper med ökande intervall
+- [x] Prioritera uppgifter där lösningsgraden är 30-70% (inlärningszonen)
+- [x] Ebbinghaus-driven schemaläggning av repetitioner
 
 ### 3.2 Hierarkisk HDC
 - [ ] Sub-koncept: "sorting" → "bubble_sort", "merge_sort", "insertion_sort"
@@ -61,12 +61,43 @@ Bygga en **generell meta-lärande agent** som kan appliceras på godtyckliga dom
 - [ ] Kontextuella features (svårighetsgrad, uppgiftstyp, kodlängd)
 - [ ] Temporal features (tid på dygnet, session-position)
 
-### 3.4 Multi-LLM Routing
-- [ ] AIF väljer inte bara strategi utan även LLM (Gemini vs Grok vs lokal)
-- [ ] Kostnads-medveten routing (billigare modell för enkla uppgifter)
-- [ ] Fallback-kedja vid API-fel
+### 3.4 Multi-LLM Routing ✅
+- [x] AIF väljer inte bara strategi utan även LLM (Gemini vs Grok vs lokal)
+- [x] Kostnads-medveten routing (billigare modell för enkla uppgifter)
+- [x] Fallback-kedja vid API-fel
+- [x] Historisk prestanda per LLM per kategori
+- [x] Automatisk import från träningshistorik
 
 **Milstolpe:** ≥85% lösningsgrad på nivå 1-5, ≥60% på nivå 6-8
+
+---
+
+## Fas 3.5: Utökade Domäner ✅ (Klar)
+
+**Mål:** Bredda träningsdomänen bortom ren algoritmisk kodning
+
+### 3.5.1 Frankenstein 4.0 — Nya uppgiftskategorier ✅
+- [x] **Regex**: Mönstermatchning, extraktion, validering (3 generatorer)
+- [x] **JSON/Data**: Parsa, transformera, fråga strukturerad data (2 generatorer)
+- [x] **State Machines**: FSM-parsers, tokenizers, protokollhanterare (3 generatorer)
+- [x] **Bit Manipulation**: Bitoperationer, XOR-kryptering, popcount (3 generatorer)
+- [x] **Text Processing**: Ordfrekvens, Jaccard-likhet, Caesar-chiffer (3 generatorer)
+- [x] **Matematik Avancerad**: Modulär exponentiering, matrismultiplikation, GCD/LCM (3 generatorer)
+- [x] **System Design**: LRU Cache, Rate Limiter, Task Scheduler (3 generatorer)
+- [x] **Concurrency**: Deadlock-detektion med Banker's algorithm (1 generator)
+- [x] **Design Patterns**: Observer/Pub-Sub-simulering (1 generator)
+- [x] **Encoding**: Run-Length Encoding, baskonvertering (2 generatorer)
+
+**Totalt:** 24 nya generatorer i `task_generator_v4.py`
+
+### 3.5.2 Meta-Learning Engine ✅
+- [x] Detekterar inlärningsfaser (breakthrough, plateau, regression)
+- [x] Analyserar prestanda per kategori med trenddetektering
+- [x] Rekommenderar parameterändringar (exploration, max_attempts, difficulty)
+- [x] Optimerar träningsschema (V4-ratio, svaga kategorier, batch-storlek)
+- [x] Automatisk analys var 10:e batch
+
+**Resultat:** Systemet kan nu identifiera sina egna svagheter och anpassa träningen
 
 ---
 

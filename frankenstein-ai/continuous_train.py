@@ -42,7 +42,10 @@ from rich import box
 from curriculum import get_curriculum
 from task_generator import generate_task
 from task_generator_v2 import generate_v2_task
+from task_generator_v4 import generate_v4_task, V4_GENERATORS
 from chaos_monkey import create_chaos_task, generate_refactor_task
+from meta_learning import MetaLearningEngine
+from multi_llm_router import MultiLLMRouter
 from code_agent import CodeLearningAgent, SolveMetadata
 from code_solver import solve_deterministic as solve_code_deterministic
 from programming_env import evaluate_solution
@@ -339,6 +342,20 @@ def run_continuous():
     sr_imported = sr_scheduler.import_from_progress(progress)
     if sr_imported:
         console.print(f"[dim]📅 Spaced Repetition: importerade {sr_imported} kategorier[/]")
+
+    # Meta-Learning Engine — analyzes learning curve and recommends optimizations
+    meta_engine = MetaLearningEngine(history_window=200)
+
+    # Multi-LLM Router — routes tasks to best LLM
+    available_providers = []
+    if os.environ.get("GEMINI_API_KEY") or True:  # Gemini always available via bridge/.env
+        available_providers.append("gemini")
+    if os.environ.get("XAI_API_KEY"):
+        available_providers.append("grok")
+    llm_router = MultiLLMRouter(available_providers=available_providers or ["gemini"])
+    llm_imported = llm_router.import_from_history(progress.get("history", []))
+    if llm_imported:
+        console.print(f"[dim]🔀 Multi-LLM Router: importerade {llm_imported} historiska resultat[/]")
 
     # Återställ agent-state från sparad progression
     for skill_name, skill_data in progress.get("skills", {}).items():
@@ -735,6 +752,130 @@ def run_continuous():
                 console.print()
                 continue
 
+            # === FRANKENSTEIN 4.0: Nya domäner — regex, JSON, FSM, bitar, text, system design (var 4:e batch) ===
+            if batch_num % 4 == 0 and batch_num % 5 != 0 and batch_num % 7 != 0 and batch_num % 15 != 0:
+                v4_diff = max(3, min(8, progress.get("current_difficulty", 5)))
+                v4_cats = set(d for d, _ in V4_GENERATORS)
+                console.print(f"[bold white on dark_orange] Batch {batch_num} {circ_state.emoji} — 🧬 FRANKENSTEIN 4.0 (regex/json/fsm/bits/text/system) Nivå {v4_diff} [/]")
+                _send_terminal_event({"type": "v4_batch_start", "batch": batch_num, "difficulty": v4_diff})
+                v4_solved = 0
+                for vi in range(8):
+                    if not running:
+                        break
+                    try:
+                        v4task = generate_v4_task(v4_diff)
+                        console.print(f"  [dark_orange]🧬 {v4task.id}[/] {v4task.title}", end=" ")
+                        try:
+                            v4result = agent.solve_task(v4task, verbose=False)
+                        except Exception as v4err:
+                            console.print(f"[red]⚠ {v4err}[/]")
+                            log_event(f"V4_ERROR {v4task.id}: {v4err}")
+                            continue
+
+                        v4meta: SolveMetadata | None = getattr(v4result, "metadata", None) if v4result else None
+                        v4_time_ms = v4meta.total_time_ms if v4meta else 0.0
+                        v4_first = v4meta.first_try_success if v4meta else False
+                        v4_strat = v4meta.winning_strategy if v4meta else ""
+                        session_attempted += 1
+                        progress["total_tasks_attempted"] = progress.get("total_tasks_attempted", 0) + 1
+
+                        v4_score = v4result.score if v4result else 0
+                        lvl = str(v4task.difficulty)
+                        if lvl not in progress["level_stats"]:
+                            progress["level_stats"][lvl] = {"attempted": 0, "solved": 0}
+                        progress["level_stats"][lvl]["attempted"] += 1
+
+                        # Spaced Repetition: registrera V4-resultat
+                        sr_scheduler.record_attempt(
+                            category=v4task.category,
+                            difficulty=v4task.difficulty,
+                            score=v4_score,
+                            first_try=v4_first,
+                            time_ms=v4_time_ms,
+                        )
+
+                        # Multi-LLM Router: registrera resultat
+                        llm_router.record_result(
+                            llm_name="gemini-flash", category=v4task.category,
+                            score=v4_score, first_try=v4_first, time_ms=v4_time_ms,
+                        )
+
+                        if v4result and v4_score >= 1.0:
+                            session_solved += 1
+                            v4_solved += 1
+                            progress["total_tasks_solved"] = progress.get("total_tasks_solved", 0) + 1
+                            progress["level_stats"][lvl]["solved"] += 1
+                            progress["current_streak"] = progress.get("current_streak", 0) + 1
+                            progress["best_streak"] = max(progress.get("best_streak", 0), progress["current_streak"])
+                            progress["total_solve_time_ms"] = progress.get("total_solve_time_ms", 0.0) + v4_time_ms
+                            save_solution(v4task.id, v4result.code, v4result.score)
+                            console.print(f"[green]✅[/] [dim]{v4_time_ms:.0f}ms[/]")
+                            log_event(f"V4_SOLVED {v4task.id} ({v4task.category}) time={v4_time_ms:.0f}ms strat={v4_strat}")
+                        else:
+                            progress["current_streak"] = 0
+                            console.print(f"[red]❌ {v4_score:.0%}[/]")
+                            log_event(f"V4_FAILED {v4task.id} ({v4task.category}) score={v4_score:.0%}")
+
+                        progress["history"].append({
+                            "id": v4task.id, "task_id": v4task.id,
+                            "score": v4_score,
+                            "difficulty": v4task.difficulty,
+                            "category": v4task.category,
+                            "timestamp": time.time(),
+                            "time_ms": round(v4_time_ms, 1),
+                            "attempts": v4meta.attempts_used if v4meta else 1,
+                            "first_try": v4_first,
+                            "strategy": v4_strat,
+                            "feedback": ((v4result.feedback if v4result else "") or "")[:300],
+                            "v4": True,
+                            "circadian_phase": circ_state.phase,
+                            "circadian_day": circ_state.day_number,
+                        })
+                        progress["history"] = progress["history"][-1000:]
+                    except Exception as v4gen_err:
+                        console.print(f"[red]⚠ V4 gen error: {v4gen_err}[/]")
+
+                console.print(f"  [dim]V4 batch: {v4_solved}/8 lösta[/]")
+                progress.setdefault("v4_stats", {"attempted": 0, "solved": 0})
+                progress["v4_stats"]["attempted"] += 8
+                progress["v4_stats"]["solved"] += v4_solved
+                circadian.advance_batch(events_this_batch=8)
+                circadian.save_state()
+                save_progress(progress)
+                console.print()
+                print_session_stats(progress, session_start, session_solved, session_attempted, agent=agent)
+                console.print()
+                continue
+
+            # === META-LEARNING: Analysera inlärningskurva (var 10:e batch) ===
+            if batch_num % 10 == 0 and meta_engine.should_analyze(progress.get("total_tasks_attempted", 0)):
+                try:
+                    meta_analysis = meta_engine.analyze(progress)
+                    if meta_analysis.get("status") == "analyzed":
+                        phase = meta_analysis["learning_phase"]
+                        schedule = meta_analysis["schedule_recommendation"]
+                        console.print(f"\n[bold yellow]🧠 META-LEARNING ANALYS[/]")
+                        console.print(f"  Fas: [bold]{phase['phase']}[/] (konfidens: {phase['confidence']:.0%})")
+                        console.print(f"  {phase['recommendation']}")
+
+                        # Visa svagaste kategorier
+                        weak_cats = [c for c in meta_analysis.get("category_insights", []) if c["weakness_score"] > 0.5]
+                        if weak_cats:
+                            weak_strs = [c["category"] + " (" + f'{c["solve_rate"]:.0%}' + ")" for c in weak_cats[:5]]
+                            console.print(f"  [red]Svaga kategorier:[/] {', '.join(weak_strs)}")
+
+                        # Visa parameterrekommendationer
+                        for rec in meta_analysis.get("parameter_recommendations", []):
+                            console.print(f"  [cyan]→ {rec['parameter']}:[/] {rec['current']} → {rec['recommended']} ({rec['reason']})")
+
+                        # Spara meta-analys i progress
+                        progress["meta_learning"] = meta_analysis
+                        log_event(f"META_LEARNING phase={phase['phase']} weak_cats={len(weak_cats)}")
+                        _send_terminal_event({"type": "meta_learning", "phase": phase["phase"], "recommendation": phase["recommendation"], "weak_categories": len(weak_cats)})
+                        console.print()
+                except Exception as meta_err:
+                    log_event(f"META_LEARNING_ERROR: {meta_err}")
+
             # === SPACED REPETITION: Återbesök svaga kategorier (var 4:e batch) ===
             if sr_scheduler.should_inject_review(batch_num):
                 sr_stats = sr_scheduler.get_stats()
@@ -1006,6 +1147,16 @@ def run_continuous():
                 "sleep_engine": sleep_engine.get_stats(),
             }
             progress["trends"] = compute_trends(progress)
+            # Multi-LLM Router stats
+            progress["llm_router"] = llm_router.get_stats()
+            # V4 category coverage
+            v4_history = [h for h in progress.get("history", []) if h.get("v4")]
+            if v4_history:
+                v4_cats_seen = set(h.get("category", "") for h in v4_history)
+                v4_solved_count = sum(1 for h in v4_history if h.get("score", 0) >= 1.0)
+                progress["v4_stats"] = progress.get("v4_stats", {"attempted": 0, "solved": 0})
+                progress["v4_stats"]["categories_seen"] = list(v4_cats_seen)
+                progress["v4_stats"]["solve_rate"] = round(v4_solved_count / max(len(v4_history), 1), 3)
             # Spaced Repetition stats
             progress["sr_stats"] = sr_scheduler.get_stats()
             save_progress(progress)
