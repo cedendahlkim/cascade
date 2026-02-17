@@ -535,6 +535,133 @@ Förklara:
   }
 });
 
+/** POST /api/workspace/ai/chat — Smart natural language coding assistant */
+router.post("/ai/chat", async (req: Request, res: Response) => {
+  const { message, currentFile, currentContent, openFiles } = req.body;
+  if (!message) return res.status(400).json({ error: "message required" });
+
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || "";
+    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+    // Step 1: Let Gemini decide what actions to take
+    const planPrompt = `Du är Frankenstein, en expert AI-kodassistent. Analysera användarens begäran och bestäm vilka åtgärder som behövs.
+
+WORKSPACE ROOT: ${WORKSPACE_ROOT}
+${currentFile ? `AKTUELL FIL: ${currentFile}` : "INGEN FIL ÖPPEN"}
+${openFiles?.length ? `ÖPPNA FILER: ${openFiles.join(", ")}` : ""}
+${currentContent ? `FILINNEHÅLL (${currentFile}):\n\`\`\`\n${currentContent.slice(0, 6000)}\n\`\`\`` : ""}
+
+ANVÄNDARENS BEGÄRAN: ${message}
+
+Svara med EXAKT EN JSON-array med åtgärder. Varje åtgärd har ett "action"-fält.
+Tillgängliga actions:
+- {"action":"edit","path":"relativ/sökväg","content":"HELA det nya filinnehållet"} — Redigera/skriv om en fil
+- {"action":"create","path":"relativ/sökväg","content":"filinnehåll"} — Skapa en ny fil
+- {"action":"run","command":"shell-kommando"} — Kör ett terminalkommando
+- {"action":"answer","text":"svar till användaren"} — Svara/förklara utan kodändring
+
+REGLER:
+- Vid "edit" MÅSTE "content" vara HELA det uppdaterade filinnehållet, inte bara ändringarna
+- Om du skapar/redigerar kod, skriv produktionsklar, komplett kod
+- Inkludera alltid en "answer" action sist som sammanfattar vad du gjort
+- Svara BARA med JSON-arrayen, inget annat. Ingen markdown, inga code fences.
+
+Exempel: [{"action":"edit","path":"src/app.ts","content":"import...\\n..."},{"action":"answer","text":"Jag uppdaterade app.ts med..."}]`;
+
+    const planRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: planPrompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 16384 },
+        }),
+      }
+    );
+
+    const planData = await planRes.json() as any;
+    let planText = planData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    // Strip markdown fences if present
+    planText = planText.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?\s*```$/i, "").trim();
+
+    let actions: any[];
+    try {
+      actions = JSON.parse(planText);
+      if (!Array.isArray(actions)) actions = [actions];
+    } catch {
+      // If Gemini didn't return valid JSON, treat as a simple answer
+      return res.json({
+        actions: [{ action: "answer", text: planText }],
+        results: [{ action: "answer", success: true, text: planText }],
+      });
+    }
+
+    // Step 2: Execute each action
+    const results: any[] = [];
+
+    for (const act of actions) {
+      try {
+        switch (act.action) {
+          case "edit":
+          case "create": {
+            const abs = safePath(act.path);
+            if (!abs) { results.push({ ...act, success: false, error: "Path outside workspace" }); break; }
+            // Ensure parent dirs exist
+            const dir = dirname(abs);
+            if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+            const isNew = !existsSync(abs);
+            writeFileSync(abs, act.content || "", "utf-8");
+            results.push({
+              action: act.action,
+              path: act.path,
+              success: true,
+              isNew,
+              language: langFromExt(extname(act.path)),
+              content: act.content,
+            });
+            break;
+          }
+          case "run": {
+            const cmdResult = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve) => {
+              let stdout = "";
+              let stderr = "";
+              const isWin = process.platform === "win32";
+              const sh = isWin ? "cmd.exe" : "/bin/bash";
+              const args = isWin ? ["/c", act.command] : ["-c", act.command];
+              const proc = spawn(sh, args, {
+                cwd: WORKSPACE_ROOT,
+                env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+                timeout: 30000,
+              });
+              proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString("utf-8"); });
+              proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf-8"); });
+              proc.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 1 }));
+              proc.on("error", (err) => resolve({ stdout, stderr: String(err), exitCode: 1 }));
+            });
+            results.push({ action: "run", command: act.command, success: cmdResult.exitCode === 0, ...cmdResult });
+            break;
+          }
+          case "answer": {
+            results.push({ action: "answer", success: true, text: act.text });
+            break;
+          }
+          default:
+            results.push({ action: act.action, success: false, error: "Unknown action" });
+        }
+      } catch (err) {
+        results.push({ ...act, success: false, error: String(err) });
+      }
+    }
+
+    res.json({ actions, results });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 /** POST /api/workspace/ai/terminal — AI runs a terminal command */
 router.post("/ai/terminal", async (req: Request, res: Response) => {
   const { command, cwd } = req.body;

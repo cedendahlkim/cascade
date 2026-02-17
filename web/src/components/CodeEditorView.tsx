@@ -643,7 +643,7 @@ export default function CodeEditorView() {
     }
   }, [activeTab]);
 
-  // ── AI Chat ──
+  // ── AI Chat (smart — natural language → code actions) ──
   const sendAiMessage = async () => {
     if (!aiInput.trim()) return;
     const msg = aiInput.trim();
@@ -654,74 +654,84 @@ export default function CodeEditorView() {
     try {
       const currentTab = tabs.find((t) => t.path === activeTab);
 
-      // Determine action based on message
-      let response: any;
-      if (msg.toLowerCase().startsWith("/edit ") && currentTab) {
-        const instruction = msg.slice(6);
-        response = await api("/ai/edit", {
-          method: "POST",
-          body: JSON.stringify({ path: currentTab.path, instruction }),
-        });
-        setDiffContent({ original: response.original, modified: response.modified });
-        setShowDiff(true);
-        setAiMessages((prev) => [
-          ...prev,
-          { role: "ai", content: `Föreslagna ändringar i ${currentTab.name}. Granska diff-vyn och klicka "Acceptera" för att applicera.`, timestamp: Date.now() },
-        ]);
-      } else if (msg.toLowerCase().startsWith("/generate ")) {
-        const parts = msg.slice(10).split(" ", 1);
-        const path = parts[0];
-        const instruction = msg.slice(10 + path.length + 1);
-        response = await api("/ai/generate", {
-          method: "POST",
-          body: JSON.stringify({ path, instruction }),
-        });
-        setAiMessages((prev) => [
-          ...prev,
-          { role: "ai", content: `Genererade ${path}. Öppna filen för att se resultatet.`, timestamp: Date.now() },
-        ]);
-        // Auto-save and open
-        await api("/file", { method: "PUT", body: JSON.stringify({ path, content: response.content }) });
-        await loadTree();
-      } else if (msg.toLowerCase().startsWith("/run ")) {
-        const cmd = msg.slice(5);
-        response = await api("/ai/terminal", {
-          method: "POST",
-          body: JSON.stringify({ command: cmd }),
-        });
-        const output = [response.stdout, response.stderr].filter(Boolean).join("\n") || "(ingen output)";
-        setAiMessages((prev) => [
-          ...prev,
-          { role: "ai", content: `\`\`\`\n$ ${cmd}\n${output}\n[exit: ${response.exitCode}]\n\`\`\``, timestamp: Date.now() },
-        ]);
-      } else if (msg.toLowerCase().startsWith("/explain") && currentTab) {
-        response = await api("/ai/explain", {
-          method: "POST",
-          body: JSON.stringify({ path: currentTab.path }),
-        });
-        setAiMessages((prev) => [
-          ...prev,
-          { role: "ai", content: response.explanation, timestamp: Date.now() },
-        ]);
-      } else {
-        // General AI chat about current file
-        const context = currentTab
-          ? `Aktuell fil: ${currentTab.path}\n\`\`\`${currentTab.language}\n${currentTab.content.slice(0, 3000)}\n\`\`\``
-          : "Ingen fil öppen.";
+      // Send everything to the smart /ai/chat endpoint
+      const response = await api("/ai/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          message: msg,
+          currentFile: currentTab?.path || null,
+          currentContent: currentTab?.content || null,
+          openFiles: tabs.map((t) => t.path),
+        }),
+      });
 
-        const apiKey = ""; // Will use server-side
-        response = await api("/ai/explain", {
-          method: "POST",
-          body: JSON.stringify({
-            path: currentTab?.path || ".",
-            selection: `Användaren frågar: ${msg}\n\nKontext:\n${context}`,
-          }),
-        });
-        setAiMessages((prev) => [
-          ...prev,
-          { role: "ai", content: response.explanation, timestamp: Date.now() },
-        ]);
+      const { results } = response as { results: any[] };
+      const parts: string[] = [];
+      let filesChanged = false;
+
+      for (const r of results) {
+        switch (r.action) {
+          case "edit":
+          case "create": {
+            if (r.success) {
+              filesChanged = true;
+              const icon = r.isNew ? "📄" : "✏️";
+              parts.push(`${icon} **${r.isNew ? "Skapade" : "Uppdaterade"}** \`${r.path}\``);
+
+              // If this file is currently open, update its content in the tab
+              const existingTab = tabs.find((t) => t.path === r.path);
+              if (existingTab) {
+                setTabs((prev) =>
+                  prev.map((t) =>
+                    t.path === r.path
+                      ? { ...t, content: r.content, originalContent: r.content, modified: false }
+                      : t
+                  )
+                );
+              } else {
+                // Auto-open newly created/edited files
+                const name = r.path.split("/").pop() || r.path;
+                setTabs((prev) => [
+                  ...prev,
+                  {
+                    path: r.path,
+                    name,
+                    language: r.language || "plaintext",
+                    content: r.content,
+                    originalContent: r.content,
+                    modified: false,
+                  },
+                ]);
+                setActiveTab(r.path);
+              }
+            } else {
+              parts.push(`❌ Kunde inte ${r.action === "create" ? "skapa" : "redigera"} \`${r.path}\`: ${r.error}`);
+            }
+            break;
+          }
+          case "run": {
+            const output = [r.stdout, r.stderr].filter(Boolean).join("\n") || "(ingen output)";
+            const status = r.success ? "✅" : "❌";
+            parts.push(`${status} Körde: \`${r.command}\`\n\`\`\`\n${output.slice(0, 2000)}\n[exit: ${r.exitCode}]\n\`\`\``);
+            // Also show in terminal
+            setTerminalOutput((prev) => [...prev, `$ ${r.command}`, ...(r.stdout ? [r.stdout] : []), ...(r.stderr ? [`[stderr] ${r.stderr}`] : []), `[exit: ${r.exitCode}]`]);
+            break;
+          }
+          case "answer": {
+            parts.push(r.text);
+            break;
+          }
+          default:
+            if (r.error) parts.push(`⚠️ ${r.error}`);
+        }
       }
+
+      if (filesChanged) await loadTree();
+
+      setAiMessages((prev) => [
+        ...prev,
+        { role: "ai", content: parts.join("\n\n"), timestamp: Date.now() },
+      ]);
     } catch (err) {
       setAiMessages((prev) => [
         ...prev,
@@ -1186,13 +1196,14 @@ export default function CodeEditorView() {
               </button>
             </div>
 
-            {/* AI commands help */}
+            {/* AI help */}
             <div className="px-3 py-2 border-b border-slate-700/30 text-[10px] text-slate-500 space-y-0.5">
-              <div><code>/edit</code> — redigera aktuell fil</div>
-              <div><code>/generate path</code> — generera ny fil</div>
-              <div><code>/run cmd</code> — kör terminalkommando</div>
-              <div><code>/explain</code> — förklara aktuell fil</div>
-              <div>Eller skriv fritt för att chatta om koden</div>
+              <div className="font-semibold text-slate-400 mb-1">Skriv vad du vill — Frankenstein kodar det</div>
+              <div>💬 &quot;Lägg till en login-sida med email och lösenord&quot;</div>
+              <div>✏️ &quot;Fixa bugg i rad 42 — variabeln är undefined&quot;</div>
+              <div>📄 &quot;Skapa en REST API med Express för users&quot;</div>
+              <div>🖥️ &quot;Kör npm test och visa resultatet&quot;</div>
+              <div>🔍 &quot;Förklara vad den här filen gör&quot;</div>
             </div>
 
             {/* Messages */}
@@ -1235,7 +1246,7 @@ export default function CodeEditorView() {
                   value={aiInput}
                   onChange={(e) => setAiInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendAiMessage()}
-                  placeholder="Fråga Frankenstein..."
+                  placeholder="Beskriv vad du vill koda..."
                   className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 text-xs outline-none text-slate-200 placeholder:text-slate-500 focus:border-violet-500/50"
                   disabled={aiLoading}
                 />
