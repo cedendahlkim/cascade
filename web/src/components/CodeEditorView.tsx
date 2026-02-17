@@ -1566,7 +1566,7 @@ export default function CodeEditorView() {
 
         {/* AI Panel */}
         {showAiPanel && (
-          <div className="shrink-0 bg-[#0d1117] border-l border-slate-700/50 flex flex-col relative" style={{ width: aiPanelWidth }}>
+          <div className="shrink-0 bg-[#0d1117] border-l border-slate-700/50 flex flex-col relative min-h-0" style={{ width: aiPanelWidth }}>
             <div
               className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-violet-500/50 active:bg-violet-500/70 transition-colors z-10"
               onMouseDown={(e) => startResize("ai", e)}
@@ -1582,7 +1582,7 @@ export default function CodeEditorView() {
             </div>
 
             {/* AI help */}
-            <div className="px-3 py-2 border-b border-slate-700/30 text-[10px] text-slate-500 space-y-0.5">
+            <div className="shrink-0 px-3 py-2 border-b border-slate-700/30 text-[10px] text-slate-500 space-y-0.5">
               <div className="font-semibold text-slate-400 mb-1">Skriv vad du vill — Frankenstein kodar det</div>
               <div>💬 &quot;Lägg till en login-sida med email och lösenord&quot;</div>
               <div>✏️ &quot;Fixa bugg i rad 42 — variabeln är undefined&quot;</div>
@@ -1592,7 +1592,7 @@ export default function CodeEditorView() {
             </div>
 
             {/* Messages */}
-            <div ref={aiRef} className="flex-1 overflow-y-auto p-3 space-y-3">
+            <div ref={aiRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
               {aiMessages.length === 0 && (
                 <div className="text-center text-slate-500 text-xs mt-8">
                   <Sparkles className="w-8 h-8 mx-auto mb-2 text-violet-500/50" />
@@ -1628,7 +1628,7 @@ export default function CodeEditorView() {
             </div>
 
             {/* AI input */}
-            <div className="border-t border-slate-700/50 p-2">
+            <div className="shrink-0 border-t border-slate-700/50 p-2">
               <div className="flex items-center gap-2">
                 <input
                   type="text"

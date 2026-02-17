@@ -1140,6 +1140,12 @@ export default function App() {
   };
 
   const [moreTab, setMoreTab] = useState<string>("dashboard");
+  const [editorMounted, setEditorMounted] = useState(false);
+
+  // Once editor tab is visited, keep it mounted forever
+  useEffect(() => {
+    if (activeTab === "more" && moreTab === "editor") setEditorMounted(true);
+  }, [activeTab, moreTab]);
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "chat", label: "Claude", icon: Brain },
@@ -2519,12 +2525,21 @@ export default function App() {
             {moreTab === "researchlab" && <ResearchLabView />}
             {moreTab === "hierarchy" && <HierarchyView />}
             {moreTab === "debate" && <DebateView />}
-            {moreTab === "editor" && <CodeEditorView />}
+            {/* Editor rendered persistently outside More section */}
             {moreTab === "git" && <GitView />}
             {moreTab === "install" && <InstallView />}
             {moreTab === "settings" && <SettingsView />}
           </Suspense>
         </>
+      )}
+
+      {/* Persistent Editor — stays mounted once first visited */}
+      {editorMounted && (
+        <div className={activeTab === "more" && moreTab === "editor" ? "flex-1 flex flex-col overflow-hidden" : "hidden"}>
+          <Suspense fallback={<LazyFallback />}>
+            <CodeEditorView />
+          </Suspense>
+        </div>
       )}
 
       {/* Bottom Tab Bar */}
