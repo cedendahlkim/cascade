@@ -77,6 +77,7 @@ const FrankensteinChatView = lazy(() => import("./components/FrankensteinChatVie
 const FlipperZeroView = lazy(() => import("./components/FlipperZeroView"));
 const GitView = lazy(() => import("./components/GitView"));
 const DebateView = lazy(() => import("./components/DebateView"));
+const CodeEditorView = lazy(() => import("./components/CodeEditorView"));
 
 const LazyFallback = () => <div className="flex-1 flex items-center justify-center"><div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -2483,6 +2484,7 @@ export default function App() {
               { id: "researchlab", label: "🔬 Research Lab" },
               { id: "hierarchy", label: "🏗️ Hierarki" },
               { id: "debate", label: "🏛️ Debatt" },
+              { id: "editor", label: "💻 Editor" },
               { id: "git", label: "🔀 Git" },
               { id: "install", label: "📦 Installera" },
               { id: "settings", label: "⚙️ Inställningar" },
@@ -2517,6 +2519,7 @@ export default function App() {
             {moreTab === "researchlab" && <ResearchLabView />}
             {moreTab === "hierarchy" && <HierarchyView />}
             {moreTab === "debate" && <DebateView />}
+            {moreTab === "editor" && <CodeEditorView />}
             {moreTab === "git" && <GitView />}
             {moreTab === "install" && <InstallView />}
             {moreTab === "settings" && <SettingsView />}
