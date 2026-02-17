@@ -7,7 +7,7 @@ import {
   ArrowUp, ArrowDown, CornerDownLeft, Clock, Zap, GitBranch,
   FileJson, FileText, FileCode, FileType, Image, Settings, Database,
   Hash, Braces, Coffee, Gem, FileCode2, Globe, Cpu, Package,
-  Columns, Undo2, Eye, GripVertical, Copy, Check, Maximize2, Minimize2,
+  Columns, Undo2, Eye, GripVertical, Copy, Check, Maximize2, Minimize2, CheckCircle, AlertCircle, Info,
   type LucideIcon,
 } from "lucide-react";
 import { BRIDGE_URL } from "../config";
@@ -51,6 +51,12 @@ interface CommandItem {
   icon: LucideIcon;
   action: () => void;
   category: string;
+}
+
+interface Toast {
+  id: number;
+  type: "success" | "error" | "info";
+  message: string;
 }
 
 // ── Theme definitions ──
@@ -354,6 +360,101 @@ function TreeNode({
   );
 }
 
+// ── AI Markdown renderer ──
+
+function AiMarkdown({ content }: { content: string }) {
+  const [copied, setCopied] = useState<number | null>(null);
+
+  const parts = useMemo(() => {
+    const result: { type: "text" | "code"; lang?: string; value: string }[] = [];
+    const codeRegex = /```(\w*)\n([\s\S]*?)```/g;
+    let lastIdx = 0;
+    let match;
+    while ((match = codeRegex.exec(content)) !== null) {
+      if (match.index > lastIdx) {
+        result.push({ type: "text", value: content.slice(lastIdx, match.index) });
+      }
+      result.push({ type: "code", lang: match[1] || "plaintext", value: match[2].trimEnd() });
+      lastIdx = match.index + match[0].length;
+    }
+    if (lastIdx < content.length) {
+      result.push({ type: "text", value: content.slice(lastIdx) });
+    }
+    return result;
+  }, [content]);
+
+  const renderInline = (text: string) => {
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '<strong class="text-slate-200">$1</strong>')
+      .replace(/`([^`]+)`/g, '<code class="bg-slate-700/50 px-1 py-0.5 rounded text-violet-300 text-[11px]">$1</code>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-blue-400 underline">$1</a>');
+  };
+
+  const handleCopy = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text);
+    setCopied(idx);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  return (
+    <div className="space-y-2">
+      {parts.map((part, i) =>
+        part.type === "code" ? (
+          <div key={i} className="relative group rounded-lg overflow-hidden border border-slate-700/50">
+            <div className="flex items-center justify-between px-3 py-1 bg-slate-800/80 border-b border-slate-700/30">
+              <span className="text-[10px] text-slate-500 uppercase">{part.lang}</span>
+              <button
+                onClick={() => handleCopy(part.value, i)}
+                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                title="Kopiera kod"
+              >
+                {copied === i ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                {copied === i ? "Kopierat!" : "Kopiera"}
+              </button>
+            </div>
+            <pre className="p-3 bg-[#0d1117] overflow-x-auto text-[11px] leading-relaxed">
+              <code className="text-slate-300">{part.value}</code>
+            </pre>
+          </div>
+        ) : (
+          <div
+            key={i}
+            className="whitespace-pre-wrap leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: renderInline(part.value) }}
+          />
+        )
+      )}
+    </div>
+  );
+}
+
+// ── Toast notifications ──
+
+function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+  return (
+    <div className="fixed bottom-16 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+      {toasts.map((t) => {
+        const Icon = t.type === "success" ? CheckCircle : t.type === "error" ? AlertCircle : Info;
+        const colors = t.type === "success" ? "bg-green-500/20 border-green-500/30 text-green-300"
+          : t.type === "error" ? "bg-red-500/20 border-red-500/30 text-red-300"
+          : "bg-blue-500/20 border-blue-500/30 text-blue-300";
+        return (
+          <div
+            key={t.id}
+            className={`pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-lg border shadow-lg backdrop-blur-sm text-xs animate-[slideIn_0.3s_ease-out] ${colors}`}
+          >
+            <Icon className="w-4 h-4 shrink-0" />
+            <span className="flex-1">{t.message}</span>
+            <button onClick={() => onDismiss(t.id)} className="hover:opacity-70" title="Stäng">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Command Palette ──
 
 function CommandPalette({ commands, onClose }: { commands: CommandItem[]; onClose: () => void }) {
@@ -471,6 +572,17 @@ export default function CodeEditorView() {
 
   // Markdown preview
   const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
+
+  // Toasts
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const addToast = useCallback((type: Toast["type"], message: string) => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+  }, []);
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   // Search
   const [searchQuery, setSearchQuery] = useState("");
@@ -621,8 +733,9 @@ export default function CodeEditorView() {
           t.path === path ? { ...t, originalContent: t.content, modified: false } : t
         )
       );
+      addToast("success", `Sparade ${tab.name}`);
     } catch (err) {
-      setError(String(err));
+      addToast("error", `Kunde inte spara: ${err}`);
     }
   };
 
@@ -953,6 +1066,9 @@ export default function CodeEditorView() {
 
   return (
     <div className="flex flex-col h-full bg-[#0d1117] text-slate-200">
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
       {/* Command Palette */}
       {showCommandPalette && <CommandPalette commands={commands} onClose={() => setShowCommandPalette(false)} />}
 
@@ -1096,7 +1212,7 @@ export default function CodeEditorView() {
             autoFocus
           />
           {searching && <Loader2 className="w-4 h-4 animate-spin text-blue-400" />}
-          <button onClick={() => { setShowSearch(false); setSearchResults([]); }}>
+          <button onClick={() => { setShowSearch(false); setSearchResults([]); }} title="Stäng sök">
             <X className="w-4 h-4 text-slate-500" />
           </button>
         </div>
@@ -1338,6 +1454,26 @@ export default function CodeEditorView() {
                   </div>
                 </div>
 
+                {/* Quick actions */}
+                <div className="flex gap-2">
+                  <button onClick={handleNewFile} className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs text-blue-300 hover:bg-blue-500/20 transition-colors">
+                    <Plus className="w-3.5 h-3.5" /> Ny fil
+                  </button>
+                  <button onClick={() => setShowTerminal(true)} className="flex items-center gap-1.5 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg text-xs text-green-300 hover:bg-green-500/20 transition-colors">
+                    <Terminal className="w-3.5 h-3.5" /> Terminal
+                  </button>
+                  <button onClick={() => setShowAiPanel(true)} className="flex items-center gap-1.5 px-3 py-2 bg-violet-500/10 border border-violet-500/20 rounded-lg text-xs text-violet-300 hover:bg-violet-500/20 transition-colors">
+                    <Bot className="w-3.5 h-3.5" /> Frankenstein AI
+                  </button>
+                </div>
+
+                {/* Project stats */}
+                <div className="flex gap-4 text-[10px] text-slate-600">
+                  <span>{tree.length} toppnivå-objekt</span>
+                  <span>{tabs.length} öppna flikar</span>
+                  <span>{closedTabs.length} i undo-stack</span>
+                </div>
+
                 {recentFiles.length > 0 && (
                   <div className="w-72">
                     <p className="text-[10px] uppercase tracking-wider text-slate-600 mb-2 flex items-center gap-1"><Clock className="w-3 h-3" /> Senaste filer</p>
@@ -1363,11 +1499,11 @@ export default function CodeEditorView() {
 
                 <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+S</kbd> Spara</div>
-                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+P</kbd> Sök</div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+H</kbd> Sök/Ersätt</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+`</kbd> Terminal</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+I</kbd> AI</div>
-                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+B</kbd> Sidopanel</div>
-                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+Shift+P</kbd> Kommandon</div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+\</kbd> Split vy</div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+Shift+T</kbd> Återöppna</div>
                 </div>
               </div>
             )}
@@ -1381,14 +1517,33 @@ export default function CodeEditorView() {
                 onMouseDown={(e) => startResize("terminal", e)}
               />
               <div className="flex items-center justify-between px-3 py-1 bg-[#161b22] border-b border-slate-700/50">
-                <span className="text-xs font-semibold text-slate-400">Terminal</span>
-                <button onClick={() => setShowTerminal(false)}>
-                  <X className="w-3.5 h-3.5 text-slate-500" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-xs font-semibold text-slate-400">Terminal</span>
+                  <span className="text-[10px] text-slate-600">{terminalOutput.length} rader</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setTerminalOutput([])} className="p-0.5 hover:bg-slate-700 rounded" title="Rensa terminal">
+                    <RefreshCw className="w-3 h-3 text-slate-500" />
+                  </button>
+                  <button onClick={() => setShowTerminal(false)} title="Stäng terminal">
+                    <X className="w-3.5 h-3.5 text-slate-500" />
+                  </button>
+                </div>
               </div>
-              <div ref={terminalRef} className="flex-1 overflow-y-auto p-2 font-mono text-xs text-slate-300">
+              <div ref={terminalRef} className="flex-1 overflow-y-auto p-2 font-mono text-xs text-slate-300 select-text">
+                {terminalOutput.length === 0 && (
+                  <div className="text-slate-600 text-center mt-4">Skriv ett kommando nedan...</div>
+                )}
                 {terminalOutput.map((line, i) => (
-                  <div key={i} className={line.startsWith("$") ? "text-green-400" : line.startsWith("[stderr]") ? "text-red-400" : ""}>{line}</div>
+                  <div key={i} className={
+                    line.startsWith("$ ") ? "text-green-400 font-semibold mt-1" :
+                    line.startsWith("[stderr]") ? "text-red-400" :
+                    line.startsWith("[exit: 0]") ? "text-slate-600 text-[10px] mb-1" :
+                    line.startsWith("[exit:") ? "text-red-500 text-[10px] mb-1" :
+                    line.startsWith("[error]") ? "text-red-400 italic" :
+                    "text-slate-300"
+                  }>{line}</div>
                 ))}
               </div>
               <div className="flex items-center gap-2 px-2 py-1.5 border-t border-slate-700/50">
@@ -1455,9 +1610,13 @@ export default function CodeEditorView() {
                   }`}
                 >
                   <div className="font-semibold text-[10px] mb-1 text-slate-500">
-                    {msg.role === "user" ? "Du" : "Frankenstein"}
+                    {msg.role === "user" ? "Du" : "🧟 Frankenstein"}
                   </div>
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  {msg.role === "user" ? (
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  ) : (
+                    <AiMarkdown content={msg.content} />
+                  )}
                 </div>
               ))}
               {aiLoading && (
