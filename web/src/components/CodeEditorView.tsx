@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, type DragEvent } from "react";
 import Editor, { DiffEditor, type Monaco } from "@monaco-editor/react";
 import {
   FolderOpen, ChevronRight, ChevronDown, Plus, Save,
@@ -7,6 +7,7 @@ import {
   ArrowUp, ArrowDown, CornerDownLeft, Clock, Zap, GitBranch,
   FileJson, FileText, FileCode, FileType, Image, Settings, Database,
   Hash, Braces, Coffee, Gem, FileCode2, Globe, Cpu, Package,
+  Columns, Undo2, Eye, GripVertical, Copy, Check, Maximize2, Minimize2,
   type LucideIcon,
 } from "lucide-react";
 import { BRIDGE_URL } from "../config";
@@ -155,6 +156,26 @@ function formatFileSize(bytes?: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ── Simple markdown renderer ──
+
+function simpleMarkdown(md: string): string {
+  return md
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/```(\w*)\n([\s\S]*?)```/g, "<pre><code>$2</code></pre>")
+    .replace(/^\- (.+)$/gm, "<li>$1</li>")
+    .replace(/^\d+\. (.+)$/gm, "<li>$1</li>")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>")
+    .replace(/\n{2,}/g, "<br/><br/>")
+    .replace(/\n/g, "<br/>");
 }
 
 // ── API helpers ──
@@ -428,6 +449,29 @@ export default function CodeEditorView() {
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [monacoReady, setMonacoReady] = useState(false);
 
+  // Split editor
+  const [splitTab, setSplitTab] = useState<string>("");
+  const [showSplit, setShowSplit] = useState(false);
+
+  // Closed tabs stack (for Ctrl+Shift+T reopen)
+  const [closedTabs, setClosedTabs] = useState<OpenTab[]>([]);
+
+  // Drag & drop tabs
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  // Resizable panels
+  const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [terminalHeight, setTerminalHeight] = useState(192);
+  const [aiPanelWidth, setAiPanelWidth] = useState(320);
+  const resizingRef = useRef<{ type: string; startPos: number; startSize: number } | null>(null);
+
+  // Fullscreen editor
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Markdown preview
+  const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
+
   // Search
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -490,16 +534,76 @@ export default function CodeEditorView() {
     }
   };
 
-  // ── Close tab ──
+  // ── Close tab (with undo stack) ──
   const closeTab = (path: string) => {
     const tab = tabs.find((t) => t.path === path);
     if (tab?.modified && !confirm(`${tab.name} har osparade ändringar. Stäng ändå?`)) return;
+    if (tab) setClosedTabs((prev) => [tab, ...prev].slice(0, 20));
 
     setTabs((prev) => prev.filter((t) => t.path !== path));
     if (activeTab === path) {
       const remaining = tabs.filter((t) => t.path !== path);
       setActiveTab(remaining.length > 0 ? remaining[remaining.length - 1].path : "");
     }
+    if (splitTab === path) { setSplitTab(""); setShowSplit(false); }
+  };
+
+  // ── Reopen closed tab (Ctrl+Shift+T) ──
+  const reopenTab = () => {
+    if (closedTabs.length === 0) return;
+    const [tab, ...rest] = closedTabs;
+    setClosedTabs(rest);
+    setTabs((prev) => [...prev, tab]);
+    setActiveTab(tab.path);
+  };
+
+  // ── Drag & drop tab reorder ──
+  const handleTabDragStart = (e: DragEvent<HTMLDivElement>, idx: number) => {
+    setDragIdx(idx);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleTabDragOver = (e: DragEvent<HTMLDivElement>, idx: number) => {
+    e.preventDefault();
+    setDragOverIdx(idx);
+  };
+  const handleTabDrop = (e: DragEvent<HTMLDivElement>, idx: number) => {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setDragOverIdx(null); return; }
+    setTabs((prev) => {
+      const copy = [...prev];
+      const [moved] = copy.splice(dragIdx, 1);
+      copy.splice(idx, 0, moved);
+      return copy;
+    });
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
+  // ── Resizable panels ──
+  const startResize = (type: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    const startPos = type === "terminal" ? e.clientY : e.clientX;
+    const startSize = type === "sidebar" ? sidebarWidth : type === "terminal" ? terminalHeight : aiPanelWidth;
+    resizingRef.current = { type, startPos, startSize };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const { type: t, startPos: sp, startSize: ss } = resizingRef.current;
+      if (t === "sidebar") {
+        setSidebarWidth(Math.max(160, Math.min(500, ss + (ev.clientX - sp))));
+      } else if (t === "terminal") {
+        setTerminalHeight(Math.max(100, Math.min(500, ss - (ev.clientY - sp))));
+      } else if (t === "ai") {
+        setAiPanelWidth(Math.max(250, Math.min(600, ss - (ev.clientX - sp))));
+      }
+    };
+    const onUp = () => {
+      resizingRef.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
   };
 
   // ── Save file ──
@@ -652,15 +756,15 @@ export default function CodeEditorView() {
     setAiLoading(true);
 
     try {
-      const currentTab = tabs.find((t) => t.path === activeTab);
+      const activeFile = tabs.find((t) => t.path === activeTab);
 
       // Send everything to the smart /ai/chat endpoint
       const response = await api("/ai/chat", {
         method: "POST",
         body: JSON.stringify({
           message: msg,
-          currentFile: currentTab?.path || null,
-          currentContent: currentTab?.content || null,
+          currentFile: activeFile?.path || null,
+          currentContent: activeFile?.content || null,
           openFiles: tabs.map((t) => t.path),
         }),
       });
@@ -759,6 +863,9 @@ export default function CodeEditorView() {
     setDiffContent(null);
   };
 
+  const currentTab = tabs.find((t) => t.path === activeTab);
+  const splitTabData = tabs.find((t) => t.path === splitTab);
+
   // ── Command palette commands ──
   const commands: CommandItem[] = useMemo(() => [
     { id: "save", label: "Spara fil", shortcut: "Ctrl+S", icon: Save, action: () => { if (activeTab) saveFile(activeTab); }, category: "Fil" },
@@ -775,9 +882,13 @@ export default function CodeEditorView() {
     { id: "newfile", label: "Ny fil", icon: Plus, action: handleNewFile, category: "Fil" },
     { id: "newdir", label: "Ny mapp", icon: FolderPlus, action: handleNewDir, category: "Fil" },
     { id: "closeall", label: "Stäng alla flikar", icon: X, action: () => { setTabs([]); setActiveTab(""); }, category: "Fil" },
+    { id: "reopen", label: "Återöppna stängd flik", shortcut: "Ctrl+Shift+T", icon: Undo2, action: reopenTab, category: "Fil" },
+    { id: "split", label: `${showSplit ? "Stäng" : "Öppna"} delad vy`, shortcut: "Ctrl+\\", icon: Columns, action: () => { if (showSplit) { setShowSplit(false); setSplitTab(""); } else if (currentTab) { setShowSplit(true); setSplitTab(activeTab); } }, category: "Vy" },
+    { id: "fullscreen", label: `${isFullscreen ? "Avsluta" : "Aktivera"} fullskärm`, shortcut: "F11", icon: isFullscreen ? Minimize2 : Maximize2, action: () => setIsFullscreen((v) => !v), category: "Vy" },
+    { id: "mdpreview", label: `${showMarkdownPreview ? "Dölj" : "Visa"} Markdown-förhandsvisning`, icon: Eye, action: () => setShowMarkdownPreview((v) => !v), category: "Vy" },
     { id: "clearterminal", label: "Rensa terminal", icon: Terminal, action: () => setTerminalOutput([]), category: "Terminal" },
     { id: "refresh", label: "Uppdatera filträd", icon: RefreshCw, action: loadTree, category: "Navigering" },
-  ], [activeTab, showMinimap, wordWrap, autoSave]);
+  ], [activeTab, showMinimap, wordWrap, autoSave, showSplit, isFullscreen, showMarkdownPreview, currentTab]);
 
   // ── Keyboard shortcuts ──
   useEffect(() => {
@@ -810,10 +921,23 @@ export default function CodeEditorView() {
         e.preventDefault();
         if (activeTab) closeTab(activeTab);
       }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "T") {
+        e.preventDefault();
+        reopenTab();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "\\") {
+        e.preventDefault();
+        if (showSplit) { setShowSplit(false); setSplitTab(""); }
+        else if (activeTab) { setShowSplit(true); setSplitTab(activeTab); }
+      }
+      if (e.key === "F11") {
+        e.preventDefault();
+        setIsFullscreen((v) => !v);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeTab, tabs]);
+  }, [activeTab, tabs, showSplit, closedTabs]);
 
   // ── Monaco mount handler ──
   const handleMonacoMount = useCallback((_editor: any, monaco: Monaco) => {
@@ -823,8 +947,6 @@ export default function CodeEditorView() {
       setCursorPosition({ line: e.position.lineNumber, col: e.position.column });
     });
   }, []);
-
-  const currentTab = tabs.find((t) => t.path === activeTab);
 
   // ── Breadcrumbs ──
   const breadcrumbs = currentTab ? currentTab.path.split("/") : [];
@@ -912,6 +1034,30 @@ export default function CodeEditorView() {
         >
           <Command className="w-4 h-4" />
         </button>
+        <div className="w-px h-5 bg-slate-700" />
+        <button
+          onClick={() => { if (showSplit) { setShowSplit(false); setSplitTab(""); } else if (activeTab) { setShowSplit(true); setSplitTab(activeTab); } }}
+          className={`p-1.5 rounded ${showSplit ? "bg-blue-500/20 text-blue-400" : "hover:bg-slate-700"}`}
+          title="Delad vy (Ctrl+\)"
+        >
+          <Columns className="w-4 h-4" />
+        </button>
+        {currentTab?.language === "markdown" && (
+          <button
+            onClick={() => setShowMarkdownPreview((v) => !v)}
+            className={`p-1.5 rounded ${showMarkdownPreview ? "bg-blue-500/20 text-blue-400" : "hover:bg-slate-700"}`}
+            title="Markdown-förhandsvisning"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+        )}
+        <button
+          onClick={() => setIsFullscreen((v) => !v)}
+          className="p-1.5 hover:bg-slate-700 rounded"
+          title={isFullscreen ? "Avsluta fullskärm (F11)" : "Fullskärm (F11)"}
+        >
+          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+        </button>
         <div className="flex-1" />
         {autoSave && <span className="text-[10px] text-green-500/60 flex items-center gap-1"><Zap className="w-3 h-3" />auto</span>}
         {currentTab?.modified && (
@@ -980,8 +1126,8 @@ export default function CodeEditorView() {
       {/* Main area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        {showSidebar && (
-          <div className="w-60 shrink-0 bg-[#0d1117] border-r border-slate-700/50 overflow-hidden">
+        {showSidebar && !isFullscreen && (
+          <div className="shrink-0 bg-[#0d1117] border-r border-slate-700/50 overflow-hidden relative" style={{ width: sidebarWidth }}>
             <FileTree
               nodes={tree}
               onSelect={openFile}
@@ -993,6 +1139,10 @@ export default function CodeEditorView() {
               fileFilter={fileFilter}
               setFileFilter={setFileFilter}
             />
+            <div
+              className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors z-10"
+              onMouseDown={(e) => startResize("sidebar", e)}
+            />
           </div>
         )}
 
@@ -1001,17 +1151,22 @@ export default function CodeEditorView() {
           {/* Tabs */}
           {tabs.length > 0 && (
             <div className="flex bg-[#161b22] border-b border-slate-700/50 overflow-x-auto">
-              {tabs.map((tab) => {
+              {tabs.map((tab, idx) => {
                 const tabIcon = getFileIcon(tab.name);
                 const TabIcon = tabIcon.icon;
                 return (
                   <div
                     key={tab.path}
-                    className={`group flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer border-r border-slate-700/30 shrink-0 ${
+                    draggable
+                    onDragStart={(e) => handleTabDragStart(e, idx)}
+                    onDragOver={(e) => handleTabDragOver(e, idx)}
+                    onDrop={(e) => handleTabDrop(e, idx)}
+                    onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer border-r border-slate-700/30 shrink-0 transition-all ${
                       tab.path === activeTab
                         ? "bg-[#0d1117] text-slate-200 border-b-2 border-b-blue-500"
                         : "text-slate-400 hover:bg-slate-800"
-                    }`}
+                    } ${dragOverIdx === idx ? "border-l-2 border-l-blue-400" : ""} ${dragIdx === idx ? "opacity-50" : ""}`}
                     onClick={() => setActiveTab(tab.path)}
                     onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(tab.path); } }}
                     title={tab.path}
@@ -1075,32 +1230,99 @@ export default function CodeEditorView() {
             )}
 
             {!loading && !showDiff && currentTab && (
-              <Editor
-                path={currentTab.path}
-                value={currentTab.content}
-                language={currentTab.language}
-                theme={monacoReady ? editorTheme : "vs-dark"}
-                onChange={handleEditorChange}
-                onMount={handleMonacoMount}
-                options={{
-                  minimap: { enabled: showMinimap },
-                  fontSize,
-                  lineNumbers: "on",
-                  wordWrap,
-                  tabSize: 2,
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                  padding: { top: 8 },
-                  smoothScrolling: true,
-                  cursorBlinking: "smooth",
-                  cursorSmoothCaretAnimation: "on",
-                  bracketPairColorization: { enabled: true },
-                  guides: { bracketPairs: true, indentation: true },
-                  renderLineHighlight: "all",
-                  fontLigatures: true,
-                  suggest: { preview: true, showMethods: true, showFunctions: true },
-                }}
-              />
+              <div className="flex h-full">
+                {/* Primary editor */}
+                <div className={showSplit || (showMarkdownPreview && currentTab.language === "markdown") ? "flex-1 min-w-0" : "w-full"}>
+                  <Editor
+                    path={currentTab.path}
+                    value={currentTab.content}
+                    language={currentTab.language}
+                    theme={monacoReady ? editorTheme : "vs-dark"}
+                    onChange={handleEditorChange}
+                    onMount={handleMonacoMount}
+                    options={{
+                      minimap: { enabled: showMinimap },
+                      fontSize,
+                      lineNumbers: "on",
+                      wordWrap,
+                      tabSize: 2,
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                      padding: { top: 8 },
+                      smoothScrolling: true,
+                      cursorBlinking: "smooth",
+                      cursorSmoothCaretAnimation: "on",
+                      bracketPairColorization: { enabled: true },
+                      guides: { bracketPairs: true, indentation: true },
+                      renderLineHighlight: "all",
+                      fontLigatures: true,
+                      suggest: { preview: true, showMethods: true, showFunctions: true },
+                    }}
+                  />
+                </div>
+
+                {/* Split editor (second pane) */}
+                {showSplit && splitTabData && !(showMarkdownPreview && currentTab.language === "markdown") && (
+                  <>
+                    <div className="w-px bg-slate-700/50 relative">
+                      <div className="absolute inset-y-0 -left-1 w-3 cursor-col-resize z-10" />
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <div className="flex items-center gap-2 px-3 py-1 bg-[#161b22] border-b border-slate-700/50 text-[11px] text-slate-400">
+                        <span>{splitTabData.name}</span>
+                        <select
+                          className="ml-auto bg-transparent text-[10px] text-slate-500 outline-none cursor-pointer"
+                          value={splitTab}
+                          onChange={(e) => setSplitTab(e.target.value)}
+                          title="Välj fil för delad vy"
+                        >
+                          {tabs.map((t) => <option key={t.path} value={t.path}>{t.name}</option>)}
+                        </select>
+                        <button onClick={() => { setShowSplit(false); setSplitTab(""); }} className="hover:bg-slate-700 rounded p-0.5" title="Stäng delad vy">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <Editor
+                        path={`split-${splitTabData.path}`}
+                        value={splitTabData.content}
+                        language={splitTabData.language}
+                        theme={monacoReady ? editorTheme : "vs-dark"}
+                        options={{
+                          readOnly: splitTabData.path === currentTab.path,
+                          minimap: { enabled: false },
+                          fontSize,
+                          lineNumbers: "on",
+                          wordWrap,
+                          tabSize: 2,
+                          scrollBeyondLastLine: false,
+                          automaticLayout: true,
+                          padding: { top: 8 },
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Markdown preview */}
+                {showMarkdownPreview && currentTab.language === "markdown" && (
+                  <>
+                    <div className="w-px bg-slate-700/50" />
+                    <div className="flex-1 min-w-0 overflow-y-auto p-4 bg-[#0d1117]">
+                      <div className="flex items-center gap-2 mb-3 text-[11px] text-slate-400 border-b border-slate-700/30 pb-2">
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Markdown Preview</span>
+                        <button onClick={() => setShowMarkdownPreview(false)} className="ml-auto hover:bg-slate-700 rounded p-0.5">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div
+                        className="prose prose-invert prose-sm max-w-none text-slate-300 [&_h1]:text-slate-100 [&_h2]:text-slate-200 [&_h3]:text-slate-200 [&_code]:bg-slate-800 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-slate-800/50 [&_pre]:border [&_pre]:border-slate-700/50 [&_a]:text-blue-400 [&_blockquote]:border-l-blue-500/50 [&_blockquote]:text-slate-400"
+                        dangerouslySetInnerHTML={{ __html: simpleMarkdown(currentTab.content) }}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
             )}
 
             {!loading && !currentTab && (
@@ -1153,7 +1375,11 @@ export default function CodeEditorView() {
 
           {/* Terminal */}
           {showTerminal && (
-            <div className="h-48 border-t border-slate-700/50 bg-[#0d1117] flex flex-col">
+            <div className="border-t border-slate-700/50 bg-[#0d1117] flex flex-col relative" style={{ height: terminalHeight }}>
+              <div
+                className="absolute top-0 left-0 right-0 h-1 cursor-row-resize hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors z-10"
+                onMouseDown={(e) => startResize("terminal", e)}
+              />
               <div className="flex items-center justify-between px-3 py-1 bg-[#161b22] border-b border-slate-700/50">
                 <span className="text-xs font-semibold text-slate-400">Terminal</span>
                 <button onClick={() => setShowTerminal(false)}>
@@ -1185,13 +1411,17 @@ export default function CodeEditorView() {
 
         {/* AI Panel */}
         {showAiPanel && (
-          <div className="w-80 shrink-0 bg-[#0d1117] border-l border-slate-700/50 flex flex-col">
+          <div className="shrink-0 bg-[#0d1117] border-l border-slate-700/50 flex flex-col relative" style={{ width: aiPanelWidth }}>
+            <div
+              className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-violet-500/50 active:bg-violet-500/70 transition-colors z-10"
+              onMouseDown={(e) => startResize("ai", e)}
+            />
             <div className="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-slate-700/50">
               <div className="flex items-center gap-2">
                 <Bot className="w-4 h-4 text-violet-400" />
                 <span className="text-xs font-semibold text-slate-300">Frankenstein AI</span>
               </div>
-              <button onClick={() => setShowAiPanel(false)}>
+              <button onClick={() => setShowAiPanel(false)} title="Stäng AI-panel">
                 <X className="w-3.5 h-3.5 text-slate-500" />
               </button>
             </div>
