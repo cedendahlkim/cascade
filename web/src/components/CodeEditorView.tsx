@@ -728,7 +728,7 @@ export default function CodeEditorView() {
     }
   }, []);
 
-  useEffect(() => { loadTree(); loadGitStatus(); }, [loadTree, loadGitStatus]);
+  useEffect(() => { loadTree(); }, [loadTree]);
 
   // ── Open file ──
   const openFile = async (node: FileNode) => {
@@ -1266,6 +1266,7 @@ export default function CodeEditorView() {
     } catch { addToast("error", "Kunde inte generera commit-meddelande"); }
   };
 
+  useEffect(() => { loadGitStatus(); }, [loadGitStatus]);
   useEffect(() => { if (showGitPanel) loadGitStatus(); }, [showGitPanel, loadGitStatus]);
 
   // ── AI Autocomplete (ghost text) ──
