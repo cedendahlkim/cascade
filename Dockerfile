@@ -23,12 +23,12 @@ RUN pip3 install --no-cache-dir --break-system-packages rich numpy google-genai 
     pip3 install --no-cache-dir --break-system-packages torch --index-url https://download.pytorch.org/whl/cpu
 
 # Build bridge (needs typescript from devDeps)
-RUN cd bridge && npm run build
+RUN cd bridge && chmod +x node_modules/.bin/* 2>/dev/null; npx tsc
 
 # Build web (needs env vars at build time)
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
-RUN cd web && VITE_SUPABASE_URL=$VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY npm run build
+RUN cd web && chmod +x node_modules/.bin/* 2>/dev/null; VITE_SUPABASE_URL=$VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY npm run build
 
 # Prune devDependencies for smaller image
 RUN cd bridge && npm prune --omit=dev && cd ../web && rm -rf node_modules

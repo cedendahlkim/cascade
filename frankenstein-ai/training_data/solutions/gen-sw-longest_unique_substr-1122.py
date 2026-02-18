@@ -1,4 +1,4 @@
-# Task: gen-sw-longest_unique_substr-1122 | Score: 100% | 2026-02-14T12:59:32.631269
+# Task: gen-sw-longest_unique_substr-1122 | Score: 100% | 2026-02-17T20:33:22.186111
 
 def solve():
     s = input()

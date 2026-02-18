@@ -1,15 +1,15 @@
-import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense, type DragEvent } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, type DragEvent } from "react";
 import Editor, { DiffEditor, type Monaco } from "@monaco-editor/react";
 import {
   FolderOpen, ChevronRight, ChevronDown, Plus, Save,
   X, Search, Bot, Play, Terminal, RefreshCw, Send, FolderPlus,
   Sparkles, Loader2, PanelLeftClose, PanelLeft, Palette, Command,
   ArrowUp, ArrowDown, CornerDownLeft, Clock, Zap, GitBranch,
-  FileJson, FileText, FileCode, FileType, Image, Settings, Database,
+  FileJson, FileText, FileType, Image, Settings, Database,
   Hash, Braces, Coffee, Gem, FileCode2, Globe, Cpu, Package,
-  Columns, Undo2, Eye, GripVertical, Copy, Check, Maximize2, Minimize2, CheckCircle, AlertCircle, Info,
-  Wand2, MessageSquare, FileEdit, SquareSlash, StopCircle,
-  Trash2, Upload, CircleDot, Eraser,
+  Columns, Undo2, Eye, Copy, Check, Maximize2, Minimize2, CheckCircle, AlertCircle, Info,
+  Wand2, FileEdit, StopCircle,
+  CircleDot, Eraser,
   type LucideIcon,
 } from "lucide-react";
 import { BRIDGE_URL } from "../config";
@@ -223,6 +223,7 @@ function FileTree({
   onDelete,
   fileFilter,
   setFileFilter,
+  onContextMenu,
 }: {
   nodes: FileNode[];
   onSelect: (node: FileNode) => void;
@@ -233,6 +234,7 @@ function FileTree({
   onDelete: (path: string) => void;
   fileFilter: string;
   setFileFilter: (v: string) => void;
+  onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
 }) {
   const filteredNodes = useMemo(() => {
     if (!fileFilter.trim()) return nodes;
@@ -285,6 +287,7 @@ function FileTree({
             onSelect={onSelect}
             selectedPath={selectedPath}
             onDelete={onDelete}
+            onContextMenu={onContextMenu}
           />
         ))}
         {filteredNodes.length === 0 && (
@@ -301,12 +304,14 @@ function TreeNode({
   onSelect,
   selectedPath,
   onDelete,
+  onContextMenu,
 }: {
   node: FileNode;
   depth: number;
   onSelect: (node: FileNode) => void;
   selectedPath: string;
   onDelete: (path: string) => void;
+  onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
 }) {
   const [expanded, setExpanded] = useState(depth < 1);
   const isDir = node.type === "directory";
@@ -322,13 +327,6 @@ function TreeNode({
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (confirm(`Ta bort ${node.name}?`)) {
-      onDelete(node.path);
-    }
-  };
-
   return (
     <>
       <div
@@ -337,7 +335,7 @@ function TreeNode({
         }`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={handleClick}
-        onContextMenu={handleContextMenu}
+        onContextMenu={(e) => onContextMenu(e, node)}
         title={node.path + (node.size ? ` (${formatFileSize(node.size)})` : "")}
       >
         {isDir ? (
@@ -351,13 +349,9 @@ function TreeNode({
           <FileIconComp className={`w-3.5 h-3.5 shrink-0 ${fileIcon?.color || "text-slate-400"}`} />
         )}
         <span className="truncate text-xs">{node.name}</span>
-        <button
-          onClick={(e) => { e.stopPropagation(); if (confirm(`Ta bort ${node.name}?`)) onDelete(node.path); }}
-          className="ml-auto opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500/20 rounded transition-opacity"
-          title="Ta bort"
-        >
-          <X className="w-3 h-3 text-red-400" />
-        </button>
+        {isDir && node.children && (
+          <span className="ml-auto text-[9px] text-slate-600">{node.children.length}</span>
+        )}
       </div>
       {isDir && expanded && node.children?.map((child) => (
         <TreeNode
@@ -367,6 +361,7 @@ function TreeNode({
           onSelect={onSelect}
           selectedPath={selectedPath}
           onDelete={onDelete}
+          onContextMenu={onContextMenu}
         />
       ))}
     </>
@@ -638,6 +633,10 @@ export default function CodeEditorView() {
   const [showDiff, setShowDiff] = useState(false);
   const [diffContent, setDiffContent] = useState<{ original: string; modified: string } | null>(null);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showFilePicker, setShowFilePicker] = useState(false);
+  const [filePickerQuery, setFilePickerQuery] = useState("");
+  const filePickerInputRef = useRef<HTMLInputElement>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null);
   const [showGitPanel, setShowGitPanel] = useState(false);
   const [gitStatus, setGitStatus] = useState<{ branch: string; files: any[]; commits: any[]; clean: boolean } | null>(null);
   const [gitLoading, setGitLoading] = useState(false);
@@ -692,12 +691,7 @@ export default function CodeEditorView() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
-  // Terminal
-  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
-  const [terminalInput, setTerminalInput] = useState("");
-  const [terminalHistory, setTerminalHistory] = useState<string[]>([]);
-  const [historyIdx, setHistoryIdx] = useState(-1);
-  const terminalRef = useRef<HTMLDivElement>(null);
+  // Terminal (handled by XTerminal component)
 
   // AI
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
@@ -729,6 +723,54 @@ export default function CodeEditorView() {
   }, []);
 
   useEffect(() => { loadTree(); }, [loadTree]);
+
+  // ── Flatten tree for fuzzy file picker ──
+  const flattenTree = useCallback((nodes: FileNode[]): FileNode[] => {
+    const result: FileNode[] = [];
+    const walk = (items: FileNode[]) => {
+      for (const item of items) {
+        if (item.type === "file") result.push(item);
+        if (item.children) walk(item.children);
+      }
+    };
+    walk(nodes);
+    return result;
+  }, []);
+
+  const allFiles = useMemo(() => flattenTree(tree), [tree, flattenTree]);
+
+  const filePickerResults = useMemo(() => {
+    if (!filePickerQuery.trim()) {
+      // Show recent files first, then all files
+      const recent = recentFiles.map((p) => allFiles.find((f) => f.path === p)).filter(Boolean) as FileNode[];
+      const rest = allFiles.filter((f) => !recentFiles.includes(f.path));
+      return [...recent, ...rest].slice(0, 20);
+    }
+    const q = filePickerQuery.toLowerCase();
+    const scored = allFiles.map((f) => {
+      const name = f.name.toLowerCase();
+      const path = f.path.toLowerCase();
+      let score = 0;
+      // Exact name match
+      if (name === q) score += 100;
+      // Name starts with query
+      else if (name.startsWith(q)) score += 80;
+      // Name contains query
+      else if (name.includes(q)) score += 60;
+      // Path contains query
+      else if (path.includes(q)) score += 40;
+      // Fuzzy: all chars in order
+      else {
+        let qi = 0;
+        for (let i = 0; i < path.length && qi < q.length; i++) {
+          if (path[i] === q[qi]) qi++;
+        }
+        if (qi === q.length) score += 20;
+      }
+      return { file: f, score };
+    }).filter((s) => s.score > 0).sort((a, b) => b.score - a.score);
+    return scored.slice(0, 20).map((s) => s.file);
+  }, [filePickerQuery, allFiles, recentFiles]);
 
   // ── Open file ──
   const openFile = async (node: FileNode) => {
@@ -920,52 +962,6 @@ export default function CodeEditorView() {
     }
   };
 
-  // ── Terminal (with history) ──
-  const runCommand = async () => {
-    if (!terminalInput.trim()) return;
-    const cmd = terminalInput.trim();
-    setTerminalInput("");
-    setTerminalHistory((prev) => [cmd, ...prev.filter((h) => h !== cmd)].slice(0, 50));
-    setHistoryIdx(-1);
-    setTerminalOutput((prev) => [...prev, `$ ${cmd}`]);
-
-    try {
-      const data = await api("/ai/terminal", {
-        method: "POST",
-        body: JSON.stringify({ command: cmd }),
-      });
-      if (data.stdout) setTerminalOutput((prev) => [...prev, data.stdout]);
-      if (data.stderr) setTerminalOutput((prev) => [...prev, `[stderr] ${data.stderr}`]);
-      setTerminalOutput((prev) => [...prev, `[exit: ${data.exitCode}]`]);
-    } catch (err) {
-      setTerminalOutput((prev) => [...prev, `[error] ${err}`]);
-    }
-
-    setTimeout(() => {
-      terminalRef.current?.scrollTo(0, terminalRef.current.scrollHeight);
-    }, 50);
-  };
-
-  const handleTerminalKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") { runCommand(); return; }
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const next = Math.min(historyIdx + 1, terminalHistory.length - 1);
-      setHistoryIdx(next);
-      if (terminalHistory[next]) setTerminalInput(terminalHistory[next]);
-    }
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      const next = historyIdx - 1;
-      if (next < 0) { setHistoryIdx(-1); setTerminalInput(""); }
-      else { setHistoryIdx(next); setTerminalInput(terminalHistory[next] || ""); }
-    }
-    if (e.key === "l" && e.ctrlKey) {
-      e.preventDefault();
-      setTerminalOutput([]);
-    }
-  };
-
   // ── Track recent files ──
   useEffect(() => {
     if (activeTab) {
@@ -1054,12 +1050,8 @@ export default function CodeEditorView() {
                   }
                 }
                 if (fa.action === "run") {
-                  setTerminalOutput((prev) => [
-                    ...prev, `$ ${fa.command}`,
-                    ...(fa.stdout ? [fa.stdout] : []),
-                    ...(fa.stderr ? [`[stderr] ${fa.stderr}`] : []),
-                    `[exit: ${fa.exitCode}]`,
-                  ]);
+                  setShowTerminal(true);
+                  addToast(fa.exitCode === 0 ? "success" : "error", `Körde: ${fa.command} [exit: ${fa.exitCode}]`);
                 }
               }
               await loadTree();
@@ -1351,7 +1343,7 @@ export default function CodeEditorView() {
     { id: "split", label: `${showSplit ? "Stäng" : "Öppna"} delad vy`, shortcut: "Ctrl+\\", icon: Columns, action: () => { if (showSplit) { setShowSplit(false); setSplitTab(""); } else if (currentTab) { setShowSplit(true); setSplitTab(activeTab); } }, category: "Vy" },
     { id: "fullscreen", label: `${isFullscreen ? "Avsluta" : "Aktivera"} fullskärm`, shortcut: "F11", icon: isFullscreen ? Minimize2 : Maximize2, action: () => setIsFullscreen((v) => !v), category: "Vy" },
     { id: "mdpreview", label: `${showMarkdownPreview ? "Dölj" : "Visa"} Markdown-förhandsvisning`, icon: Eye, action: () => setShowMarkdownPreview((v) => !v), category: "Vy" },
-    { id: "clearterminal", label: "Rensa terminal", icon: Terminal, action: () => setTerminalOutput([]), category: "Terminal" },
+    { id: "clearterminal", label: "Rensa terminal", icon: Terminal, action: () => addToast("info", "Använd Ctrl+L i terminalen för att rensa"), category: "Terminal" },
     { id: "refresh", label: "Uppdatera filträd", icon: RefreshCw, action: loadTree, category: "Navigering" },
     { id: "git", label: "Visa/dölj Git-panel", shortcut: "Ctrl+G", icon: GitBranch, action: () => setShowGitPanel((v) => !v), category: "Git" },
     { id: "inlineai", label: "Inline AI Edit", shortcut: "Ctrl+K", icon: Wand2, action: triggerInlineEdit, category: "AI" },
@@ -1366,7 +1358,9 @@ export default function CodeEditorView() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "p") {
         e.preventDefault();
-        setShowSearch((v) => !v);
+        setShowFilePicker((v) => !v);
+        setFilePickerQuery("");
+        setTimeout(() => filePickerInputRef.current?.focus(), 50);
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "`") {
         e.preventDefault();
@@ -1417,6 +1411,14 @@ export default function CodeEditorView() {
     return () => window.removeEventListener("keydown", handler);
   }, [activeTab, tabs, showSplit, closedTabs, inlineEdit.visible, triggerInlineEdit]);
 
+  // ── Dismiss context menu on click outside ──
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = () => setContextMenu(null);
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
+  }, [contextMenu]);
+
   // ── Monaco mount handler ──
   const handleMonacoMount = useCallback((_editor: any, monaco: Monaco) => {
     editorRef.current = _editor;
@@ -1439,6 +1441,104 @@ export default function CodeEditorView() {
 
       {/* Command Palette */}
       {showCommandPalette && <CommandPalette commands={commands} onClose={() => setShowCommandPalette(false)} />}
+
+      {/* Fuzzy File Picker (Ctrl+P) */}
+      {showFilePicker && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/40" onClick={() => setShowFilePicker(false)}>
+          <div className="w-[520px] max-w-[90vw] bg-[#1c2128] border border-slate-600/50 rounded-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50">
+              <Search className="w-4 h-4 text-slate-500" />
+              <input
+                ref={filePickerInputRef}
+                type="text"
+                value={filePickerQuery}
+                onChange={(e) => setFilePickerQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setShowFilePicker(false);
+                  if (e.key === "Enter" && filePickerResults.length > 0) {
+                    openFile(filePickerResults[0]);
+                    setShowFilePicker(false);
+                  }
+                }}
+                placeholder="Sök fil efter namn..."
+                className="flex-1 bg-transparent text-sm outline-none text-slate-200 placeholder:text-slate-500"
+                autoFocus
+              />
+              <kbd className="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">Esc</kbd>
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto">
+              {filePickerResults.length === 0 && (
+                <div className="px-4 py-6 text-center text-xs text-slate-500">Inga filer hittades</div>
+              )}
+              {filePickerResults.map((f, i) => {
+                const fi = getFileIcon(f.name);
+                const FI = fi.icon;
+                const dir = f.path.includes("/") ? f.path.substring(0, f.path.lastIndexOf("/")) : "";
+                const isOpen = tabs.some((t) => t.path === f.path);
+                const isRecent = recentFiles.includes(f.path);
+                return (
+                  <div
+                    key={f.path}
+                    className={`flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-slate-700/50 transition-colors ${i === 0 ? "bg-slate-700/30" : ""}`}
+                    onClick={() => { openFile(f); setShowFilePicker(false); }}
+                  >
+                    <FI className={`w-4 h-4 shrink-0 ${fi.color}`} />
+                    <span className="text-sm text-slate-200">{f.name}</span>
+                    {dir && <span className="text-xs text-slate-500 truncate">{dir}</span>}
+                    <div className="ml-auto flex items-center gap-1">
+                      {isRecent && <Clock className="w-3 h-3 text-slate-600" />}
+                      {isOpen && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-[#1c2128] border border-slate-600/50 rounded-lg shadow-2xl py-1 min-w-[160px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={() => setContextMenu(null)}
+        >
+          {contextMenu.node.type === "file" && (
+            <>
+              <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50" onClick={() => openFile(contextMenu.node)}>
+                Öppna fil
+              </button>
+              <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50" onClick={() => {
+                navigator.clipboard.writeText(contextMenu.node.path);
+                addToast("info", "Sökväg kopierad");
+              }}>
+                Kopiera sökväg
+              </button>
+            </>
+          )}
+          {contextMenu.node.type === "directory" && (
+            <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50" onClick={() => {
+              navigator.clipboard.writeText(contextMenu.node.path);
+              addToast("info", "Sökväg kopierad");
+            }}>
+              Kopiera sökväg
+            </button>
+          )}
+          <div className="border-t border-slate-700/50 my-1" />
+          <button className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-slate-700/50" onClick={async () => {
+            if (!confirm(`Radera ${contextMenu.node.name}?`)) return;
+            try {
+              await api(`/file?path=${encodeURIComponent(contextMenu.node.path)}`, { method: "DELETE" });
+              await loadTree();
+              if (tabs.find((t) => t.path === contextMenu.node.path)) closeTab(contextMenu.node.path);
+              addToast("success", `Raderade ${contextMenu.node.name}`);
+            } catch (err) { addToast("error", `Kunde inte radera: ${err}`); }
+          }}>
+            Radera
+          </button>
+        </div>
+      )}
 
       {/* Theme Picker */}
       {showThemePicker && (
@@ -1629,6 +1729,10 @@ export default function CodeEditorView() {
               onDelete={handleDelete}
               fileFilter={fileFilter}
               setFileFilter={setFileFilter}
+              onContextMenu={(e, node) => {
+                e.preventDefault();
+                setContextMenu({ x: e.clientX, y: e.clientY, node });
+              }}
             />
             <div
               className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors z-10"
@@ -2257,15 +2361,24 @@ export default function CodeEditorView() {
 
             {/* AI input */}
             <div className="shrink-0 border-t border-slate-700/50 p-2">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
+              <div className="flex items-end gap-2">
+                <textarea
                   value={aiInput}
-                  onChange={(e) => setAiInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendAiMessage()}
-                  placeholder="Beskriv vad du vill koda..."
-                  className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 text-xs outline-none text-slate-200 placeholder:text-slate-500 focus:border-violet-500/50"
+                  onChange={(e) => {
+                    setAiInput(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendAiMessage();
+                    }
+                  }}
+                  placeholder="Beskriv vad du vill koda... (Shift+Enter för ny rad)"
+                  className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 text-xs outline-none text-slate-200 placeholder:text-slate-500 focus:border-violet-500/50 resize-none overflow-hidden"
                   disabled={aiLoading}
+                  rows={1}
                 />
                 {aiStreaming ? (
                   <button

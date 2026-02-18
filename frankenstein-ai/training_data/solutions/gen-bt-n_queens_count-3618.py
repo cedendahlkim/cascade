@@ -1,4 +1,4 @@
-# Task: gen-bt-n_queens_count-3618 | Score: 100% | 2026-02-13T20:32:41.694681
+# Task: gen-bt-n_queens_count-3618 | Score: 100% | 2026-02-17T20:10:46.312160
 
 n = int(input())
 count = 0

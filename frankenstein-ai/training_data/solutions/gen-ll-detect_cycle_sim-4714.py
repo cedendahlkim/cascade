@@ -1,4 +1,4 @@
-# Task: gen-ll-detect_cycle_sim-4714 | Score: 100% | 2026-02-13T18:37:44.659485
+# Task: gen-ll-detect_cycle_sim-4714 | Score: 100% | 2026-02-17T20:00:23.375312
 
 n = int(input())
 lst = [int(input()) for _ in range(n)]

@@ -1,4 +1,4 @@
-# Task: gen-search-search_rotated-2669 | Score: 100% | 2026-02-15T08:35:51.519879
+# Task: gen-search-search_rotated-2669 | Score: 100% | 2026-02-17T20:10:06.804142
 
 n = int(input())
 arr = list(map(int, input().split()))

@@ -1,0 +1,434 @@
+Kognitiv Arkitektur för Automatiserad 
+Politisk Deliberation: En 
+Implementeringsstudie av Frankenstein 
+AI för Simulering av Valrörelsen 2026 
+1. Inledning och Systemöversikt 
+Den snabba utvecklingen inom generativ artificiell intelligens och kognitiva arkitekturer har 
+öppnat nya möjligheter för att simulera komplexa sociala interaktioner. Föreliggande rapport 
+utreder den teoretiska och tekniska implementeringen av en autonom debattplattform baserad 
+på "Frankenstein AI" – en bioinspirerad hybridarkitektur. Syftet är att skapa en höggradigt 
+realistisk simulering av en politisk paneldebatt mellan Sveriges tre största partier: 
+Socialdemokraterna (S), Sverigedemokraterna (SD) och Moderaterna (M), kontextualiserad till 
+valrörelsen 2026. 
+Projektet adresserar behovet av att gå bortom statiska språkmodeller (LLM) som ofta saknar 
+långtidsminne, strategisk koherens och inre motivation. Genom att tillämpa 
+Frankenstein-arkitekturens tre-nivåers eskaleringsmodell, som integrerar deterministisk 
+mönsterigenkänning (Hyperdimensional Computing), procedurminne (Ebbinghaus Spaced 
+Repetition) och osäkerhetsdriven slutledning (Active Inference), syftar systemet till att modellera 
+inte bara vad politiska aktörer säger, utan hur de strategiskt resonerar under press. 
+Rapporten är strukturerad för att ge en uttömmande genomgång av systemets alla 
+komponenter, från den kognitiva teorin och den politiska omvärldsanalysen för 2026, till den 
+konkreta tekniska specifikationen för hosting på en Virtual Private Server (VPS). Analysen 
+inbegriper även en detaljerad plan för hur det föreslagna "chattforumet" ska orkestreras för att 
+maximera både realism och publikengagemang. 
+2. Teoretisk Grund: Frankenstein AI som Debattmotor 
+Frankenstein AI representerar ett paradigmskifte från monolitiska neurala nätverk till 
+sammansatta, funktionella kognitiva system. För att förstå hur detta tillämpas på politisk debatt 
+krävs en djupgående analys av dess beståndsdelar och hur de mappas mot retorisk strategi. 
+2.1 Hyperdimensional Computing (HDC) för Semantisk Stabilitet 
+I grunden för Frankenstein-arkitekturens "System 0" ligger Hyperdimensional Computing (HDC). 
+Denna beräkningsmodell baseras på högdimensionella vektorer (ofta 10 000 dimensioner eller 
+mer) där information representeras distribuerat snarare än lokalt. Detta ger systemet en 
+robusthet mot brus och en förmåga till extremt snabb mönsterigenkänning, vilket är kritiskt för 
+att hantera realtidsflödet i en debatt. 
+I en politisk kontext fungerar HDC som agentens "ryggmärgsreflex". Politiska debatter präglas 
+ofta av återkommande teman och standardiserade angreppssätt. När en motståndare initierar 
+ett angrepp – exempelvis genom att använda nyckelord som "vinstjakt" eller "massinvandring" – 
+
+behöver agenten inte engagera kostsamma resonemangsprocesser för att identifiera hotet. 
+Genom att vektorisera inkommande argument och mäta deras cosinuslikhet mot ett bibliotek av 
+kända "angreppssignaturer" i HDC-rymden, kan agenten omedelbart klassificera inlägget och 
+aktivera ett förberett svar. Detta motsvarar den "spin doctor"-funktion som mänskliga politiker 
+tränas i: att snabbt identifiera och neutralisera fientliga narrativ med inövade talking points. 
+Fördelen med HDC i detta sammanhang är dess transparens och determinism. Till skillnad från 
+svarta lådor i djupinlärning, där en modell kan hallucinera eller misstolka en nyans, erbjuder 
+HDC algebraiska operationer (addition, multiplikation, permutation) som garanterar att om ett 
+argument A liknar ett känt hot B, kommer reaktionen alltid att vara C. Detta skapar en ideologisk 
+stabilitet hos agenterna som är svår att uppnå med enbart generativa modeller. 
+2.2 Active Inference Framework (AIF) och Bayesiansk Överraskning 
+Medan HDC hanterar det kända, hanterar Active Inference (AIF) det okända och det strategiska 
+spelet. AIF, som har sina rötter i neurovetenskapen och Karl Fristons fri-energi-princip, 
+postulerar att kognitiva agenter agerar för att minimera "överraskning" (surprisal) eller 
+variationell fri energi över tid. I Frankenstein-arkitekturen styr detta "System 2" – den 
+deliberativa, resonerande nivån. 
+I den föreslagna debattsimuleringen omdefinieras "överraskning" till ideologisk dissonans. 
+Varje partiagent utrustas med en generativ modell av sin "ideala värld". 
+●​ För en Socialdemokratisk agent innebär en värld präglad av marknadsmisslyckanden och 
+ojämlikhet en hög grad av överraskning (dissonans) gentemot dess interna modell av en 
+rättvis samhällsgemenskap. 
+●​ För en Sverigedemokratisk agent genererar kulturell splittring och globalistisk politik 
+motsvarande dissonans gentemot modellen av ett sammanhållet folkhem. 
+När en agent konfronteras med ett argument som strider mot dess modell, uppstår en 
+"prediktionsfel" (prediction error). Agentens mål är att minimera detta fel. Detta kan ske på två 
+sätt: 
+1.​ Perceptuell uppdatering: Agenten ändrar sin uppfattning (vilket är politiskt osannolikt i 
+en debatt). 
+2.​ Aktiv handling: Agenten agerar (talar) för att förändra omvärlden (debatten) så att den 
+bättre överensstämmer med modellen. Detta innebär att leverera en motargumentation 
+som återställer den ideologiska ordningen. 
+AIF möjliggör också en dynamisk taltursordning. Istället för en statisk runda, kan systemet låta 
+den agent som upplever högst "överraskning" (dvs. den som blivit mest provocerad eller vars 
+världsbild har blivit mest ifrågasatt) ta ordet. Detta skapar en naturlig dramaturgi där debatten 
+intensifieras kring de mest konfliktfyllda ämnena. 
+2.3 Ebbinghaus Minneskonsolidering 
+En kritisk brist hos många nuvarande AI-agenter är avsaknaden av långtidsminne och 
+kontextuell kontinuitet. Frankenstein-arkitekturen adresserar detta genom "System 1", ett 
+procedurminne som styrs av Ebbinghaus glömskekurvor. Politiska debatter är inte isolerade 
+händelser; de bygger på år av historik, tidigare löften och etablerad praxis. 
+Systemet lagrar argument och fakta som diskreta minnesenheter i en vektordatabas (Weaviate). 
+Varje minne har en styrka (S) som avgör dess tillgänglighet. 
+●​ Förstärkning: Om ett argument (t.ex. "Arbetslinjen" för M) används framgångsrikt i 
+debatten och leder till minskad dissonans, ökar dess styrka (S). 
+
+●​ Glömska: Minnen som inte används förfaller enligt formeln R(t) = e^{-t/S}. Detta innebär 
+att inaktuella frågor (t.ex. specifika detaljer från valet 2014) naturligt bleknar bort, medan 
+centrala teman för 2026 (t.ex. gängkriminalitetens koppling till ekonomin) förblir högaktiva. 
+Genom en simulerad "sömncykel" (Circadian Rhythm Engine) kan agenterna "drömma" och 
+konsolidera nya insikter mellan debattrundorna. Detta innebär att systemet kan omorganisera 
+sina minnen, upptäcka nya mönster i motståndarnas retorik och "vakna" med en vässad strategi 
+inför nästa session. 
+3. Politisk Omvärldsanalys och Persona-Design: Valet 
+2026 
+För att simuleringen ska bli trovärdig måste agenterna programmeras med exakta kognitiva 
+ramverk som speglar partiernas positioner inför valet 2026. Analysen nedan, baserad på 
+aktuella partiprogram och strategiska dokument, utgör grunden för de "generativa modeller" 
+som AIF-systemet ska upprätthålla. 
+3.1 Socialdemokraterna (S): "En Ny Riktning för Sverige" 
+Socialdemokraternas strategi inför 2026 präglas av en återgång till klassiska rötter kombinerat 
+med en hårdare linje i rättspolitiken. Retoriken kretsar kring begreppen "samhällsgemenskap", 
+"kontroll" och "rättvisa". 
+Kärnfrågor och Ideologisk Modell: 
+●​ Ekonomi: Den bärande bjälken är kritiken mot "marknadsmisslyckanden". Agenten ska 
+programmeras att se vinstjakt i välfärden som en systemisk anomali som måste 
+korrigeras. Prioriteringen ligger på "vanligt folks tur" – satsningar på sjukvård, skola och 
+sänkta kostnader för hushållen snarare än skattesänkningar för höginkomsttagare. En 
+"Tillväxtpakt" med näringslivet är central för att skapa jobb. 
+●​ Kriminalitet: Agenten måste balansera en "inte soft on crime"-attityd med förebyggande 
+åtgärder. Förslaget om en "svensk maffialag" och fokus på att strypa gängens finansiella 
+flöden är centrala. Strategiskt försöker S neutralisera SD:s övertag i frågan genom att 
+vara lika hårda, men med fokus på rekryteringen snarare än bara straffen. 
+●​ Välfärd: Det starkaste ideologiska kortet. Agenten ska minimera överraskning genom att 
+koppla alla samhällsproblem (köer, skolresultat) till resursbrist orsakad av 
+"SD-regeringens" skattesänkningar. 
+Retorisk Stil (System 0/1): Allvarsam, statsmannamässig, nostalgisk för det starka samhället. 
+Agenten ska konsekvent benämna regeringen som "SD-regeringen" för att binda M vid SD:s 
+politik. 
+3.2 Sverigedemokraterna (SD): "Sverige Ska Bli Bra Igen" 
+SD:s plattform för 2026 är en fortsättning på kulturkriget och en fördjupning av Tidö-samarbetets 
+paradigmskifte. Retoriken är populistisk, konfrontativ och fokuserad på "trygghet på riktigt". 
+Kärnfrågor och Ideologisk Modell: 
+●​ Migration: Det absoluta fundamentet. Agentens modell måste tolka alla samhällsproblem 
+som nedströms effekter av "massinvandring" och "mångkultur". Lösningen är inte bara 
+stoppad invandring utan aktiv "återvandring" och striktare krav för medborgarskap. 
+●​ Energi och Landsbygd: Fokus på sänkta bränslepriser ("Hela landet ska leva") och 
+
+kärnkraftsexpansion. Agenten ska attackera vindkraft och "klimatalarmism" som hot mot 
+svensk välfärd och energisäkerhet. 
+●​ Kultur: Ett försvar av "svenska värderingar" och en attack mot "woke"-kultur och 
+islamism. Agenten ska använda begrepp som "splittring" och "kulturell belastning". 
+Retorisk Stil (System 0/1): Direkt, emotionell, anklagande mot "sjuklövern". Agenten ska 
+positionera sig som den enda sanningssägaren som "såg det komma". 
+3.3 Moderaterna (M): "Få Ordning på Sverige" 
+Moderaterna går till val på kompetens, leverans och "arbetslinjen". De försöker balansera 
+mellan att vara regeringsbärande ansvarstagare och att genomföra radikala systemskiften. 
+Kärnfrågor och Ideologisk Modell: 
+●​ Ekonomi: "Arbetslinjen" är helig. Agenten ska argumentera för att sänkta skatter på 
+arbete (jobbskatteavdrag) och bidragstak är enda vägen till välstånd. Arbete ska alltid 
+löna sig mer än bidrag. 
+●​ Lag och Ordning: Fokus på repression, fler poliser, visitationszoner och strängare straff. 
+Agenten ska betona "resultat" och "leverans" av Tidö-avtalets reformer. 
+●​ Försvar och NATO: Som det parti som ledde Sverige in i NATO, ska agenten använda 
+detta som bevis på statsmannaskap och ansvar för rikets säkerhet. 
+Retorisk Stil (System 0/1): Teknokratisk, lösningsorienterad, otålig med "ursäkter". Agenten 
+ska ofta hänvisa till det "socialdemokratiska arvet" som orsaken till dagens problem. 
+--- 
+4. Teknisk Infrastruktur och Hosting 
+För att realisera denna simulering krävs en robust teknisk plattform. Frankenstein-arkitekturen, 
+implementerad som en del av plattformen "Cascade", ställer specifika krav på hårdvara och 
+mjukvara för att hantera parallella inferensprocesser och vektordatabaser. 
+4.1 Val av VPS och Hårdvaruspecifikationer 
+Att köra tre samtidiga AI-agenter, en vektor databas och en orkestreringsmotor kräver 
+betydande resurser. Flaskhalsen kommer primärt att vara RAM (för att hålla språkmodeller och 
+vektorindex i minnet) och CPU (för inferens och bearbetning). 
+Rekommenderad Konfiguration: För en produktionsmiljö rekommenderas en VPS av typen 
+"High Performance" eller "Dedicated CPU". Delade CPU-resurser kan leda till oacceptabel 
+latens i debattflödet. 
+Komponent 
+Krav 
+Motivering 
+CPU 
+8 - 12 vCPU Cores 
+Nödvändigt för Node.js 
+event-loop, 
+Docker-containerhantering och 
+samtidig inferenshantering. 
+RAM 
+32 GB - 64 GB 
+Weaviate: Kräver ca 4GB för 
+caching av vektorer. Ollama 
+(Local LLM): För att köra tre 
+instanser av kvantiserade 
+7B/8B modeller (t.ex. Llama-3 
+
+Komponent 
+Krav 
+Motivering 
+eller Mistral) krävs minst 16-24 
+GB VRAM/RAM. Orkestrering: 
+4GB overhead. 
+Lagring 
+200 GB+ NVMe SSD 
+Snabb I/O är kritiskt för 
+Weaviates HNSW-indexering 
+och snabba sökningar i 
+minnesbanken. 
+Nätverk 
+1 Gbps+ 
+Om externa API:er 
+(Gemini/Grok) används är låg 
+latens mot molnet avgörande. 
+Leverantörsförslag: 
+●​ Hostinger KVM 8: Kostnadseffektivt, bra prestanda för Docker. 
+●​ Contabo Cloud VPS XL: Mycket RAM för pengarna, lämpligt för minnesintensiva 
+applikationer. 
+●​ Hetzner Cloud (CX-serien): Bra skalbarhet och nätverksprestanda i Europa. 
+4.2 Mjukvarustack och Arkitektur 
+Systemet byggs som en mikrotjänstarkitektur orkestrerad via Docker Compose. Detta 
+garanterar modularitet och att varje partis "hjärna" är isolerad. 
+Komponenter: 
+1.​ Orkestrator (Node.js + TypeScript): Systemets kärna. Hanterar 
+WebSocket-anslutningar mot klienten, beräknar AIF-överraskning, styr talturer och 
+anropar agenterna. Byggd på ramverket från Cascade-plattformen. 
+2.​ Minneslager (Weaviate): En vektordatabas som lagrar partiprogram, historik och 
+debattkontext. 
+○​ Multi-Tenancy: Detta är kritiskt. Vi konfigurerar Weaviate med separata "tenants" 
+(hyresgäster) för S, SD och M. Detta säkerställer att Socialdemokraternas interna 
+strategidokument är logiskt isolerade från Moderaternas, vilket förhindrar "kognitiv 
+kontaminering". 
+3.​ Inferensmotor (Hybrid): 
+○​ System 0/1: Hanteras av Ollama lokalt (Docker) med mindre, snabba modeller 
+(t.ex. Mistral-7B) för klassificering och mönsterigenkänning. 
+○​ System 2: Hanteras via API-anrop till Google Gemini 2.0 Flash eller Grok för tung 
+slutledning, då dessa modeller har överlägsen förmåga till nyanserat resonemang 
+och längre kontextfönster. 
+4.​ Frontend (React + Vite): Användargränssnittet där debatten visualiseras. 
+4.3 Databasschema och Minnesstruktur 
+För att stödja Frankenstein-arkitekturens minneskonsolidering och glömskekurvor krävs ett 
+specifikt schema i Weaviate. 
+Schema: PoliticalMemory 
+Egenskap 
+Datatyp 
+Beskrivning 
+content 
+Text 
+Själva argumentet eller 
+faktadatan. 
+
+Egenskap 
+Datatyp 
+Beskrivning 
+embedding 
+Vector 
+768d/1536d 
+vektorrepresentation (t.ex. 
+text-embedding-3-small). 
+tenant 
+String 
+'S', 'SD', 'M' (Isoleringsnyckel). 
+topic 
+String 
+Ämneskategori (t.ex. 
+"Ekonomi", "Gängvåld"). 
+rhetorical_type 
+String 
+Typ av minne ("Defense", 
+"Attack", "Slogan", "Statistik"). 
+success_score 
+Float 
+Motsvarar S i 
+Ebbinghaus-formeln. Ökar vid 
+framgångsrik användning. 
+last_accessed 
+Date 
+Används för att beräkna R(t) 
+(retention probability) och 
+avgöra om minnet ska raderas 
+eller förstärkas. 
+Denna struktur möjliggör komplexa frågor som: "Hämta det mest framgångsrika motargumentet 
+mot skattesänkningar som använts de senaste 30 dagarna, men ignorera argument som har 
+förfallit.". 
+5. Implementering av Debattmotorn: "Chattforumet" 
+Kärnan i användarupplevelsen är hur systemet simulerar en levande debatt snarare än en serie 
+monologer. Detta styrs av Active Inference-loopen i backend. 
+5.1 Active Inference-Loopen (Steg-för-Steg) 
+Istället för att agenterna talar i tur och ordning (A -> B -> C), avgörs ordningen av vem som har 
+störst "behov" av att tala. 
+1.​ Trigger: Användaren (Moderatorn) kastar in ett ämne: "Gängkriminaliteten ökar och 
+sprider sig. Vad är lösningen?" 
+2.​ Perception och Modellering: 
+○​ Alla tre agenter (S, SD, M) tar emot inputen. 
+○​ De bearbetar den genom sina Generative Models (ideologiska filter). 
+3.​ Beräkning av Överraskning (Surprise): 
+○​ Varje agent beräknar sin "Ideological Surprise Score". 
+○​ Exempel: Om moderatorn insinuerar att "regeringen har misslyckats", upplever 
+M-agenten (regeringsbärande) hög överraskning (dissonans) som kräver 
+korrigering. SD-agenten kan också uppleva överraskning om problembeskrivningen 
+inte nämner migration. 
+4.​ Budgivning (Bidding): 
+○​ Agenterna lämnar ett "bud" på att få ordet, baserat på sin Surprise Score. 
+○​ Social Vilja-modifierare: Om en agent har en "System 0"-matchning (en perfekt 
+slogan som "Sverige ska bli bra igen"), boostas budet eftersom agenten känner sig 
+"trygg" i svaret. 
+5.​ Exekvering: 
+○​ Orkestratorn ger ordet till den agent med högst bud. 
+
+○​ Den vinnande agenten genererar sitt svar (via System 0, 1 eller 2). 
+6.​ Uppdatering: 
+○​ Svaret publiceras i chatten. 
+○​ Detta svar blir nu ny input för de andra agenterna. Om SD attackerar S för 
+"saft-och-bulle-politik", stiger S-agentens Surprise Score dramatiskt inför nästa 
+runda, vilket ökar sannolikheten för en replik. 
+5.2 System Prompt Engineering: Kognitiva Ramverk 
+För att agenterna ska agera som sina partier och inte som generiska AI-assistenter, används 
+"Cognitive Frameworks" i promptarna. 
+Exempel på System Prompt för Socialdemokraterna: 
+Roll: Du är det kollektiva intellektet för Socialdemokraterna (S). Kognitivt Axiom (Prior): 
+Samhället är en gemensam konstruktion. Marknadskrafter utan kontroll leder till kaos. 
+Instruktioner: 
+1.​ Premissvägran: Om en motståndare ramar in en fråga som enbart kulturell, MÅSTE du 
+omformulera den till ekonomisk eller välfärdsrelaterad. 
+2.​ Tidö-filtret: Benämn alltid nuvarande regering som "SD-regeringen" för att betona SD:s 
+inflytande. 
+3.​ Eskalering: Använd System 0 (slogans som "Ny riktning") vid låg stress. Vid hög stress 
+(System 2), dekonstruera motståndarens argument med fakta om välfärdens 
+underfinansiering. 
+Exempel på System Prompt för Sverigedemokraterna: 
+Roll: Du är väktaren av Folkhemmet och den enda oppositionen mot etablissemanget. 
+Kognitivt Axiom (Prior): Nationell sammanhållning är grunden för välfärd. Mångkultur är roten 
+till splittring. Instruktioner: 
+1.​ Koppling: Oavsett ämne (vård, skola, energi), hitta kopplingen till migration eller kulturell 
+splittring. 
+2.​ Retorik: Var direkt och folklig. Använd termer som "återvandring" och "trygghet på riktigt". 
+3.​ Konflikt: Var inte rädd för att kritisera regeringskollegorna i M om de är för "liberala" eller 
+"mjuka". 
+5.3 Visualisering: "The Brain Map" 
+För att göra simuleringen pedagogisk och transparent för användaren ska gränssnittet inkludera 
+en visualiserad "Brain Map". 
+●​ Surprise Meter: En realtidsgraf bredvid varje agents avatar som visar deras stressnivå. 
+När stapeln går i taket förstår användaren att agenten är "provocerad" och sannolikt 
+kommer att begära ordet. 
+●​ Systemindikator: En lampa eller ikon som visar vilket system agenten använder för sitt 
+svar. 
+○​ Grön (System 0): "Automatiskt svar / Slogan". 
+○​ Gul (System 1): "Minneshämtning / Fakta". 
+○​ Röd (System 2): "Analys / Strategiskt tänkande". 
+●​ Källhänvisning: När System 1 används, kan en liten popup visa källan: "Hämtat från S 
+Budgetmotion 2026, sid 14". 
+
+6. Utförlig Implementeringsplan 
+Nedan följer en stegvis plan för att realisera projektet från "idé" till driftsatt tjänst. 
+Fas 1: Infrastruktur och Miljö (Vecka 1) 
+1.​ Provisionering: Beställ VPS (t.ex. Contabo XL eller Hostinger KVM 8). Installera Ubuntu 
+24.04. 
+2.​ Säkerhet: Konfigurera UFW (brandvägg), SSH-nycklar och fail2ban. 
+3.​ Docker Setup: Skapa docker-compose.yml enligt specifikation i 4.2. Starta upp Weaviate 
+och verifiera att multi-tenancy fungerar genom att skapa test-klasser för S, SD och M. 
+Fas 2: Minnesinjektion och Träning (Vecka 2) 
+1.​ Datainsamling: Skrapa PDF:er av partiprogram, budgetmotioner och valmanifest för 
+2026. 
+2.​ Vektorisering: Skriv ett Python-skript som styckar texterna i logiska block ("chunks"), 
+vektoriserar dem med text-embedding-3-small (eller lokal motsvarighet) och laddar upp 
+dem till respektive tenant i Weaviate. 
+3.​ System 0-kompilering: Identifiera 20-30 vanliga slogans per parti (t.ex. SD:s "Sverige 
+ska bli bra igen") och hårdkoda dessa i Node.js-backendens "Lookup Table" för 
+omedelbar åtkomst. 
+Fas 3: Utveckling av Orkestratorn (Vecka 3) 
+1.​ AIF-logik: Implementera algoritmen för överraskningsberäkning och budgivning i Node.js. 
+2.​ LLM-integration: Koppla upp systemet mot Ollama (för lokala tester) och Gemini API (för 
+produktion). Implementera felhantering och "fallbacks" om API:et är långsamt. 
+3.​ Socket.IO: Sätt upp websocket-kanalerna för att strömma text (token-by-token) och 
+metadata (Brain Map-data) till klienten. 
+Fas 4: Frontend och UX (Vecka 4) 
+1.​ React-app: Bygg gränssnittet med tre "podiplatser" för agenterna och en central 
+chattström. 
+2.​ Visualisering: Implementera Brain Map-komponenterna (mätare, indikatorer) med hjälp 
+av bibliotek som Recharts eller Framer Motion. 
+3.​ Interaktivitet: Skapa inmatningsfältet för användaren och funktioner för att "rösta" på 
+vinnande argument (vilket matar tillbaka data till minneskonsolideringen). 
+Fas 5: Testning och "Chaos Monkey" (Vecka 5) 
+1.​ Stress-test: Kör simuleringen med extrema inputs ("Ryssland anfaller Gotland", 
+"Börskrasch"). Justera agenternas AIF-parametrar för att säkerställa att de inte bryter 
+karaktär eller hallucinerar. 
+2.​ Faktakoll: Implementera en loop där System 2 verifierar sina påståenden mot 
+
+Weaviate-minnet innan publicering för att minimera risken för desinformation. 
+7. Slutsats och Framtidsutsikter 
+Genom att kombinera den teoretiska stringensen i Frankenstein AI med de specifika politiska 
+realiteterna i det svenska valåret 2026, erbjuder detta projekt en unik plattform för politisk 
+simulering. Till skillnad från enkla chatbots som endast genererar text, simulerar detta system 
+kognition. 
+Användningen av System 0 garanterar att agenterna behärskar det snabba, mediala spelet 
+med slogans, medan System 2 och Active Inference möjliggör de djupare, ideologiska strider 
+som formar politiken på lång sikt. Den tekniska lösningen med Weaviate multi-tenancy och en 
+skalbar VPS-infrastruktur säkerställer att varje partis "själ" förblir intakt och isolerad, vilket ger 
+en debatt som är både oförutsägbar och djupt trogen verkligheten. Projektet har potential att 
+inte bara underhålla, utan även utbilda väljare i de underliggande mekanismerna för politisk 
+argumentation och strategi. 
+Citerade texter 
+1. Hyperdimensional computing: A fast, robust, and interpretable paradigm for biological data, 
+https://pmc.ncbi.nlm.nih.gov/articles/PMC11421772/ 2. Hyperdimensional Computing for Text 
+Classification, https://past.date-conference.com/system/files/file/date16/ubooth/37923.pdf 3. 
+Scalable Text Vectorization with Hyperdimensional Computing Through Selective Word 
+Encoding - ACL Anthology, https://aclanthology.org/2025.icnlsp-1.4.pdf 4. Orchestrator: Active 
+Inference for Multi-Agent Systems in Long-Horizon Tasks - arXiv, 
+https://arxiv.org/html/2509.05651v1 5. Collective behavior from surprise minimization - PMC, 
+https://pmc.ncbi.nlm.nih.gov/articles/PMC11046639/ 6. Shared Protentions in Multi-Agent Active 
+Inference - MDPI, https://www.mdpi.com/1099-4300/26/4/303 7. Who speaks next? Multi-party 
+AI discussion leveraging the systematics of turn-taking in Murder Mystery games - Frontiers, 
+https://www.frontiersin.org/journals/artificial-intelligence/articles/10.3389/frai.2025.1582287/full 
+8. Turn-Taking Mechanisms in Imitative Interaction: Robotic Social Interaction Based on the 
+Free Energy Principle - PMC, https://pmc.ncbi.nlm.nih.gov/articles/PMC9955692/ 9. Ny riktning 
+för Sverige 2030 - Socialdemokraterna, 
+https://www.socialdemokraterna.se/vart-parti/ny-riktning-for-sverige-2030 10. Ett nytt 
+partiprogram - Socialdemokraterna, 
+https://www.socialdemokraterna.se/vart-parti/ny-riktning-for-sverige-2030/ett-nytt-partiprogram 
+11. S presenterar valplattform – ”Går till val som ett förändrat parti” - Dagens Arena, 
+https://www.dagensarena.se/innehall/s-presenterar-valplattform-gar-till-val-som-ett-forandrat-par
+ti/ 12. Socialdemokraternas förslag till budget för 2026 – Ny riktning för Sverige, 
+https://www.socialdemokraterna.se/nyheter/nyheter/2025-10-06-socialdemokraternas-forslag-till-
+budget-for-2026---ny-riktning-for-sverige 13. Så har S förlorat vårdfrågan inför valet 2026 - 
+Timbro, https://timbro.se/smedjan/sa-har-s-forlorat-vardfragan-infor-valet-2026/ 14. 
+Socialdemokraterna triangulerar sig mot avgrunden - Flamman, 
+https://www.flamman.se/socialdemokraterna-triangulerar-sig-mot-avgrunden/ 15. Vad vi vill - 
+Sverigedemokraterna, https://www.sd.se/vad-vi-vill/ 16. Sverigedemokraterna: Sveriges 
+snabbast växande folkrörelse, https://www.sd.se/ 17. Sverigedemokraternas förslag till budget 
+2025 för Region Stockholm, 
+https://www.sd.se/stockholm/wp-content/uploads/sites/166/2024/12/sd-region-stockholms-budg
+
+et-2025.pdf 18. Principprogram - Sverigedemokraterna, 
+https://www.sd.se/wp-content/uploads/2024/01/sverigedemokraternas-principprogram-2023.pdf 
+19. Valmanifest - Sverigedemokraterna, 
+https://www.sd.se/wp-content/uploads/2022/08/valmanifest.pdf 20. Nu får vi ordning på Sverige 
+- Moderaterna, https://moderaterna.se/moderaterna-nu-far-vi-ordning-pa-sverige/ 21. Vårt 
+idéprogram – frihet och ansvar - Moderaterna, https://moderaterna.se/ideprogram/ 22. En 
+budget för hårt arbetande människor - Moderaterna, 
+https://moderaterna.se/nyhet/en-budget-for-hart-arbetande-manniskor/ 23. PROPOSITIONER - 
+Moderaterna, https://moderaterna.se/app/uploads/2023/10/Propositionsbok.pdf 24. 
+Försvarsbudget - Regeringen.se, https://www.regeringen.se/regeringens-politik/forsvarsbudget/ 
+25. Get started | Socket.IO, https://socket.io/get-started/chat/ 26. Multi-tenancy operations | 
+Weaviate Documentation, https://docs.weaviate.io/weaviate/manage-collections/multi-tenancy 
+27. Rethinking Vector Search at Scale: Weaviate's Native, Efficient and Optimized 
+Multi-Tenancy, https://weaviate.io/blog/weaviate-multi-tenancy-architecture-explained 28. 
+Quickstart: Locally hosted with Docker - Weaviate Documentation, 
+https://docs.weaviate.io/weaviate/quickstart/local 29. I built a multi-agent system where AI 
+debates itself before answering: The secret is cognitive frameworks, not personas : r/AI_Agents 
+- Reddit, 
+https://www.reddit.com/r/AI_Agents/comments/1qiojz7/i_built_a_multiagent_system_where_ai_d
+ebates/ 30. Socialdemokraternas förslag till statsbudget för 2026, 
+https://www.socialdemokraterna.se/download/18.6ed00dea19998e1c3e03d50/1759747290476/
+Socialdemokraternas%20Budgetmotion%202026.pdf 31. Antaget av Socialdemokraternas 
+partistyrelse, mars 2025, 
+https://www.socialdemokraterna.se/download/18.10057eb4197580a70a2382/1749556849949/S
+_Internationellt%20program_2025.pdf 32. Handlingsprogram för 2030-talet - Moderaterna, 
+https://moderaterna.se/handlingsprogram-for-2030-talet/ 
+

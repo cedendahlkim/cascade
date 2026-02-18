@@ -11,11 +11,50 @@ services:
     container_name: gracestack-bridge
     restart: unless-stopped
     env_file: ./bridge/.env
+    environment:
+      WEAVIATE_HOST: weaviate
+      WEAVIATE_PORT: "8080"
+      WEAVIATE_GRPC_PORT: "50051"
+      OLLAMA_EMBED_URL: "http://ollama-embed:11434"
+      OLLAMA_EMBED_URL_INTERNAL: "http://ollama-embed:11434"
     ports:
       - "3031:3031"
     volumes:
       - bridge-data:/app/bridge/data
       - frank-training:/app/frankenstein-ai/training_data
+    depends_on:
+      - weaviate
+      - ollama-embed
+
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.28.4
+    container_name: gracestack-weaviate
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      DEFAULT_VECTORIZER_MODULE: "text2vec-ollama"
+      ENABLE_MODULES: "text2vec-ollama"
+      CLUSTER_HOSTNAME: "node1"
+
+  ollama-embed:
+    image: ollama/ollama:latest
+    container_name: gracestack-ollama-embed
+    restart: unless-stopped
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 
   nginx:
     image: nginx:alpine
@@ -45,6 +84,8 @@ services:
 volumes:
   bridge-data:
   frank-training:
+  weaviate-data:
+  ollama-data:
   certbot-etc:
   certbot-var:
   certbot-webroot:

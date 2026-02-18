@@ -1,32 +1,24 @@
-# Task: gen-graph-shortest_unweighted-8965 | Score: 100% | 2026-02-12T12:22:50.595432
+# Task: gen-graph-shortest_unweighted-8965 | Score: 100% | 2026-02-17T20:10:08.531612
 
 from collections import deque
-
-def solve():
-    n, m = map(int, input().split())
-    adj = [[] for _ in range(n)]
-    for _ in range(m):
-        u, v = map(int, input().split())
-        adj[u].append(v)
-        adj[v].append(u)
-    
-    start, end = map(int, input().split())
-    
-    q = deque([(start, 0)])
-    visited = {start}
-    
+line = input().split()
+n, m = int(line[0]), int(line[1])
+adj = [[] for _ in range(n)]
+for _ in range(m):
+    u, v = map(int, input().split())
+    adj[u].append(v)
+    adj[v].append(u)
+s, t = map(int, input().split())
+if s == t:
+    print(0)
+else:
+    dist = [-1] * n
+    dist[s] = 0
+    q = deque([s])
     while q:
-        node, dist = q.popleft()
-        
-        if node == end:
-            print(dist)
-            return
-        
-        for neighbor in adj[node]:
-            if neighbor not in visited:
-                visited.add(neighbor)
-                q.append((neighbor, dist + 1))
-    
-    print(-1)
-
-solve()
+        curr = q.popleft()
+        for nb in adj[curr]:
+            if dist[nb] == -1:
+                dist[nb] = dist[curr] + 1
+                q.append(nb)
+    print(dist[t])

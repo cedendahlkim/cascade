@@ -1,4 +1,4 @@
-# Task: gen-trie-ops-2218 | Score: 100% | 2026-02-13T21:48:32.862186
+# Task: gen-trie-ops-2218 | Score: 100% | 2026-02-17T20:36:31.251680
 
 n = int(input())
 trie = {}

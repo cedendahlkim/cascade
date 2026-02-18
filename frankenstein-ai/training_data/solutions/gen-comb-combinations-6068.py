@@ -1,4 +1,4 @@
-# Task: gen-comb-combinations-6068 | Score: 100% | 2026-02-13T09:26:09.625161
+# Task: gen-comb-combinations-6068 | Score: 100% | 2026-02-17T20:33:21.330513
 
 from itertools import combinations
 n = int(input())

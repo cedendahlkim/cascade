@@ -1,4 +1,4 @@
-# Task: gen-func-flatten-5520 | Score: 100% | 2026-02-13T21:49:06.024823
+# Task: gen-func-flatten-5520 | Score: 100% | 2026-02-17T19:58:40.419803
 
 import ast
 data = ast.literal_eval(input())

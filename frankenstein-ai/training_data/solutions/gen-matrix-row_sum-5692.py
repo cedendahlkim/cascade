@@ -1,13 +1,7 @@
-# Task: gen-matrix-row_sum-5692 | Score: 100% | 2026-02-12T14:01:54.822220
+# Task: gen-matrix-row_sum-5692 | Score: 100% | 2026-02-17T19:57:41.923953
 
-def solve():
-    rows, cols = map(int, input().split())
-    matrix = []
-    for _ in range(rows):
-        row = list(map(int, input().split()))
-        matrix.append(row)
-    
-    for row in matrix:
-        print(sum(row))
-
-solve()
+line = input().split()
+r, c = int(line[0]), int(line[1])
+for _ in range(r):
+    row = list(map(int, input().split()))
+    print(sum(row))

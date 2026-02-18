@@ -1,4 +1,4 @@
-# Task: gen-graph-topo-7549 | Score: 100% | 2026-02-13T09:43:37.673276
+# Task: gen-graph-topo-7549 | Score: 100% | 2026-02-17T20:02:29.114741
 
 from collections import deque
 line = input().split()

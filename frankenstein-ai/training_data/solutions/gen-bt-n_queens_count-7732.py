@@ -1,25 +1,24 @@
-# Task: gen-bt-n_queens_count-7732 | Score: 100% | 2026-02-11T19:42:58.690586
-
-def solve_n_queens(n):
-    def is_safe(board, row, col):
-        for i in range(row):
-            if board[i] == col or abs(board[i] - col) == row - i:
-                return False
-        return True
-
-    def solve_n_queens_util(board, row):
-        if row == n:
-            return 1
-
-        count = 0
-        for col in range(n):
-            if is_safe(board, row, col):
-                board[row] = col
-                count += solve_n_queens_util(board, row + 1)
-        return count
-
-    board = [0] * n
-    return solve_n_queens_util(board, 0)
+# Task: gen-bt-n_queens_count-7732 | Score: 100% | 2026-02-17T20:09:42.013891
 
 n = int(input())
-print(solve_n_queens(n))
+count = 0
+cols = set()
+diag1 = set()
+diag2 = set()
+def solve(row):
+    global count
+    if row == n:
+        count += 1
+        return
+    for col in range(n):
+        if col in cols or (row-col) in diag1 or (row+col) in diag2:
+            continue
+        cols.add(col)
+        diag1.add(row-col)
+        diag2.add(row+col)
+        solve(row+1)
+        cols.remove(col)
+        diag1.remove(row-col)
+        diag2.remove(row+col)
+solve(0)
+print(count)

@@ -53,7 +53,12 @@
     "refactor_graph:718f74c8": "def solve():\n    n, m = map(int, input().split())\n    adj = [[] for _ in range(n)]\n    for _ in range(m):\n        u, v = map(int, input().split())\n        adj[u].append(v)\n        adj[v].append(u)\n    for i in range(n):\n        print(' '.join(map(str, sorted(adj[i]))))\n\nsolve()",
     "refactor_string_advanced:e7296fb5": "s = input()\nn = int(input())\nprint(''.join(chr((ord(c) - (base := ord('a') if c.islower() else ord('A')) + n) % 26 + base) if c.isalpha() else c for c in s))",
     "refactor_matrix:cf1a5d14": "r, c = map(int, input().split())\nrow_sums = [sum(map(int, input().split())) for _ in range(r)]\nfor row_sum in row_sums:\n    print(row_sum)",
-    "refactor_list:9a24e4aa": "def solve():\n  n = int(input())\n  nums = list(map(int, [input() for _ in range(n)]))\n  unique_sorted = sorted(list(set(nums)))\n  print(unique_sorted[-2] if len(unique_sorted) >= 2 else max(nums))\n\nsolve()"
+    "refactor_list:9a24e4aa": "def solve():\n  n = int(input())\n  nums = list(map(int, [input() for _ in range(n)]))\n  unique_sorted = sorted(list(set(nums)))\n  print(unique_sorted[-2] if len(unique_sorted) >= 2 else max(nums))\n\nsolve()",
+    "state_machine:f73a5ed5": "import sys\n\ndef main():\n    lines = sys.stdin.readlines()\n    \n    request_line = lines[0].strip()\n    parts = request_line.split()\n    method = parts[0]\n    path = parts[1]\n    \n    headers = {}\n    body_start = 1\n    for i in range(1, len(lines)):\n        line = lines[i].strip()\n        if line == \"\":\n            body_start = i + 1\n            break\n        else:\n            if \":\" in line:\n                key, value = line.split(\":\", 1)\n                headers[key.strip()] = value.strip()\n            \n    body = \"\".join(lines[body_start:]).strip()\n    \n    num_headers = len(headers)\n    body_length = len(body)\n    \n    print(f\"method:{method} path:{path} headers:{num_headers} body:{body_length}\")\n\nif __name__ == \"__main__\":\n    main()",
+    "system_design:f2fc7adc": "class LRUCache:\n    def __init__(self, capacity):\n        self.capacity = capacity\n        self.cache = {}\n        self.order = []\n\n    def get(self, key):\n        if key in self.cache:\n            self.order.remove(key)\n            self.order.append(key)\n            return self.cache[key]\n        else:\n            return -1\n\n    def put(self, key, value):\n        if key in self.cache:\n            self.cache[key] = value\n            self.order.remove(key)\n            self.order.append(key)\n        else:\n            if len(self.cache) == self.capacity:\n                oldest = self.order.pop(0)\n                del self.cache[oldest]\n            self.cache[key] = value\n            self.order.append(key)\n\ncapacity = int(input())\nn = int(input())\ncache = LRUCache(capacity)\nresults = []\n\nfor _ in range(n):\n    line = input().split()\n    if line[0] == 'PUT':\n        key = line[1]\n        value = int(line[2])\n        cache.put(key, value)\n    elif line[0] == 'GET':\n        key = line[1]\n        result = cache.get(key)\n        results.append(result)\n\nif not results:\n    print('EMPTY')\nelse:\n    for result in results:\n        print(result)",
+    "math_advanced:c092308c": "def matrix_multiplication():\n    r1, c1 = map(int, input().split())\n    A = []\n    for _ in range(r1):\n        A.append(list(map(int, input().split())))\n    \n    c1_b, c2 = map(int, input().split())\n    B = []\n    for _ in range(c1_b):\n        B.append(list(map(int, input().split())))\n    \n    C = [[0 for _ in range(c2)] for _ in range(r1)]\n    \n    for i in range(r1):\n        for j in range(c2):\n            for k in range(c1):\n                C[i][j] += A[i][k] * B[k][j]\n    \n    for row in C:\n        print(*row)\n\nmatrix_multiplication()",
+    "system_design:73b75dff": "def solve():\n    max_requests, window_size = map(int, input().split())\n    n_events = int(input())\n    \n    user_requests = {}\n    \n    for _ in range(n_events):\n        timestamp, user = input().split()\n        timestamp = int(timestamp)\n        \n        if user not in user_requests:\n            user_requests[user] = []\n        \n        user_requests[user] = [t for t in user_requests[user] if t >= timestamp - window_size + 1]\n        \n        if len(user_requests[user]) < max_requests:\n            print(\"ALLOW\")\n            user_requests[user].append(timestamp)\n        else:\n            print(\"DENY\")\n\nsolve()",
+    "concurrency:3e334700": "def solve():\n    p, r = map(int, input().split())\n    total = list(map(int, input().split()))\n    allocation = []\n    request = []\n    for _ in range(p):\n        line = input().split('|')\n        allocation.append(list(map(int, line[0].split())))\n        request.append(list(map(int, line[1].split())))\n\n    available = [total[i] - sum(allocation[j][i] for j in range(p)) for i in range(r)]\n    \n    finish = [False] * p\n    safe_sequence = []\n    \n    while True:\n        found = False\n        for i in range(p):\n            if not finish[i]:\n                can_finish = True\n                for j in range(r):\n                    if request[i][j] > available[j]:\n                        can_finish = False\n                        break\n                \n                if can_finish:\n                    safe_sequence.append(i)\n                    for j in range(r):\n                        available[j] += allocation[i][j]\n                    finish[i] = True\n                    found = True\n        \n        if not found:\n            break\n    \n    if all(finish):\n        print(\"SAFE\")\n    else:\n        deadlocked = []\n        for i in range(p):\n            if not finish[i]:\n                deadlocked.append(f\"P{i}\")\n        print(\" \".join(deadlocked))\n\nsolve()"
   },
   "promoted_s0": {
     "api_design:3b74a479": "from collections import OrderedDict\n\nclass LRUCache:\n    def __init__(self, capacity):\n        self.capacity = capacity\n        self.cache = OrderedDict()\n\n    def get(self, key):\n        if key not in self.cache:\n            return -1\n        else:\n            self.cache.move_to_end(key)\n            return self.cache[key]\n\n    def put(self, key, value):\n        if key in self.cache:\n            self.cache[key] = value\n            self.cache.move_to_end(key)\n        else:\n            if len(self.cache) == self.capacity:\n                self.cache.popitem(last=False)\n            self.cache[key] = value\n            self.cache.move_to_end(key)\n\nif __name__ == \"__main__\":\n    capacity = int(input())\n    n = int(input())\n    cache = LRUCache(capacity)\n    for _ in range(n):\n        line = input().split()\n        if line[0] == \"PUT\":\n            key = line[1]\n            value = int(line[2])\n            cache.put(key, value)\n        elif line[0] == \"GET\":\n            key = line[1]\n            print(cache.get(key))",
@@ -102,36 +107,36 @@
       "category": "optimization",
       "source_tier": "s1",
       "target_tier": "s0",
-      "successes": 24,
-      "consecutive_successes": 6,
+      "successes": 27,
+      "consecutive_successes": 9,
       "failures": 12,
       "best_code": "def find_first_duplicate():\n    nums = []\n    first_line = input()\n    try:\n        n = int(first_line)\n    except ValueError:\n        print(\"none\")\n        return\n    \n    for _ in range(n):\n        try:\n            num = int(input())\n            nums.append(num)\n        except ValueError:\n            print(\"none\")\n            return\n        except EOFError:\n            print(\"none\")\n            return\n\n    seen = set()\n    for num in nums:\n        if num in seen:\n            print(num)\n            return\n        seen.add(num)\n\n    print(\"none\")\n\nfind_first_duplicate()",
       "first_seen": 1770982431.062356,
-      "last_seen": 1771158588.031576
+      "last_seen": 1771355006.9916208
     },
     "multi_step:f03a1258": {
       "task_signature": "multi_step:f03a1258",
       "category": "multi_step",
       "source_tier": "s1",
       "target_tier": "s0",
-      "successes": 27,
-      "consecutive_successes": 8,
-      "failures": 7,
+      "successes": 30,
+      "consecutive_successes": 3,
+      "failures": 8,
       "best_code": "def main():\n    n = int(input())\n    student_grades = []\n    for _ in range(n):\n        line = input().split()\n        name = line[0]\n        grade1 = int(line[1])\n        grade2 = int(line[2])\n        grade3 = int(line[3])\n        avg = (grade1 + grade2 + grade3) / 3\n        student_grades.append((name, avg))\n\n    student_averages = {}\n    for name, avg in student_grades:\n        if name in student_averages:\n            student_averages[name].append(avg)\n        else:\n            student_averages[name] = [avg]\n\n    final_averages = {}\n    for name, grade_list in student_averages.items():\n        final_averages[name] = sum(grade_list) / len(grade_list)\n    \n    sorted_students = sorted(final_averages.items(), key=lambda item: item[1], reverse=True)\n\n    output = []\n    for name, avg in sorted_students:\n        temp_list = [(n, a) for n, a in student_grades if n == name]\n        for n, a in temp_list:\n            output.append((n, a))\n\n    output.sort(key=lambda x: x[1], reverse=True)\n\n    seen = set()\n    for name, avg in output:\n        if (name, avg) not in seen:\n            print(f\"{name} {avg:.1f}\")\n            seen.add((name, avg))\n\n\nif __name__ == \"__main__\":\n    main()",
       "first_seen": 1770982957.3100939,
-      "last_seen": 1771156792.1472552
+      "last_seen": 1771355007.4116735
     },
     "bugfix:1c3daedd": {
       "task_signature": "bugfix:1c3daedd",
       "category": "bugfix",
       "source_tier": "s1",
       "target_tier": "s0",
-      "successes": 4,
-      "consecutive_successes": 4,
+      "successes": 5,
+      "consecutive_successes": 5,
       "failures": 0,
       "best_code": "n = int(input())\nlst = [int(input()) for _ in range(n)]\n\nmax_so_far = lst[0]\ncurrent_max = lst[0]\n\nfor i in range(1, n):\n    current_max = max(lst[i], current_max + lst[i])\n    max_so_far = max(max_so_far, current_max)\n\nprint(max_so_far)",
       "first_seen": 1770982990.9442225,
-      "last_seen": 1771071930.9037747
+      "last_seen": 1771355008.1840246
     },
     "bugfix:0452ab84": {
       "task_signature": "bugfix:0452ab84",
@@ -1356,6 +1361,186 @@
       "best_code": "",
       "first_seen": 1771142478.3332918,
       "last_seen": 1771142478.3332922
+    },
+    "state_machine:f73a5ed5": {
+      "task_signature": "state_machine:f73a5ed5",
+      "category": "state_machine",
+      "source_tier": "s1",
+      "target_tier": "s0",
+      "successes": 4,
+      "consecutive_successes": 4,
+      "failures": 0,
+      "best_code": "import sys\n\ndef main():\n    lines = sys.stdin.readlines()\n    \n    request_line = lines[0].strip()\n    parts = request_line.split()\n    method = parts[0]\n    path = parts[1]\n    \n    headers = {}\n    body_start = 1\n    for i in range(1, len(lines)):\n        line = lines[i].strip()\n        if line == \"\":\n            body_start = i + 1\n            break\n        else:\n            if \":\" in line:\n                key, value = line.split(\":\", 1)\n                headers[key.strip()] = value.strip()\n            \n    body = \"\".join(lines[body_start:]).strip()\n    \n    num_headers = len(headers)\n    body_length = len(body)\n    \n    print(f\"method:{method} path:{path} headers:{num_headers} body:{body_length}\")\n\nif __name__ == \"__main__\":\n    main()",
+      "first_seen": 1771354579.5461793,
+      "last_seen": 1771357072.9426432
+    },
+    "system_design:f2fc7adc": {
+      "task_signature": "system_design:f2fc7adc",
+      "category": "system_design",
+      "source_tier": "s1",
+      "target_tier": "s0",
+      "successes": 7,
+      "consecutive_successes": 7,
+      "failures": 0,
+      "best_code": "class LRUCache:\n    def __init__(self, capacity):\n        self.capacity = capacity\n        self.cache = {}\n        self.order = []\n\n    def get(self, key):\n        if key in self.cache:\n            self.order.remove(key)\n            self.order.append(key)\n            return self.cache[key]\n        else:\n            return -1\n\n    def put(self, key, value):\n        if key in self.cache:\n            self.cache[key] = value\n            self.order.remove(key)\n            self.order.append(key)\n        else:\n            if len(self.cache) == self.capacity:\n                oldest = self.order.pop(0)\n                del self.cache[oldest]\n            self.cache[key] = value\n            self.order.append(key)\n\ncapacity = int(input())\nn = int(input())\ncache = LRUCache(capacity)\nresults = []\n\nfor _ in range(n):\n    line = input().split()\n    if line[0] == 'PUT':\n        key = line[1]\n        value = int(line[2])\n        cache.put(key, value)\n    elif line[0] == 'GET':\n        key = line[1]\n        result = cache.get(key)\n        results.append(result)\n\nif not results:\n    print('EMPTY')\nelse:\n    for result in results:\n        print(result)",
+      "first_seen": 1771354594.9425044,
+      "last_seen": 1771357069.5015712
+    },
+    "text_processing:b160688a": {
+      "task_signature": "text_processing:b160688a",
+      "category": "text_processing",
+      "source_tier": "s2",
+      "target_tier": "s1",
+      "successes": 2,
+      "consecutive_successes": 2,
+      "failures": 0,
+      "best_code": "def caesar_decrypt(text, shift):\n    result = ''\n    for char in text:\n        if 'a' <= char <= 'z':\n            start = ord('a')\n            shifted_char = chr((ord(char) - start - shift) % 26 + start)\n            result += shifted_char\n        else:\n            result += char\n    return result\n\ntext = input()\nshift = int(input())\n\ndecrypted_text = caesar_decrypt(text, shift)\nprint(decrypted_text)",
+      "first_seen": 1771354673.57435,
+      "last_seen": 1771354684.7116618
+    },
+    "state_machine:552e2b24": {
+      "task_signature": "state_machine:552e2b24",
+      "category": "state_machine",
+      "source_tier": "s2",
+      "target_tier": "s1",
+      "successes": 2,
+      "consecutive_successes": 2,
+      "failures": 0,
+      "best_code": "def solve():\n    s = input()\n    stack = []\n    for char in s:\n        if char == '(':\n            stack.append(char)\n        elif char == ')':\n            if not stack:\n                print('no')\n                return\n            stack.pop()\n    if not stack:\n        print('yes')\n    else:\n        print('no')\n\nsolve()",
+      "first_seen": 1771354679.8389802,
+      "last_seen": 1771354697.9548814
+    },
+    "bit_manipulation:520a67d9": {
+      "task_signature": "bit_manipulation:520a67d9",
+      "category": "bit_manipulation",
+      "source_tier": "s2",
+      "target_tier": "s1",
+      "successes": 1,
+      "consecutive_successes": 1,
+      "failures": 0,
+      "best_code": "n = int(input())\nk = int(input())\nresult = n ^ (1 << k)\nprint(result)",
+      "first_seen": 1771354703.944939,
+      "last_seen": 1771354703.9449413
+    },
+    "encoding:028aad25": {
+      "task_signature": "encoding:028aad25",
+      "category": "encoding",
+      "source_tier": "s2",
+      "target_tier": "s1",
+      "successes": 1,
+      "consecutive_successes": 1,
+      "failures": 0,
+      "best_code": "def run_length_encoding(s):\n    if not s:\n        return \"\"\n\n    encoded_string = \"\"\n    count = 1\n    for i in range(len(s)):\n        if i + 1 < len(s) and s[i] == s[i + 1]:\n            count += 1\n        else:\n            encoded_string += s[i] + str(count)\n            count = 1\n    return encoded_string\n\ninput_string = input()\nprint(run_length_encoding(input_string))",
+      "first_seen": 1771354718.3580225,
+      "last_seen": 1771354718.3580241
+    },
+    "math_advanced:c092308c": {
+      "task_signature": "math_advanced:c092308c",
+      "category": "math_advanced",
+      "source_tier": "s1",
+      "target_tier": "s0",
+      "successes": 3,
+      "consecutive_successes": 3,
+      "failures": 0,
+      "best_code": "def matrix_multiplication():\n    r1, c1 = map(int, input().split())\n    A = []\n    for _ in range(r1):\n        A.append(list(map(int, input().split())))\n    \n    c1_b, c2 = map(int, input().split())\n    B = []\n    for _ in range(c1_b):\n        B.append(list(map(int, input().split())))\n    \n    C = [[0 for _ in range(c2)] for _ in range(r1)]\n    \n    for i in range(r1):\n        for j in range(c2):\n            for k in range(c1):\n                C[i][j] += A[i][k] * B[k][j]\n    \n    for row in C:\n        print(*row)\n\nmatrix_multiplication()",
+      "first_seen": 1771354818.1453764,
+      "last_seen": 1771354931.1902168
+    },
+    "system_design:73b75dff": {
+      "task_signature": "system_design:73b75dff",
+      "category": "system_design",
+      "source_tier": "s1",
+      "target_tier": "s0",
+      "successes": 6,
+      "consecutive_successes": 6,
+      "failures": 0,
+      "best_code": "def solve():\n    max_requests, window_size = map(int, input().split())\n    n_events = int(input())\n    \n    user_requests = {}\n    \n    for _ in range(n_events):\n        timestamp, user = input().split()\n        timestamp = int(timestamp)\n        \n        if user not in user_requests:\n            user_requests[user] = []\n        \n        user_requests[user] = [t for t in user_requests[user] if t >= timestamp - window_size + 1]\n        \n        if len(user_requests[user]) < max_requests:\n            print(\"ALLOW\")\n            user_requests[user].append(timestamp)\n        else:\n            print(\"DENY\")\n\nsolve()",
+      "first_seen": 1771354928.76907,
+      "last_seen": 1771357073.862118
+    },
+    "bit_manipulation:ccc6a7f7": {
+      "task_signature": "bit_manipulation:ccc6a7f7",
+      "category": "bit_manipulation",
+      "source_tier": "s2",
+      "target_tier": "s1",
+      "successes": 2,
+      "consecutive_successes": 2,
+      "failures": 0,
+      "best_code": "n = int(input())\nbinary = bin(n)[2:]\ncount = binary.count('1')\nprint(count)",
+      "first_seen": 1771355509.6669605,
+      "last_seen": 1771355518.020694
+    },
+    "regex:43c40127": {
+      "task_signature": "regex:43c40127",
+      "category": "regex",
+      "source_tier": "s2",
+      "target_tier": "s1",
+      "successes": 1,
+      "consecutive_successes": 1,
+      "failures": 0,
+      "best_code": "import re\n\ns = input()\nresult = re.sub(r'\\d', '*', s)\nprint(result)",
+      "first_seen": 1771356767.076037,
+      "last_seen": 1771356767.0760403
+    },
+    "regex:dd60ca6b": {
+      "task_signature": "regex:dd60ca6b",
+      "category": "regex",
+      "source_tier": "s2",
+      "target_tier": "s1",
+      "successes": 1,
+      "consecutive_successes": 1,
+      "failures": 0,
+      "best_code": "import re\n\nline = input()\nemails = set(re.findall(r\"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}\", line))\nprint(*sorted(emails))",
+      "first_seen": 1771356775.6963449,
+      "last_seen": 1771356775.6963475
+    },
+    "regex:02241085": {
+      "task_signature": "regex:02241085",
+      "category": "regex",
+      "source_tier": "s2",
+      "target_tier": "s1",
+      "successes": 1,
+      "consecutive_successes": 1,
+      "failures": 0,
+      "best_code": "import re\n\ndef is_valid_date(date_str):\n    pattern = r\"^\\d{4}-\\d{2}-\\d{2}$\"\n    if re.match(pattern, date_str):\n        return 'yes'\n    else:\n        return 'no'\n\ndate_string = input()\nprint(is_valid_date(date_string))",
+      "first_seen": 1771356783.3821275,
+      "last_seen": 1771356783.38213
+    },
+    "encoding:88d79a9b": {
+      "task_signature": "encoding:88d79a9b",
+      "category": "encoding",
+      "source_tier": "s2",
+      "target_tier": "s1",
+      "successes": 1,
+      "consecutive_successes": 1,
+      "failures": 0,
+      "best_code": "def solve():\n    num_str = input()\n    from_base = int(input())\n    to_base = int(input())\n\n    try:\n        num_int = int(num_str, from_base)\n    except ValueError:\n        print(\"Invalid input number for the given base.\")\n        return\n\n    if to_base == 10:\n        print(num_int)\n        return\n\n    result = \"\"\n    if num_int == 0:\n        print(0)\n        return\n\n    while num_int > 0:\n        remainder = num_int % to_base\n        if remainder < 10:\n            result = str(remainder) + result\n        else:\n            result = chr(ord('A') + remainder - 10) + result\n        num_int //= to_base\n\n    print(result)\n\nsolve()",
+      "first_seen": 1771356792.805185,
+      "last_seen": 1771356792.8051887
+    },
+    "text_processing:780e2aca": {
+      "task_signature": "text_processing:780e2aca",
+      "category": "text_processing",
+      "source_tier": "s2",
+      "target_tier": "s1",
+      "successes": 1,
+      "consecutive_successes": 1,
+      "failures": 0,
+      "best_code": "def solve():\n    text = input()\n    words = text.lower().split()\n    counts = {}\n    for word in words:\n        counts[word] = counts.get(word, 0) + 1\n    \n    sorted_counts = sorted(counts.items(), key=lambda item: (-item[1], item[0]))\n    \n    top_3 = sorted_counts[:3]\n    \n    result = \" \".join([f\"{word}:{count}\" for word, count in top_3])\n    print(result)\n\nsolve()",
+      "first_seen": 1771356799.7256038,
+      "last_seen": 1771356799.7256072
+    },
+    "concurrency:3e334700": {
+      "task_signature": "concurrency:3e334700",
+      "category": "concurrency",
+      "source_tier": "s1",
+      "target_tier": "s0",
+      "successes": 7,
+      "consecutive_successes": 7,
+      "failures": 0,
+      "best_code": "def solve():\n    p, r = map(int, input().split())\n    total = list(map(int, input().split()))\n    allocation = []\n    request = []\n    for _ in range(p):\n        line = input().split('|')\n        allocation.append(list(map(int, line[0].split())))\n        request.append(list(map(int, line[1].split())))\n\n    available = [total[i] - sum(allocation[j][i] for j in range(p)) for i in range(r)]\n    \n    finish = [False] * p\n    safe_sequence = []\n    \n    while True:\n        found = False\n        for i in range(p):\n            if not finish[i]:\n                can_finish = True\n                for j in range(r):\n                    if request[i][j] > available[j]:\n                        can_finish = False\n                        break\n                \n                if can_finish:\n                    safe_sequence.append(i)\n                    for j in range(r):\n                        available[j] += allocation[i][j]\n                    finish[i] = True\n                    found = True\n        \n        if not found:\n            break\n    \n    if all(finish):\n        print(\"SAFE\")\n    else:\n        deadlocked = []\n        for i in range(p):\n            if not finish[i]:\n                deadlocked.append(f\"P{i}\")\n        print(\" \".join(deadlocked))\n\nsolve()",
+      "first_seen": 1771356930.3573637,
+      "last_seen": 1771356933.8350825
     }
   }
 }

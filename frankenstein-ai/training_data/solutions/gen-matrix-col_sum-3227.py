@@ -1,4 +1,4 @@
-# Task: gen-matrix-col_sum-3227 | Score: 100% | 2026-02-14T12:13:35.364322
+# Task: gen-matrix-col_sum-3227 | Score: 100% | 2026-02-17T20:09:06.146452
 
 line = input().split()
 r, c = int(line[0]), int(line[1])

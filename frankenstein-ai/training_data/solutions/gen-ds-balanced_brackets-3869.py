@@ -1,4 +1,4 @@
-# Task: gen-ds-balanced_brackets-3869 | Score: 100% | 2026-02-13T09:51:04.976258
+# Task: gen-ds-balanced_brackets-3869 | Score: 100% | 2026-02-17T20:00:24.708756
 
 s = input()
 stack = []

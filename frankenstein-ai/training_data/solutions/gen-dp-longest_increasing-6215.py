@@ -1,24 +1,10 @@
-# Task: gen-dp-longest_increasing-6215 | Score: 100% | 2026-02-12T13:25:52.978148
+# Task: gen-dp-longest_increasing-6215 | Score: 100% | 2026-02-17T20:33:16.182960
 
-def solve():
-    n = int(input())
-    nums = [int(input()) for _ in range(n)]
-
-    tails = []
-
-    for num in nums:
-        if not tails or num > tails[-1]:
-            tails.append(num)
-        else:
-            l, r = 0, len(tails) - 1
-            while l <= r:
-                mid = (l + r) // 2
-                if tails[mid] < num:
-                    l = mid + 1
-                else:
-                    r = mid - 1
-            tails[l] = num
-
-    print(len(tails))
-
-solve()
+n = int(input())
+lst = [int(input()) for _ in range(n)]
+dp = [1] * n
+for i in range(1, n):
+    for j in range(i):
+        if lst[j] < lst[i]:
+            dp[i] = max(dp[i], dp[j] + 1)
+print(max(dp))

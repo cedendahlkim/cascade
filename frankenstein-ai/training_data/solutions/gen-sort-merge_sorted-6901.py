@@ -1,4 +1,4 @@
-# Task: gen-sort-merge_sorted-6901 | Score: 100% | 2026-02-15T12:02:42.042912
+# Task: gen-sort-merge_sorted-6901 | Score: 100% | 2026-02-17T20:00:27.689596
 
 n1 = int(input())
 lst1 = [int(input()) for _ in range(n1)]

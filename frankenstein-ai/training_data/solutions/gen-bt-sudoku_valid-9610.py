@@ -1,46 +1,29 @@
-# Task: gen-bt-sudoku_valid-9610 | Score: 100% | 2026-02-12T10:24:59.277404
+# Task: gen-bt-sudoku_valid-9610 | Score: 100% | 2026-02-17T20:34:37.180672
 
-def solve_sudoku():
-    grid = []
-    for _ in range(9):
-        grid.append(list(map(int, input().split())))
-
-    def is_valid(grid):
-        # Check rows
-        for row in grid:
-            seen = set()
-            for num in row:
-                if num != 0:
-                    if num in seen:
-                        return False
-                    seen.add(num)
-
-        # Check columns
-        for col in range(9):
-            seen = set()
-            for row in range(9):
-                num = grid[row][col]
-                if num != 0:
-                    if num in seen:
-                        return False
-                    seen.add(num)
-
-        # Check 3x3 subgrids
-        for i in range(0, 9, 3):
-            for j in range(0, 9, 3):
-                seen = set()
-                for row in range(i, i + 3):
-                    for col in range(j, j + 3):
-                        num = grid[row][col]
-                        if num != 0:
-                            if num in seen:
-                                return False
-                            seen.add(num)
-        return True
-
-    if is_valid(grid):
-        print("valid")
-    else:
-        print("invalid")
-
-solve_sudoku()
+grid = []
+for _ in range(9):
+    grid.append(list(map(int, input().split())))
+valid = True
+for i in range(9):
+    row = [x for x in grid[i] if x != 0]
+    if len(row) != len(set(row)):
+        valid = False
+        break
+    col = [grid[r][i] for r in range(9) if grid[r][i] != 0]
+    if len(col) != len(set(col)):
+        valid = False
+        break
+if valid:
+    for br in range(3):
+        for bc in range(3):
+            box = []
+            for r in range(br*3, br*3+3):
+                for c in range(bc*3, bc*3+3):
+                    if grid[r][c] != 0:
+                        box.append(grid[r][c])
+            if len(box) != len(set(box)):
+                valid = False
+                break
+        if not valid:
+            break
+print('valid' if valid else 'invalid')

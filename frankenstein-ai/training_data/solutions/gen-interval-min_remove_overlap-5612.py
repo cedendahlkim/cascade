@@ -1,22 +1,12 @@
-# Task: gen-interval-min_remove_overlap-5612 | Score: 100% | 2026-02-12T19:36:08.891475
+# Task: gen-interval-min_remove_overlap-5612 | Score: 100% | 2026-02-17T20:34:38.977507
 
-def solve():
-    n = int(input())
-    intervals = []
-    for _ in range(n):
-        start, end = map(int, input().split())
-        intervals.append((start, end))
-    
-    intervals.sort(key=lambda x: x[1])
-    
-    count = 0
-    last_end = float('-inf')
-    
-    for start, end in intervals:
-        if start >= last_end:
-            count += 1
-            last_end = end
-            
-    print(n - count)
-
-solve()
+n = int(input())
+intervals = [tuple(map(int, input().split())) for _ in range(n)]
+intervals.sort(key=lambda x: x[1])
+count = 0
+end = float('-inf')
+for s, e in intervals:
+    if s >= end:
+        count += 1
+        end = e
+print(n - count)

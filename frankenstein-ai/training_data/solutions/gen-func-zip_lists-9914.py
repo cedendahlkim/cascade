@@ -1,4 +1,4 @@
-# Task: gen-func-zip_lists-9914 | Score: 100% | 2026-02-13T18:19:43.024243
+# Task: gen-func-zip_lists-9914 | Score: 100% | 2026-02-17T20:02:21.673832
 
 n = int(input())
 a = [int(input()) for _ in range(n)]
