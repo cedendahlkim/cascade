@@ -9,7 +9,7 @@ import {
   Hash, Braces, Coffee, Gem, FileCode2, Globe, Cpu, Package,
   Columns, Undo2, Eye, Copy, Check, Maximize2, Minimize2, CheckCircle, AlertCircle, Info,
   Wand2, FileEdit, StopCircle,
-  CircleDot, Eraser, Pencil, Files, Replace, ChevronsRight,
+  CircleDot, Eraser, Pencil, Files, Replace, ChevronsRight, Bug, ShieldCheck, Gauge, BookOpen, TestTube, BrainCircuit, SearchCode,
   type LucideIcon,
 } from "lucide-react";
 import { BRIDGE_URL } from "../config";
@@ -685,6 +685,23 @@ export default function CodeEditorView() {
   // Selection count for status bar
   const [selectionInfo, setSelectionInfo] = useState<{ chars: number; lines: number }>({ chars: 0, lines: 0 });
 
+  // Terminal error diagnosis (Frankenstein idea #2)
+  const [lastTermError, setLastTermError] = useState<{ error: string; command: string } | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diagnosis, setDiagnosis] = useState("");
+
+  // AI Refactoring panel (Frankenstein idea #3)
+  const [showRefactorPanel, setShowRefactorPanel] = useState(false);
+  const [refactorMode, setRefactorMode] = useState<string>("review");
+  const [refactorResult, setRefactorResult] = useState("");
+  const [refactorLoading, setRefactorLoading] = useState(false);
+
+  // Semantic AI search (Frankenstein idea #4)
+  const [showSemanticSearch, setShowSemanticSearch] = useState(false);
+  const [semanticQuery, setSemanticQuery] = useState("");
+  const [semanticResults, setSemanticResults] = useState<Array<{ path: string; relevance: string; line_hint: string }>>([]);
+  const [semanticLoading, setSemanticLoading] = useState(false);
+
   // Toasts
   const [toasts, setToasts] = useState<Toast[]>([]);
   const addToast = useCallback((type: Toast["type"], message: string) => {
@@ -1025,6 +1042,110 @@ export default function CodeEditorView() {
       setActiveTab(unsaved[0].path);
     } else if (unsaved.length === 0) {
       setActiveTab("");
+    }
+  };
+
+  // ── AI Error Diagnosis (Frankenstein idea #2) ──
+  const handleTerminalError = useCallback((error: string, command: string) => {
+    setLastTermError({ error, command });
+    setDiagnosis("");
+  }, []);
+
+  const runDiagnosis = async () => {
+    if (!lastTermError) return;
+    setDiagnosing(true);
+    setDiagnosis("");
+    try {
+      const currentFile = tabs.find((t) => t.path === activeTab);
+      const res = await api("/ai/diagnose", {
+        method: "POST",
+        body: JSON.stringify({
+          error: lastTermError.error,
+          command: lastTermError.command,
+          currentFile: currentFile?.path || null,
+          currentContent: currentFile?.content?.slice(0, 3000) || null,
+        }),
+      });
+      setDiagnosis(res.diagnosis || "Ingen diagnos tillgänglig.");
+    } catch (err) {
+      setDiagnosis(`Fel vid diagnos: ${err}`);
+    } finally {
+      setDiagnosing(false);
+    }
+  };
+
+  // ── AI Refactoring (Frankenstein idea #3) ──
+  const runRefactor = async (mode?: string) => {
+    const currentFile = tabs.find((t) => t.path === activeTab);
+    if (!currentFile) { addToast("error", "Öppna en fil först"); return; }
+
+    const editor = editorRef.current;
+    const selection = editor?.getSelection();
+    const model = editor?.getModel();
+    const selectedText = selection && model && !selection.isEmpty() ? model.getValueInRange(selection) : "";
+    const content = selectedText || currentFile.content;
+
+    setRefactorLoading(true);
+    setRefactorResult("");
+    setShowRefactorPanel(true);
+    const m = mode || refactorMode;
+    setRefactorMode(m);
+
+    try {
+      const res = await api("/ai/refactor", {
+        method: "POST",
+        body: JSON.stringify({
+          path: currentFile.path,
+          content,
+          mode: m,
+        }),
+      });
+      setRefactorResult(res.result || "Inget resultat.");
+    } catch (err) {
+      setRefactorResult(`Fel: ${err}`);
+    } finally {
+      setRefactorLoading(false);
+    }
+  };
+
+  const applyRefactorResult = () => {
+    if (!refactorResult || refactorMode === "review") return;
+    const currentFile = tabs.find((t) => t.path === activeTab);
+    if (!currentFile) return;
+
+    const editor = editorRef.current;
+    const selection = editor?.getSelection();
+    const model = editor?.getModel();
+
+    if (selection && model && !selection.isEmpty()) {
+      editor.executeEdits("ai-refactor", [{
+        range: selection,
+        text: refactorResult,
+      }]);
+    } else {
+      setTabs((prev) => prev.map((t) =>
+        t.path === activeTab ? { ...t, content: refactorResult, modified: true } : t
+      ));
+    }
+    addToast("success", "AI-refaktorering applicerad");
+    setShowRefactorPanel(false);
+  };
+
+  // ── Semantic AI Search (Frankenstein idea #4) ──
+  const runSemanticSearch = async () => {
+    if (!semanticQuery.trim()) return;
+    setSemanticLoading(true);
+    setSemanticResults([]);
+    try {
+      const res = await api("/ai/search-semantic", {
+        method: "POST",
+        body: JSON.stringify({ query: semanticQuery }),
+      });
+      setSemanticResults(res.results || []);
+    } catch (err) {
+      addToast("error", `Semantisk sökning misslyckades: ${err}`);
+    } finally {
+      setSemanticLoading(false);
     }
   };
 
@@ -1435,7 +1556,15 @@ export default function CodeEditorView() {
     { id: "closesaved", label: "Stäng sparade flikar", icon: Save, action: closeSavedTabs, category: "Fil" },
     { id: "gotoline", label: "Gå till rad", shortcut: "Ctrl+G", icon: Hash, action: () => { editorRef.current?.getAction("editor.action.gotoLine")?.run(); }, category: "Navigering" },
     { id: "format", label: "Formatera dokument", shortcut: "Shift+Alt+F", icon: FileEdit, action: () => { editorRef.current?.getAction("editor.action.formatDocument")?.run(); }, category: "Redigering" },
-  ], [activeTab, showMinimap, wordWrap, autoSave, showSplit, isFullscreen, showMarkdownPreview, currentTab, triggerInlineEdit]);
+    { id: "ai-review", label: "🧟 AI Kodgranskning", icon: ShieldCheck, action: () => runRefactor("review"), category: "AI" },
+    { id: "ai-refactor", label: "🧟 AI Refaktorera", icon: BrainCircuit, action: () => runRefactor("refactor"), category: "AI" },
+    { id: "ai-optimize", label: "🧟 AI Optimera", icon: Gauge, action: () => runRefactor("optimize"), category: "AI" },
+    { id: "ai-simplify", label: "🧟 AI Förenkla", icon: Sparkles, action: () => runRefactor("simplify"), category: "AI" },
+    { id: "ai-document", label: "🧟 AI Dokumentera", icon: BookOpen, action: () => runRefactor("document"), category: "AI" },
+    { id: "ai-test", label: "🧟 AI Generera tester", icon: TestTube, action: () => runRefactor("test"), category: "AI" },
+    { id: "ai-diagnose", label: "🧟 AI Diagnostisera fel", icon: Bug, action: () => { if (lastTermError) runDiagnosis(); else addToast("info", "Kör ett kommando i terminalen som ger fel först"); }, category: "AI" },
+    { id: "semantic-search", label: "🧟 AI Semantisk sökning", icon: SearchCode, action: () => setShowSemanticSearch(true), category: "AI" },
+  ], [activeTab, showMinimap, wordWrap, autoSave, showSplit, isFullscreen, showMarkdownPreview, currentTab, triggerInlineEdit, lastTermError]);
 
   // ── Keyboard shortcuts ──
   useEffect(() => {
@@ -1782,6 +1911,146 @@ export default function CodeEditorView() {
         </div>
       )}
 
+      {/* AI Refactoring Panel */}
+      {showRefactorPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowRefactorPanel(false)}>
+          <div className="w-[600px] max-w-[90vw] max-h-[80vh] bg-[#1c2128] border border-slate-600/50 rounded-xl shadow-2xl overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50 shrink-0">
+              <BrainCircuit className="w-4 h-4 text-violet-400" />
+              <span className="text-sm font-semibold text-slate-300">Frankenstein AI — Kodanalys</span>
+              <div className="flex items-center gap-1 ml-auto">
+                {[
+                  { id: "review", label: "Granska", icon: ShieldCheck, color: "text-blue-400" },
+                  { id: "refactor", label: "Refaktorera", icon: BrainCircuit, color: "text-violet-400" },
+                  { id: "optimize", label: "Optimera", icon: Gauge, color: "text-amber-400" },
+                  { id: "simplify", label: "Förenkla", icon: Sparkles, color: "text-green-400" },
+                  { id: "document", label: "Dokumentera", icon: BookOpen, color: "text-cyan-400" },
+                  { id: "test", label: "Tester", icon: TestTube, color: "text-pink-400" },
+                ].map((m) => {
+                  const MIcon = m.icon;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => runRefactor(m.id)}
+                      disabled={refactorLoading}
+                      className={`flex items-center gap-1 px-2 py-1 text-[10px] rounded transition-colors ${
+                        refactorMode === m.id ? `bg-slate-700/80 ${m.color}` : "text-slate-500 hover:text-slate-300 hover:bg-slate-700/40"
+                      }`}
+                      title={m.label}
+                    >
+                      <MIcon className="w-3 h-3" /> {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <button onClick={() => setShowRefactorPanel(false)} className="p-1 hover:bg-slate-700 rounded ml-2" title="Stäng">
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-4">
+              {refactorLoading ? (
+                <div className="flex items-center justify-center py-12 text-violet-400">
+                  <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                  <span className="text-sm">Frankenstein analyserar...</span>
+                </div>
+              ) : refactorResult ? (
+                <div className="text-xs">
+                  {refactorMode === "review" ? (
+                    <AiMarkdown content={refactorResult} />
+                  ) : (
+                    <pre className="whitespace-pre-wrap text-slate-300 font-mono text-[11px] leading-relaxed bg-[#0d1117] rounded-lg p-3 border border-slate-700/50 max-h-[50vh] overflow-y-auto">{refactorResult}</pre>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center text-slate-500 text-xs py-12">
+                  <BrainCircuit className="w-8 h-8 mx-auto mb-2 text-violet-500/40" />
+                  <p>Välj ett analysläge ovan för att starta</p>
+                  <p className="mt-1 text-slate-600">Markera kod i editorn för att analysera en specifik del</p>
+                </div>
+              )}
+            </div>
+            {refactorResult && refactorMode !== "review" && !refactorLoading && (
+              <div className="flex items-center gap-2 px-4 py-3 border-t border-slate-700/50 shrink-0">
+                <button
+                  onClick={applyRefactorResult}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30"
+                >
+                  <Check className="w-3 h-3" /> Applicera ändringar
+                </button>
+                <button
+                  onClick={() => { setDiffContent({ original: tabs.find((t) => t.path === activeTab)?.content || "", modified: refactorResult }); setShowDiff(true); setShowRefactorPanel(false); }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30"
+                >
+                  <Eye className="w-3 h-3" /> Visa diff
+                </button>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(refactorResult); addToast("info", "Kopierat till urklipp"); }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-700/50 text-slate-400 rounded-lg hover:bg-slate-700/70"
+                >
+                  <Copy className="w-3 h-3" /> Kopiera
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Semantic AI Search */}
+      {showSemanticSearch && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] bg-black/40" onClick={() => setShowSemanticSearch(false)}>
+          <div className="w-[560px] max-w-[90vw] bg-[#1c2128] border border-slate-600/50 rounded-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50">
+              <SearchCode className="w-4 h-4 text-violet-400" />
+              <input
+                type="text"
+                value={semanticQuery}
+                onChange={(e) => setSemanticQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") runSemanticSearch();
+                  if (e.key === "Escape") setShowSemanticSearch(false);
+                }}
+                placeholder="Beskriv vad du letar efter... (t.ex. 'hur hanteras autentisering')"
+                title="AI-sökning"
+                className="flex-1 bg-transparent text-sm outline-none text-slate-200 placeholder:text-slate-500"
+                autoFocus
+              />
+              {semanticLoading && <Loader2 className="w-4 h-4 animate-spin text-violet-400" />}
+              <kbd className="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">Enter</kbd>
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto">
+              {semanticResults.length === 0 && !semanticLoading && (
+                <div className="px-4 py-8 text-center text-xs text-slate-500">
+                  <BrainCircuit className="w-6 h-6 mx-auto mb-2 text-violet-500/30" />
+                  <p>Ställ en fråga i naturligt språk om din kodbas</p>
+                  <p className="mt-1 text-slate-600">Frankenstein AI analyserar projektets filer och hittar relevanta resultat</p>
+                </div>
+              )}
+              {semanticResults.map((r, i) => {
+                const fi = getFileIcon(r.path.split("/").pop() || r.path);
+                const FI = fi.icon;
+                return (
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 px-4 py-2.5 hover:bg-slate-700/30 cursor-pointer border-b border-slate-700/20 transition-colors"
+                    onClick={() => {
+                      openFile({ name: r.path.split("/").pop() || r.path, path: r.path, type: "file" });
+                      setShowSemanticSearch(false);
+                    }}
+                  >
+                    <FI className={`w-4 h-4 shrink-0 mt-0.5 ${fi.color}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-blue-400 font-medium">{r.path}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">{r.relevance}</div>
+                      {r.line_hint && <div className="text-[10px] text-slate-600 mt-0.5">{r.line_hint}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Error banner */}
       {error && (
         <div className="flex items-center justify-between px-4 py-2 bg-red-500/20 border-b border-red-500/30 text-red-300 text-sm">
@@ -1827,6 +2096,21 @@ export default function CodeEditorView() {
           title="Git (Ctrl+G)"
         >
           <GitBranch className="w-4 h-4" />
+        </button>
+        <div className="w-px h-5 bg-slate-700" />
+        <button
+          onClick={() => runRefactor("review")}
+          className={`p-1.5 rounded ${showRefactorPanel ? "bg-violet-500/20 text-violet-400" : "hover:bg-slate-700"}`}
+          title="🧟 AI Kodgranskning"
+        >
+          <ShieldCheck className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setShowSemanticSearch(true)}
+          className={`p-1.5 rounded ${showSemanticSearch ? "bg-violet-500/20 text-violet-400" : "hover:bg-slate-700"}`}
+          title="🧟 AI Semantisk sökning"
+        >
+          <SearchCode className="w-4 h-4" />
         </button>
         <div className="w-px h-5 bg-slate-700" />
         <button
@@ -2324,8 +2608,42 @@ export default function CodeEditorView() {
                   </button>
                 </div>
               </div>
+              {/* Error diagnosis banner */}
+              {lastTermError && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border-b border-red-500/20">
+                  <Bug className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                  <span className="text-[11px] text-red-300 truncate flex-1">Fel: {lastTermError.error.slice(0, 100)}</span>
+                  <button
+                    onClick={runDiagnosis}
+                    disabled={diagnosing}
+                    className="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-violet-500/20 text-violet-400 rounded hover:bg-violet-500/30 disabled:opacity-50 shrink-0"
+                    title="Låt Frankenstein AI analysera felet"
+                  >
+                    {diagnosing ? <Loader2 className="w-3 h-3 animate-spin" /> : <BrainCircuit className="w-3 h-3" />}
+                    Diagnostisera
+                  </button>
+                  <button onClick={() => { setLastTermError(null); setDiagnosis(""); }} className="p-0.5 hover:bg-slate-700 rounded" title="Stäng">
+                    <X className="w-3 h-3 text-slate-500" />
+                  </button>
+                </div>
+              )}
+              {diagnosis && (
+                <div className="max-h-32 overflow-y-auto px-3 py-2 bg-violet-500/5 border-b border-violet-500/20">
+                  <div className="flex items-center gap-1 mb-1 text-[10px] text-violet-400 font-semibold">
+                    <BrainCircuit className="w-3 h-3" /> Frankenstein Diagnos
+                  </div>
+                  <AiMarkdown content={diagnosis} onApplyCode={async (path, code, isNew) => {
+                    try {
+                      if (isNew) await api("/file", { method: "POST", body: JSON.stringify({ path, content: code }) });
+                      else await api("/file", { method: "PUT", body: JSON.stringify({ path, content: code }) });
+                      addToast("success", `${isNew ? "Skapade" : "Uppdaterade"} ${path}`);
+                      await loadTree();
+                    } catch (err) { addToast("error", `Kunde inte spara: ${err}`); }
+                  }} />
+                </div>
+              )}
               <div className="flex-1 min-h-0">
-                <XTerminal visible={showTerminal} />
+                <XTerminal visible={showTerminal} onError={handleTerminalError} />
               </div>
             </div>
           )}

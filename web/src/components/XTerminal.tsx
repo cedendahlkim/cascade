@@ -8,9 +8,10 @@ import { BRIDGE_URL } from "../config";
 interface XTerminalProps {
   visible: boolean;
   onData?: (data: string) => void;
+  onError?: (error: string, command: string) => void;
 }
 
-export default function XTerminal({ visible }: XTerminalProps) {
+export default function XTerminal({ visible, onError }: XTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -67,12 +68,16 @@ export default function XTerminal({ visible }: XTerminalProps) {
       if (data.exitCode !== undefined && data.exitCode !== 0) {
         termRef.current?.writeln(`  \x1b[90m[exit: ${data.exitCode}]\x1b[0m`);
       }
+      // Notify parent about errors for AI diagnosis
+      if (data.stderr && data.exitCode !== 0 && onError) {
+        onError(data.stderr, cmd);
+      }
     } catch (err) {
       termRef.current?.writeln(`  \x1b[31m[error] ${err}\x1b[0m`);
     }
 
     writePrompt();
-  }, [writePrompt]);
+  }, [writePrompt, onError]);
 
   useEffect(() => {
     if (!containerRef.current || termRef.current) return;

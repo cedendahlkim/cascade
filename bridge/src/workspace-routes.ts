@@ -941,6 +941,205 @@ Svara med BARA koden som ska infogas. Ingen förklaring, inga markdown-fences.`;
   }
 });
 
+/** POST /api/workspace/ai/diagnose — AI analyzes terminal errors and suggests fixes */
+router.post("/ai/diagnose", async (req: Request, res: Response) => {
+  const { error: errorText, command, currentFile, currentContent } = req.body;
+  if (!errorText) return res.status(400).json({ error: "error text required" });
+
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || "";
+    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+    let fileContext = "";
+    if (currentFile && currentContent) {
+      fileContext = `\n\nAktuell fil (${currentFile}):\n\`\`\`\n${currentContent.slice(0, 3000)}\n\`\`\``;
+    }
+
+    const prompt = `Du är Frankenstein, en expert AI-felsökare. Analysera detta terminalfel och ge en konkret lösning.
+
+Kommando som kördes: ${command || "(okänt)"}
+
+Felmeddelande:
+\`\`\`
+${errorText.slice(0, 2000)}
+\`\`\`${fileContext}
+
+Svara på svenska med:
+1. **Orsak:** Kort förklaring av vad som gick fel
+2. **Lösning:** Konkret fix (med kod om relevant)
+3. **Kommando:** Om ett terminalkommando löser problemet, skriv det i ett \`\`\`RUN block
+
+Var koncis och handlingsorienterad.`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
+        }),
+      }
+    );
+
+    const data = await response.json() as any;
+    const diagnosis = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Kunde inte analysera felet.";
+    res.json({ diagnosis });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** POST /api/workspace/ai/refactor — AI refactors code with specific instruction */
+router.post("/ai/refactor", async (req: Request, res: Response) => {
+  const { path: relPath, content, instruction, mode } = req.body;
+  if (!content) return res.status(400).json({ error: "content required" });
+
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || "";
+    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+    const modePrompts: Record<string, string> = {
+      refactor: "Refaktorera koden för bättre läsbarhet, namngivning och struktur. Behåll samma funktionalitet.",
+      optimize: "Optimera koden för bättre prestanda. Identifiera flaskhalsar och ineffektiva mönster.",
+      review: "Granska koden och ge feedback. Identifiera buggar, säkerhetsproblem, kodlukt och förbättringsmöjligheter. Svara INTE med omskriven kod utan med en lista av observationer.",
+      simplify: "Förenkla koden. Ta bort onödig komplexitet, förkorta utan att förlora läsbarhet.",
+      document: "Lägg till JSDoc/docstrings och inline-kommentarer som förklarar komplex logik. Behåll all befintlig kod.",
+      test: "Generera enhetstester för denna kod. Använd det mest lämpliga testramverket.",
+    };
+
+    const modeInstruction = modePrompts[mode] || modePrompts.refactor;
+    const userInstruction = instruction ? `\n\nAnvändarens extra instruktion: ${instruction}` : "";
+
+    const prompt = `Du är Frankenstein, en expert-kodgranskare och refaktorerare.
+
+Uppgift: ${modeInstruction}${userInstruction}
+
+Fil: ${relPath || "okänd"}
+
+Kod:
+\`\`\`
+${content.slice(0, 8000)}
+\`\`\`
+
+${mode === "review" 
+  ? "Svara med en strukturerad granskning i markdown med kategorier: 🐛 Buggar, ⚠️ Varningar, 💡 Förslag, ✅ Bra mönster."
+  : "Svara ENBART med den omskrivna koden, utan förklaringar runt koden. Behåll samma språk."}`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+        }),
+      }
+    );
+
+    const data = await response.json() as any;
+    const result = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Kunde inte bearbeta koden.";
+    
+    // Clean markdown fences if mode is not review
+    let cleaned = result;
+    if (mode !== "review") {
+      cleaned = result.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "");
+    }
+
+    res.json({ result: cleaned, mode });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** POST /api/workspace/ai/search-semantic — AI-powered semantic code search */
+router.post("/ai/search-semantic", async (req: Request, res: Response) => {
+  const { query } = req.body;
+  if (!query) return res.status(400).json({ error: "query required" });
+
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || "";
+    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+    // First, get the file tree to understand project structure
+    const allFiles: Array<{ path: string; snippet: string }> = [];
+    
+    function walkDir(dir: string, prefix: string = "") {
+      try {
+        const entries = readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "dist" || entry.name === "__pycache__") continue;
+          const fullPath = join(dir, entry.name);
+          const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+          if (entry.isDirectory()) {
+            walkDir(fullPath, relPath);
+          } else if (entry.isFile()) {
+            try {
+              const stat = statSync(fullPath);
+              if (stat.size > 100000) continue; // Skip large files
+              const ext = extname(entry.name).toLowerCase();
+              const codeExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".css", ".html", ".json", ".md", ".yaml", ".yml", ".sh", ".sql"];
+              if (!codeExts.includes(ext)) continue;
+              const content = readFileSync(fullPath, "utf-8");
+              allFiles.push({ path: relPath, snippet: content.slice(0, 500) });
+            } catch { /* skip unreadable */ }
+          }
+        }
+      } catch { /* skip */ }
+    }
+    
+    walkDir(WORKSPACE_ROOT);
+
+    // Build a compact file index for AI
+    const fileIndex = allFiles.slice(0, 100).map(f => `${f.path}:\n${f.snippet}`).join("\n---\n");
+
+    const prompt = `Du är Frankenstein, en expert på kodnavigering. Användaren söker i sin kodbas.
+
+Sökfråga: "${query}"
+
+Här är en översikt av projektets filer (första 500 tecken av varje):
+
+${fileIndex.slice(0, 15000)}
+
+Baserat på sökfrågan, identifiera de mest relevanta filerna och förklara varför. Svara i JSON-format:
+[
+  { "path": "relativ/sökväg", "relevance": "kort förklaring", "line_hint": "ungefärlig rad eller funktion" }
+]
+
+Returnera max 8 resultat, sorterade efter relevans. Svara ENBART med JSON-arrayen.`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
+        }),
+      }
+    );
+
+    const data = await response.json() as any;
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    
+    // Parse JSON from response
+    let results = [];
+    try {
+      const cleaned = raw.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+      results = JSON.parse(cleaned);
+    } catch {
+      results = [{ path: "error", relevance: "Kunde inte tolka AI-svaret", line_hint: "" }];
+    }
+
+    res.json({ results, query });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 /** POST /api/workspace/ai/terminal — AI runs a terminal command */
 router.post("/ai/terminal", async (req: Request, res: Response) => {
   const { command, cwd } = req.body;
