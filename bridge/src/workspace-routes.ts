@@ -1382,6 +1382,331 @@ RULES:
   }
 });
 
+// ── MVP Generator — Generate a complete project from a prompt ──
+
+/** Collect file index for context (path + first 2 lines) */
+function collectFileIndex(dir: string, depth = 0, max = 80): string[] {
+  if (depth > 4) return [];
+  const result: string[] = [];
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) {
+      if (result.length >= max) break;
+      if (IGNORED_DIRS.has(e.name) && e.isDirectory()) continue;
+      if (e.name.startsWith(".") && e.isDirectory()) continue;
+      if (IGNORED_FILES.has(e.name)) continue;
+      const full = join(dir, e.name);
+      const rel = relative(WORKSPACE_ROOT, full).replace(/\\/g, "/");
+      if (e.isDirectory()) {
+        result.push(`📁 ${rel}/`);
+        result.push(...collectFileIndex(full, depth + 1, max - result.length));
+      } else {
+        result.push(`📄 ${rel}`);
+      }
+    }
+  } catch { /* skip */ }
+  return result;
+}
+
+router.post("/ai/generate-mvp", async (req: Request, res: Response) => {
+  const { prompt, projectName, targetDir, attachments } = req.body;
+  if (!prompt) return res.status(400).json({ error: "prompt required" });
+
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+  const projDir = targetDir || projectName || "mvp-project";
+
+  // Build attachment context
+  let attachmentContext = "";
+  if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+    attachmentContext = "\n\nBIFOGADE FILER (använd som referens/kontext):\n";
+    for (const att of attachments) {
+      if (att.type === "text" || att.type === "code") {
+        attachmentContext += `\n--- ${att.name} ---\n${att.content?.slice(0, 4000) || ""}\n`;
+      } else if (att.type === "image") {
+        attachmentContext += `\n[Bild: ${att.name}] (beskriven av användaren)\n`;
+      } else {
+        attachmentContext += `\n[Fil: ${att.name}, typ: ${att.mimeType || "okänd"}]\n`;
+      }
+    }
+  }
+
+  try {
+    // Step 1: Generate project plan
+    const planPrompt = `Du är Frankenstein, en expert fullstack-utvecklare. Användaren vill skapa ett komplett MVP-projekt.
+
+ANVÄNDARENS BESKRIVNING:
+${prompt}
+${attachmentContext}
+
+MÅLMAPP: ${projDir}/
+
+Generera en KOMPLETT projektplan i JSON-format. Svara ENBART med JSON, inga förklaringar.
+
+JSON-format:
+{
+  "name": "projektnamn",
+  "description": "kort beskrivning",
+  "tech_stack": ["tech1", "tech2"],
+  "files": [
+    {
+      "path": "relativ/sökväg/fil.ext",
+      "description": "vad filen gör",
+      "priority": 1
+    }
+  ],
+  "commands": ["npm init -y", "npm install express"],
+  "run_command": "npm start"
+}
+
+Regler:
+- Generera ALLA filer som behövs för ett fungerande MVP
+- Inkludera package.json, README.md, .gitignore
+- Använd moderna best practices
+- Max 30 filer
+- Sortera filer efter priority (1 = skapa först)
+- commands = kommandon att köra EFTER filerna skapats (t.ex. npm install)
+- run_command = kommando för att starta projektet`;
+
+    const planRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: planPrompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 4096 },
+        }),
+      }
+    );
+
+    const planData = await planRes.json() as any;
+    let planText = planData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    planText = planText.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "").trim();
+
+    let plan: any;
+    try {
+      plan = JSON.parse(planText);
+    } catch {
+      return res.status(500).json({ error: "AI kunde inte generera en giltig projektplan", raw: planText });
+    }
+
+    if (!plan.files || !Array.isArray(plan.files)) {
+      return res.status(500).json({ error: "Ingen fillista i planen", plan });
+    }
+
+    // Sort by priority
+    plan.files.sort((a: any, b: any) => (a.priority || 99) - (b.priority || 99));
+
+    // Step 2: Create project directory
+    const projectRoot = safePath(projDir);
+    if (!projectRoot) return res.status(403).json({ error: "Invalid project path" });
+    if (!existsSync(projectRoot)) mkdirSync(projectRoot, { recursive: true });
+
+    // Step 3: Generate each file
+    const createdFiles: string[] = [];
+    const errors: string[] = [];
+
+    for (const file of plan.files) {
+      const filePath = file.path;
+      const fullPath = join(projectRoot, filePath);
+      const fileDir = dirname(fullPath);
+
+      // Create directories
+      if (!existsSync(fileDir)) mkdirSync(fileDir, { recursive: true });
+
+      // Generate file content
+      const filePrompt = `Du är Frankenstein, en expert fullstack-utvecklare. Generera innehållet för denna fil.
+
+PROJEKT: ${plan.name} — ${plan.description}
+TECH STACK: ${plan.tech_stack?.join(", ") || "modern web"}
+FIL: ${filePath}
+BESKRIVNING: ${file.description}
+${attachmentContext}
+
+ALLA FILER I PROJEKTET:
+${plan.files.map((f: any) => `- ${f.path}: ${f.description}`).join("\n")}
+
+REDAN SKAPADE FILER:
+${createdFiles.map((f) => {
+  try {
+    const content = readFileSync(join(projectRoot, f), "utf-8");
+    return `--- ${f} ---\n${content.slice(0, 2000)}`;
+  } catch { return `--- ${f} --- (ej läsbar)`; }
+}).join("\n\n")}
+
+Generera ENBART filinnehållet. Ingen markdown, inga förklaringar, inga code fences.
+Koden ska vara komplett, fungerande och följa best practices.`;
+
+      try {
+        const fileRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: filePrompt }] }],
+              generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
+            }),
+          }
+        );
+
+        const fileData = await fileRes.json() as any;
+        let content = fileData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        content = content.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "").trim();
+
+        writeFileSync(fullPath, content, "utf-8");
+        createdFiles.push(filePath);
+      } catch (err) {
+        errors.push(`${filePath}: ${err}`);
+      }
+    }
+
+    // Step 4: Run setup commands
+    const commandResults: Array<{ command: string; success: boolean; output: string }> = [];
+    if (plan.commands && Array.isArray(plan.commands)) {
+      for (const cmd of plan.commands) {
+        try {
+          const isWindows = process.platform === "win32";
+          const shell = isWindows ? "cmd.exe" : "/bin/bash";
+          const shellArgs = isWindows ? ["/c", cmd] : ["-c", cmd];
+          const proc = spawn(shell, shellArgs, {
+            cwd: projectRoot,
+            env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+            stdio: ["pipe", "pipe", "pipe"],
+          });
+
+          let stdout = "";
+          let stderr = "";
+          proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString(); });
+          proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+          const exitCode = await new Promise<number>((resolve) => {
+            proc.on("close", (code) => resolve(code || 0));
+            setTimeout(() => { proc.kill(); resolve(-1); }, 60000);
+          });
+
+          commandResults.push({
+            command: cmd,
+            success: exitCode === 0,
+            output: (stdout + stderr).slice(0, 500),
+          });
+        } catch (err) {
+          commandResults.push({ command: cmd, success: false, output: String(err) });
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      projectDir: projDir,
+      plan: {
+        name: plan.name,
+        description: plan.description,
+        tech_stack: plan.tech_stack,
+        run_command: plan.run_command,
+      },
+      files: createdFiles,
+      errors,
+      commandResults,
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** POST /api/workspace/ai/chat-with-files — Chat with file attachments */
+router.post("/ai/chat-with-files", async (req: Request, res: Response) => {
+  const { message, attachments, history } = req.body;
+  if (!message) return res.status(400).json({ error: "message required" });
+
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+  // Build attachment context
+  let fileContext = "";
+  if (attachments && Array.isArray(attachments)) {
+    for (const att of attachments) {
+      if (att.content) {
+        const label = att.name || "fil";
+        const lang = att.language || langFromExt(extname(att.name || ".txt"));
+        fileContext += `\n\n--- Bifogad fil: ${label} ---\n\`\`\`${lang}\n${att.content.slice(0, 8000)}\n\`\`\`\n`;
+      }
+    }
+  }
+
+  // Build conversation history
+  const contents: any[] = [];
+  if (history && Array.isArray(history)) {
+    for (const msg of history.slice(-10)) {
+      contents.push({
+        role: msg.role === "assistant" ? "model" : "user",
+        parts: [{ text: msg.content }],
+      });
+    }
+  }
+
+  const systemPrompt = `Du är Frankenstein, en expert AI-kodassistent i Gracestack Editor. Du kan:
+- Analysera bifogade filer (kod, text, config, data)
+- Föreslå förbättringar och fixa buggar
+- Generera ny kod baserat på bifogade filer
+- Svara på frågor om filinnehåll
+
+Svara på svenska. Var koncis och hjälpsam. Använd markdown med kodblock.
+Om du föreslår kodändringar, markera med EDIT:filsökväg eller CREATE:filsökväg före kodblocket.`;
+
+  contents.push({
+    role: "user",
+    parts: [{ text: `${systemPrompt}\n\nAnvändarens meddelande: ${message}${fileContext}` }],
+  });
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents,
+          generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
+        }),
+      }
+    );
+
+    const data = await response.json() as any;
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Kunde inte svara just nu.";
+    res.json({ reply });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** POST /api/workspace/upload — Save uploaded file to workspace */
+router.post("/upload", (req: Request, res: Response) => {
+  const { path: relPath, content, encoding } = req.body;
+  if (!relPath || content === undefined) return res.status(400).json({ error: "path and content required" });
+
+  const abs = safePath(relPath);
+  if (!abs) return res.status(403).json({ error: "Path outside workspace" });
+
+  try {
+    const dir = dirname(abs);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+    if (encoding === "base64") {
+      const buffer = Buffer.from(content, "base64");
+      writeFileSync(abs, buffer);
+    } else {
+      writeFileSync(abs, content, "utf-8");
+    }
+
+    res.json({ ok: true, path: relPath });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // ── Terminal PTY via Socket.IO ──
 
 const terminals: Map<string, ChildProcess> = new Map();

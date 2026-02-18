@@ -9,11 +9,26 @@ import {
   Hash, Braces, Coffee, Gem, FileCode2, Globe, Cpu, Package,
   Columns, Undo2, Eye, Copy, Check, Maximize2, Minimize2, CheckCircle, AlertCircle, Info,
   Wand2, FileEdit, StopCircle,
-  CircleDot, Eraser, Pencil, Files, Replace, ChevronsRight, Bug, ShieldCheck, Gauge, BookOpen, TestTube, BrainCircuit, SearchCode,
+  CircleDot, Eraser, Pencil, Files, Replace, ChevronsRight, Bug, ShieldCheck, Gauge, BookOpen, TestTube, BrainCircuit, SearchCode, Rocket, Paperclip, Upload, FolderInput,
   type LucideIcon,
 } from "lucide-react";
 import { BRIDGE_URL } from "../config";
 import XTerminal from "./XTerminal";
+
+// ── Helpers ──
+
+function langFromExt(ext: string): string {
+  const map: Record<string, string> = {
+    ".ts": "typescript", ".tsx": "typescriptreact", ".js": "javascript", ".jsx": "javascriptreact",
+    ".py": "python", ".json": "json", ".md": "markdown", ".html": "html", ".css": "css",
+    ".scss": "scss", ".yaml": "yaml", ".yml": "yaml", ".toml": "toml", ".sh": "shell",
+    ".sql": "sql", ".rs": "rust", ".go": "go", ".java": "java", ".c": "c", ".cpp": "cpp",
+    ".rb": "ruby", ".php": "php", ".swift": "swift", ".kt": "kotlin", ".lua": "lua",
+    ".xml": "xml", ".svg": "xml", ".txt": "plaintext", ".csv": "plaintext",
+    ".vue": "html", ".svelte": "html", ".astro": "html",
+  };
+  return map[ext.toLowerCase()] || "plaintext";
+}
 
 // ── Types ──
 
@@ -696,6 +711,18 @@ export default function CodeEditorView() {
   const [refactorResult, setRefactorResult] = useState("");
   const [refactorLoading, setRefactorLoading] = useState(false);
 
+  // MVP Generator
+  const [showMvpGenerator, setShowMvpGenerator] = useState(false);
+  const [mvpPrompt, setMvpPrompt] = useState("");
+  const [mvpProjectName, setMvpProjectName] = useState("");
+  const [mvpGenerating, setMvpGenerating] = useState(false);
+  const [mvpResult, setMvpResult] = useState<{ success: boolean; projectDir: string; plan: any; files: string[]; errors: string[]; commandResults: any[] } | null>(null);
+  const [mvpStep, setMvpStep] = useState("");
+
+  // File attachments for AI chat
+  const [chatAttachments, setChatAttachments] = useState<Array<{ name: string; content: string; type: string; language?: string }>>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Semantic AI search (Frankenstein idea #4)
   const [showSemanticSearch, setShowSemanticSearch] = useState(false);
   const [semanticQuery, setSemanticQuery] = useState("");
@@ -1149,6 +1176,106 @@ export default function CodeEditorView() {
     }
   };
 
+  // ── MVP Generator ──
+  const generateMvp = async () => {
+    if (!mvpPrompt.trim()) return;
+    setMvpGenerating(true);
+    setMvpResult(null);
+    setMvpStep("Frankenstein planerar projektet...");
+
+    try {
+      const res = await api("/ai/generate-mvp", {
+        method: "POST",
+        body: JSON.stringify({
+          prompt: mvpPrompt,
+          projectName: mvpProjectName || undefined,
+          attachments: chatAttachments.length > 0 ? chatAttachments : undefined,
+        }),
+      });
+
+      setMvpResult(res);
+      setMvpStep("");
+
+      if (res.success) {
+        addToast("success", `MVP "${res.plan?.name}" skapad med ${res.files?.length || 0} filer!`);
+        await loadTree();
+        // Auto-open first file
+        if (res.files?.length > 0) {
+          const firstFile = `${res.projectDir}/${res.files[0]}`;
+          openFile({ name: res.files[0].split("/").pop() || res.files[0], path: firstFile, type: "file" });
+        }
+      }
+    } catch (err) {
+      setMvpResult({ success: false, projectDir: "", plan: null, files: [], errors: [String(err)], commandResults: [] });
+      setMvpStep("");
+    } finally {
+      setMvpGenerating(false);
+    }
+  };
+
+  // ── File attachment helpers ──
+  const readFileAsText = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
+
+  const handleFileAttach = async (files: FileList | File[]) => {
+    const newAttachments: typeof chatAttachments = [];
+    for (const file of Array.from(files)) {
+      try {
+        const ext = file.name.split(".").pop()?.toLowerCase() || "";
+        const textExts = ["txt", "md", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss", "yaml", "yml", "toml", "sh", "sql", "rs", "go", "java", "c", "cpp", "h", "hpp", "rb", "php", "swift", "kt", "lua", "r", "xml", "svg", "csv", "env", "gitignore", "dockerfile", "conf", "ini", "cfg", "log", "bat", "ps1", "vue", "svelte", "astro"];
+        const isText = textExts.includes(ext) || file.type.startsWith("text/");
+        const isImage = file.type.startsWith("image/");
+
+        if (isText || file.size < 500_000) {
+          const content = await readFileAsText(file);
+          newAttachments.push({
+            name: file.name,
+            content,
+            type: isImage ? "image" : "code",
+            language: langFromExt("." + ext),
+          });
+        } else if (isImage) {
+          newAttachments.push({
+            name: file.name,
+            content: `[Bild: ${file.name}, ${(file.size / 1024).toFixed(0)} KB]`,
+            type: "image",
+          });
+        } else {
+          newAttachments.push({
+            name: file.name,
+            content: `[Binärfil: ${file.name}, ${(file.size / 1024).toFixed(0)} KB, typ: ${file.type || "okänd"}]`,
+            type: "binary",
+          });
+        }
+      } catch {
+        addToast("error", `Kunde inte läsa ${file.name}`);
+      }
+    }
+    setChatAttachments((prev) => [...prev, ...newAttachments]);
+  };
+
+  const handlePaste = useCallback((e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      handleFileAttach(files);
+    }
+  }, []);
+
   // ── Search ──
   const handleSearch = async () => {
     if (searchQuery.length < 2) return;
@@ -1172,10 +1299,17 @@ export default function CodeEditorView() {
 
   // ── AI Chat (streaming SSE) ──
   const sendAiMessage = async () => {
-    if (!aiInput.trim()) return;
+    if (!aiInput.trim() && chatAttachments.length === 0) return;
     const msg = aiInput.trim();
+    const attachments = [...chatAttachments];
     setAiInput("");
-    setAiMessages((prev) => [...prev, { role: "user", content: msg, timestamp: Date.now() }]);
+    setChatAttachments([]);
+
+    // Show user message with attachment info
+    const userContent = attachments.length > 0
+      ? `${msg}\n\n📎 Bifogade filer: ${attachments.map((a) => a.name).join(", ")}`
+      : msg;
+    setAiMessages((prev) => [...prev, { role: "user", content: userContent, timestamp: Date.now() }]);
     setAiLoading(true);
     setAiStreaming(true);
 
@@ -1188,6 +1322,25 @@ export default function CodeEditorView() {
 
     try {
       const activeFile = tabs.find((t) => t.path === activeTab);
+
+      // If attachments present, use chat-with-files endpoint (non-streaming)
+      if (attachments.length > 0) {
+        const res = await api("/ai/chat-with-files", {
+          method: "POST",
+          body: JSON.stringify({
+            message: msg || "Analysera dessa filer",
+            attachments,
+            history: aiMessages.slice(-10).map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.content })),
+          }),
+        });
+        setAiMessages((prev) =>
+          prev.map((m) => m.timestamp === aiMsgIdx ? { ...m, content: res.reply || "Inget svar." } : m)
+        );
+        setAiLoading(false);
+        setAiStreaming(false);
+        setTimeout(() => aiRef.current?.scrollTo(0, aiRef.current.scrollHeight), 10);
+        return;
+      }
 
       const response = await fetch(`${BRIDGE_URL}/api/workspace/ai/chat/stream`, {
         method: "POST",
@@ -1564,6 +1717,7 @@ export default function CodeEditorView() {
     { id: "ai-test", label: "🧟 AI Generera tester", icon: TestTube, action: () => runRefactor("test"), category: "AI" },
     { id: "ai-diagnose", label: "🧟 AI Diagnostisera fel", icon: Bug, action: () => { if (lastTermError) runDiagnosis(); else addToast("info", "Kör ett kommando i terminalen som ger fel först"); }, category: "AI" },
     { id: "semantic-search", label: "🧟 AI Semantisk sökning", icon: SearchCode, action: () => setShowSemanticSearch(true), category: "AI" },
+    { id: "mvp-generator", label: "🧟 MVP Generator — Skapa projekt från prompt", icon: Rocket, action: () => setShowMvpGenerator(true), category: "AI" },
   ], [activeTab, showMinimap, wordWrap, autoSave, showSplit, isFullscreen, showMarkdownPreview, currentTab, triggerInlineEdit, lastTermError]);
 
   // ── Keyboard shortcuts ──
@@ -2051,6 +2205,201 @@ export default function CodeEditorView() {
         </div>
       )}
 
+      {/* MVP Generator Dialog */}
+      {showMvpGenerator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !mvpGenerating && setShowMvpGenerator(false)}>
+          <div className="w-[640px] max-w-[92vw] max-h-[85vh] bg-[#1c2128] border border-slate-600/50 rounded-xl shadow-2xl overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50 shrink-0">
+              <Rocket className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm font-semibold text-slate-300">Frankenstein MVP Generator</span>
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full">Prompt → Färdigt projekt</span>
+              {!mvpGenerating && (
+                <button onClick={() => setShowMvpGenerator(false)} className="ml-auto p-1 hover:bg-slate-700 rounded" title="Stäng">
+                  <X className="w-4 h-4 text-slate-400" />
+                </button>
+              )}
+            </div>
+
+            {!mvpResult ? (
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1.5 font-medium">Beskriv ditt projekt</label>
+                  <textarea
+                    value={mvpPrompt}
+                    onChange={(e) => setMvpPrompt(e.target.value)}
+                    placeholder="T.ex: En todo-app med React och Express. Ska ha login, CRUD för uppgifter, och en snygg dark mode UI med Tailwind..."
+                    title="Projektbeskrivning"
+                    className="w-full h-32 bg-[#0d1117] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/50 resize-none"
+                    disabled={mvpGenerating}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1.5 font-medium">Projektnamn (valfritt)</label>
+                  <input
+                    type="text"
+                    value={mvpProjectName}
+                    onChange={(e) => setMvpProjectName(e.target.value)}
+                    placeholder="my-awesome-app"
+                    title="Projektnamn"
+                    className="w-full bg-[#0d1117] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/50"
+                    disabled={mvpGenerating}
+                  />
+                </div>
+
+                {/* Attachments for MVP */}
+                {chatAttachments.length > 0 && (
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1.5 font-medium">Bifogade filer som referens</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {chatAttachments.map((att, i) => (
+                        <div key={i} className="flex items-center gap-1 px-2 py-1 bg-slate-700/40 rounded text-[10px] text-slate-300">
+                          <Paperclip className="w-3 h-3 text-slate-500" />
+                          <span className="max-w-[120px] truncate">{att.name}</span>
+                          <button onClick={() => setChatAttachments((prev) => prev.filter((_, j) => j !== i))} className="hover:text-red-400" title="Ta bort">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-700/50 text-slate-400 rounded-lg hover:bg-slate-700/70"
+                    disabled={mvpGenerating}
+                  >
+                    <Paperclip className="w-3 h-3" /> Bifoga referensfiler
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    title="Välj filer"
+                    onChange={(e) => { if (e.target.files) handleFileAttach(e.target.files); e.target.value = ""; }}
+                  />
+                </div>
+
+                {mvpGenerating && (
+                  <div className="flex items-center gap-3 px-4 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                    <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+                    <div>
+                      <div className="text-xs text-emerald-400 font-medium">{mvpStep || "Genererar..."}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">Detta kan ta 30-60 sekunder beroende på projektets storlek</div>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={generateMvp}
+                  disabled={mvpGenerating || !mvpPrompt.trim()}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {mvpGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
+                  {mvpGenerating ? "Frankenstein bygger..." : "Generera MVP"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+                {mvpResult.success ? (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                      <div>
+                        <div className="text-xs text-emerald-400 font-medium">Projekt skapat: {mvpResult.plan?.name}</div>
+                        <div className="text-[10px] text-slate-400">{mvpResult.plan?.description}</div>
+                      </div>
+                    </div>
+
+                    {mvpResult.plan?.tech_stack && (
+                      <div className="flex flex-wrap gap-1">
+                        {mvpResult.plan.tech_stack.map((t: string, i: number) => (
+                          <span key={i} className="px-2 py-0.5 text-[10px] bg-blue-500/10 text-blue-400 rounded-full">{t}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-medium mb-1">Skapade filer ({mvpResult.files.length})</div>
+                      <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                        {mvpResult.files.map((f, i) => {
+                          const fi = getFileIcon(f.split("/").pop() || f);
+                          const FI = fi.icon;
+                          return (
+                            <div
+                              key={i}
+                              className="flex items-center gap-2 px-2 py-1 hover:bg-slate-700/30 rounded cursor-pointer text-xs text-slate-300"
+                              onClick={() => {
+                                openFile({ name: f.split("/").pop() || f, path: `${mvpResult.projectDir}/${f}`, type: "file" });
+                              }}
+                            >
+                              <FI className={`w-3 h-3 ${fi.color}`} />
+                              <span>{f}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {mvpResult.commandResults.length > 0 && (
+                      <div>
+                        <div className="text-[11px] text-slate-400 font-medium mb-1">Körda kommandon</div>
+                        {mvpResult.commandResults.map((cr, i) => (
+                          <div key={i} className="flex items-center gap-2 px-2 py-1 text-[10px]">
+                            {cr.success ? <CheckCircle className="w-3 h-3 text-green-400" /> : <AlertCircle className="w-3 h-3 text-red-400" />}
+                            <code className="text-slate-400">{cr.command}</code>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {mvpResult.errors.length > 0 && (
+                      <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <div className="text-[11px] text-red-400 font-medium mb-1">Varningar</div>
+                        {mvpResult.errors.map((e, i) => (
+                          <div key={i} className="text-[10px] text-red-300">{e}</div>
+                        ))}
+                      </div>
+                    )}
+
+                    {mvpResult.plan?.run_command && (
+                      <div className="px-3 py-2 bg-slate-700/30 rounded-lg">
+                        <div className="text-[10px] text-slate-500 mb-1">Starta projektet:</div>
+                        <code className="text-xs text-emerald-400">{mvpResult.plan.run_command}</code>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <div className="text-xs text-red-400 font-medium">Generering misslyckades</div>
+                    {mvpResult.errors.map((e, i) => (
+                      <div key={i} className="text-[10px] text-red-300 mt-1">{e}</div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    onClick={() => { setMvpResult(null); setMvpPrompt(""); setMvpProjectName(""); }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-700/50 text-slate-400 rounded-lg hover:bg-slate-700/70"
+                  >
+                    <Rocket className="w-3 h-3" /> Nytt projekt
+                  </button>
+                  <button
+                    onClick={() => setShowMvpGenerator(false)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30"
+                  >
+                    <Check className="w-3 h-3" /> Klar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Error banner */}
       {error && (
         <div className="flex items-center justify-between px-4 py-2 bg-red-500/20 border-b border-red-500/30 text-red-300 text-sm">
@@ -2111,6 +2460,13 @@ export default function CodeEditorView() {
           title="🧟 AI Semantisk sökning"
         >
           <SearchCode className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setShowMvpGenerator(true)}
+          className={`p-1.5 rounded ${showMvpGenerator ? "bg-emerald-500/20 text-emerald-400" : "hover:bg-slate-700"}`}
+          title="🧟 MVP Generator — Skapa projekt från prompt"
+        >
+          <Rocket className="w-4 h-4" />
         </button>
         <div className="w-px h-5 bg-slate-700" />
         <button
@@ -2900,8 +3256,45 @@ export default function CodeEditorView() {
             </div>
 
             {/* AI input */}
-            <div className="shrink-0 border-t border-slate-700/50 p-2">
+            <div
+              className="shrink-0 border-t border-slate-700/50 p-2"
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer.files.length > 0) handleFileAttach(e.dataTransfer.files);
+              }}
+            >
+              {/* Attachment chips */}
+              {chatAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {chatAttachments.map((att, i) => (
+                    <div key={i} className="flex items-center gap-1 px-1.5 py-0.5 bg-violet-500/10 border border-violet-500/20 rounded text-[10px] text-violet-300">
+                      <Paperclip className="w-2.5 h-2.5" />
+                      <span className="max-w-[100px] truncate">{att.name}</span>
+                      <button onClick={() => setChatAttachments((prev) => prev.filter((_, j) => j !== i))} className="hover:text-red-400" title="Ta bort">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex items-end gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 hover:bg-slate-700/50 rounded-lg text-slate-500 hover:text-slate-300 shrink-0"
+                  title="Bifoga filer (drag&drop eller klistra in)"
+                >
+                  <Paperclip className="w-3.5 h-3.5" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  title="Välj filer att bifoga"
+                  onChange={(e) => { if (e.target.files) handleFileAttach(e.target.files); e.target.value = ""; }}
+                />
                 <textarea
                   value={aiInput}
                   onChange={(e) => {
@@ -2915,7 +3308,22 @@ export default function CodeEditorView() {
                       sendAiMessage();
                     }
                   }}
-                  placeholder="Beskriv vad du vill koda... (Shift+Enter för ny rad)"
+                  onPaste={(e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    const files: File[] = [];
+                    for (const item of Array.from(items)) {
+                      if (item.kind === "file") {
+                        const file = item.getAsFile();
+                        if (file) files.push(file);
+                      }
+                    }
+                    if (files.length > 0) {
+                      e.preventDefault();
+                      handleFileAttach(files);
+                    }
+                  }}
+                  placeholder={chatAttachments.length > 0 ? "Fråga om bifogade filer..." : "Beskriv vad du vill koda... (Shift+Enter för ny rad)"}
                   className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 text-xs outline-none text-slate-200 placeholder:text-slate-500 focus:border-violet-500/50 resize-none overflow-hidden"
                   disabled={aiLoading}
                   rows={1}
@@ -2931,7 +3339,7 @@ export default function CodeEditorView() {
                 ) : (
                   <button
                     onClick={sendAiMessage}
-                    disabled={aiLoading || !aiInput.trim()}
+                    disabled={aiLoading || (!aiInput.trim() && chatAttachments.length === 0)}
                     className="p-2 bg-violet-500/20 text-violet-400 rounded-lg hover:bg-violet-500/30 disabled:opacity-50"
                   >
                     <Send className="w-3.5 h-3.5" />
