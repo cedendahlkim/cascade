@@ -12,7 +12,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%233b82f6'/><stop offset='100%25' stop-color='%238b5cf6'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='url(%23g)'/><text x='50' y='68' font-family='system-ui' font-size='55' font-weight='900' fill='white' text-anchor='middle'>G</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <div class="bg-gradient"></div>
@@ -35,6 +35,7 @@
       <div class="nav-links">
         <a href="#products">Produkter</a>
         <a href="#technology">Teknologi</a>
+        <a href="#research">Forskning</a>
         <a href="#live">Live Data</a>
         <a href="#architecture">Arkitektur</a>
         <a href="https://app.gracestack.se" class="btn btn-primary btn-sm">Öppna appen →</a>
@@ -73,6 +74,8 @@
           <div class="term-line term-out"><span class="term-green">✓</span> Active Inference (pymdp) — redo</div>
           <div class="term-line term-out"><span class="term-green">✓</span> Ebbinghaus-minne — <span id="termMemories">5 717</span> minnen</div>
           <div class="term-line term-out"><span class="term-green">✓</span> Emotionell motor — <span id="termMood">nyfiken</span></div>
+          <div class="term-line term-out"><span class="term-green">✓</span> Math Research Engine — 5 olösta problem</div>
+          <div class="term-line term-out"><span class="term-green">✓</span> Collatz Explorer — autonom utforskning</div>
           <div class="term-line term-out dim">─────────────────────────────────</div>
           <div class="term-line term-out" id="termTask"><span class="term-violet">►</span> Löser: api-emitter — EventEmitter</div>
           <div class="term-line term-out" id="termResult"><span class="term-green">✅</span> 1/1 — 572ms</div>
@@ -120,6 +123,7 @@
         <span class="tech-logo">TypeScript</span>
         <span class="tech-logo">ChromaDB</span>
         <span class="tech-logo">pymdp</span>
+        <span class="tech-logo">NumPy</span>
         <span class="tech-logo">Docker</span>
         <span class="tech-logo">Monaco Editor</span>
       </div>
@@ -157,6 +161,18 @@
             <li>System 0/1/2 arkitektur</li>
           </ul>
           <a href="#technology" class="btn btn-outline btn-sm">Läs mer →</a>
+        </div>
+        <div class="product-card">
+          <div class="product-icon">🔬</div>
+          <h3>Math Research Lab</h3>
+          <p>Autonom matematisk forskning under AI:ns sömnfas. Utforskar olösta problem som Goldbachs förmodan och Collatz-sekvenser.</p>
+          <ul class="product-features">
+            <li>5 olösta matematiska problem</li>
+            <li>Collatz-sekvensutforskning</li>
+            <li>HDC cross-domain discovery</li>
+            <li>Sömndriven forskning (NREM/REM)</li>
+          </ul>
+          <a href="#research" class="btn btn-outline btn-sm">Läs mer →</a>
         </div>
         <div class="product-card">
           <div class="product-icon">💬</div>
@@ -254,15 +270,117 @@
         <div class="feature-card clickable" data-detail="circadian">
           <div class="feature-icon fi-indigo">🌙</div>
           <h3>Dygnsrytm & drömmar</h3>
-          <p>Circadian clock med sömnarkitektur. Under "sömn" konsolideras minnen.</p>
+          <p>Circadian clock med sömnarkitektur. Under "sömn" forskar AI:n i matematik och utforskar Collatz-sekvenser.</p>
+          <span class="card-hint">Klicka för att läsa mer →</span>
+        </div>
+        <div class="feature-card clickable" data-detail="math-research">
+          <div class="feature-icon fi-purple">🔬</div>
+          <h3>Matematisk forskning</h3>
+          <p>Autonom utforskning av olösta problem: Goldbach, tvillingprimtal, Collatz. AIF-driven hypotesformulering.</p>
           <span class="card-hint">Klicka för att läsa mer →</span>
         </div>
       </div>
     </div>
   </section>
 
+  <!-- Math Research -->
+  <section id="research" class="alt-bg">
+    <div class="container">
+      <div class="section-label">🔬 Forskning</div>
+      <h2 class="section-title">Autonom matematisk forskning</h2>
+      <p class="section-desc">Under sömnfasen utforskar Frankenstein AI olösta matematiska problem — helt autonomt. Collatz-sekvenser under djupsömn, kreativ forskning under REM.</p>
+
+      <div class="research-grid">
+        <div class="research-card">
+          <div class="research-emoji">🔢</div>
+          <h4>Goldbachs förmodan</h4>
+          <p>Varje jämnt tal > 2 är summan av två primtal. Olöst sedan 1742.</p>
+          <div class="research-stats">
+            <span class="rs-badge" id="rsGoldbach">Utforskas</span>
+          </div>
+        </div>
+        <div class="research-card">
+          <div class="research-emoji">👯</div>
+          <h4>Tvillingprimtal</h4>
+          <p>Finns det oändligt många primtal med avstånd 2?</p>
+          <div class="research-stats">
+            <span class="rs-badge" id="rsTwinPrime">Utforskas</span>
+          </div>
+        </div>
+        <div class="research-card">
+          <div class="research-emoji">💎</div>
+          <h4>Perfekta tal</h4>
+          <p>Finns det udda perfekta tal? Ingen har hittat ett — eller bevisat att de inte finns.</p>
+          <div class="research-stats">
+            <span class="rs-badge" id="rsPerfect">Utforskas</span>
+          </div>
+        </div>
+        <div class="research-card">
+          <div class="research-emoji">🏃</div>
+          <h4>Lonely Runner</h4>
+          <p>Varje löpare på en cirkulär bana blir "ensam" — bevisat för k ≤ 7.</p>
+          <div class="research-stats">
+            <span class="rs-badge" id="rsLonely">Utforskas</span>
+          </div>
+        </div>
+        <div class="research-card">
+          <div class="research-emoji">🌀</div>
+          <h4>Collatz / Syracuse</h4>
+          <p>Når varje starttal 1? Miljarder sekvenser testade, inget motexempel funnet.</p>
+          <div class="research-stats">
+            <span class="rs-badge active" id="rsCollatz">Aktiv utforskning</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="research-architecture">
+        <h3>Sömndriven forskning</h3>
+        <div class="sleep-phases">
+          <div class="sleep-phase">
+            <div class="phase-icon">🌊</div>
+            <div class="phase-label">NREM — Djupsömn</div>
+            <div class="phase-desc">Systematisk Collatz-utforskning. Intensitet skalas med djupsömnsstyrka. Anomalier konverteras till upptäckter och lagras i Ebbinghaus-minnet.</div>
+          </div>
+          <div class="sleep-phase">
+            <div class="phase-icon">💭</div>
+            <div class="phase-label">REM — Drömfas</div>
+            <div class="phase-desc">Kreativ matematisk forskning. AIF-driven problemval med hög nyfikenhet. Hypotesformulering vid intensiv REM.</div>
+          </div>
+          <div class="sleep-phase">
+            <div class="phase-icon">✨</div>
+            <div class="phase-label">Cross-domain</div>
+            <div class="phase-desc">HDC-similarity mellan fynd från olika problem. Mönster som uppstår i Collatz kan ge insikter om primtal.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="research-live-stats">
+        <div class="rls-item">
+          <div class="rls-value" id="rlsFindings">—</div>
+          <div class="rls-label">Matematiska fynd</div>
+        </div>
+        <div class="rls-item">
+          <div class="rls-value" id="rlsHypotheses">—</div>
+          <div class="rls-label">Hypoteser</div>
+        </div>
+        <div class="rls-item">
+          <div class="rls-value" id="rlsCollatzSeq">—</div>
+          <div class="rls-label">Collatz-sekvenser</div>
+        </div>
+        <div class="rls-item">
+          <div class="rls-value" id="rlsAnomalies">—</div>
+          <div class="rls-label">Anomalier</div>
+        </div>
+        <div class="rls-item">
+          <div class="rls-value" id="rlsTests">188</div>
+          <div class="rls-label">Tester passerar</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Architecture -->
-  <section id="architecture" class="alt-bg">
+  <section id="architecture">
     <div class="container">
       <div class="section-label">🏗️ Arkitektur</div>
       <h2 class="section-title">Tre-nivå bearbetning</h2>
@@ -290,6 +408,8 @@
           <tr><td>Emotionell intelligens</td><td class="check">✅ 6 grundemotioner</td><td class="cross">❌ Ingen</td></tr>
           <tr><td>Deterministisk precision</td><td class="check">✅ System 0 — 100%</td><td class="cross">❌ Probabilistisk</td></tr>
           <tr><td>Autonom förbättring</td><td class="check">✅ Tränar 24/7</td><td class="cross">❌ Manuell finetuning</td></tr>
+          <tr><td>Autonom forskning</td><td class="check">✅ 5 olösta problem + Collatz</td><td class="cross">❌ Ingen</td></tr>
+          <tr><td>Sömndriven inlärning</td><td class="check">✅ NREM/REM-forskning</td><td class="cross">❌ Ingen vilofas</td></tr>
           <tr><td>Superhuman benchmark</td><td class="check">✅ 21/21 (100%)</td><td class="cross">Gemini: 17/21 (81%)</td></tr>
         </tbody>
       </table>
@@ -354,6 +474,7 @@
           <a href="https://app.gracestack.se">Gracestack Editor</a>
           <a href="https://app.gracestack.se">AI Chat</a>
           <a href="https://app.gracestack.se">Frankenstein AI</a>
+          <a href="#research">Math Research</a>
           <a href="https://app.gracestack.se">Research Lab</a>
         </div>
         <div class="footer-col">
@@ -379,6 +500,6 @@
     </div>
   </footer>
 
-  <script src="live.js?v=3"></script>
+  <script src="live.js?v=4"></script>
 </body>
 </html>

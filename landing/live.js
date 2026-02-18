@@ -149,6 +149,53 @@ function updateUI(data) {
   lastData = data;
 }
 
+function updateResearchUI(data) {
+  if (!data) return;
+
+  // Math research stats
+  if (data.mathResearch) {
+    var rlsFindings = document.getElementById('rlsFindings');
+    var rlsHypotheses = document.getElementById('rlsHypotheses');
+    if (rlsFindings) animateCounter(rlsFindings, data.mathResearch.findings, '');
+    if (rlsHypotheses) animateCounter(rlsHypotheses, data.mathResearch.hypotheses, '');
+
+    // Update per-problem badges
+    var problemMap = {
+      'goldbach': 'rsGoldbach',
+      'twin_prime': 'rsTwinPrime',
+      'perfect_number': 'rsPerfect',
+      'lonely_runner': 'rsLonely'
+    };
+    Object.keys(problemMap).forEach(function(key) {
+      var el = document.getElementById(problemMap[key]);
+      if (el && data.mathResearch.problemStats && data.mathResearch.problemStats[key]) {
+        var stats = data.mathResearch.problemStats[key];
+        el.textContent = stats.findings + ' fynd';
+        el.className = 'rs-badge active';
+      }
+    });
+  }
+
+  // Collatz stats
+  if (data.collatz) {
+    var rlsCollatz = document.getElementById('rlsCollatzSeq');
+    var rlsAnomalies = document.getElementById('rlsAnomalies');
+    if (rlsCollatz) animateCounter(rlsCollatz, data.collatz.sequences, '');
+    if (rlsAnomalies) animateCounter(rlsAnomalies, data.collatz.anomalies, '');
+
+    var rsCollatz = document.getElementById('rsCollatz');
+    if (rsCollatz && data.collatz.sequences > 0) {
+      rsCollatz.textContent = data.collatz.sequences.toLocaleString('sv-SE') + ' sekvenser';
+    }
+  }
+
+  // Tests
+  if (data.testing) {
+    var rlsTests = document.getElementById('rlsTests');
+    if (rlsTests) rlsTests.textContent = data.testing.totalTests;
+  }
+}
+
 function fetchStats() {
   fetch(API_BASE + '/api/public/stats')
     .then(function(res) {
@@ -164,6 +211,20 @@ function fetchStats() {
       var status = document.getElementById('heroStatus');
       if (badge) badge.className = 'hero-badge offline';
       if (status) status.textContent = 'Server ej nåbar — visar senaste data';
+    });
+}
+
+function fetchResearchStats() {
+  fetch(API_BASE + '/api/dashboard/frankenstein')
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      updateResearchUI(data);
+    })
+    .catch(function(err) {
+      console.warn('[landing] Failed to fetch research stats:', err);
     });
 }
 
@@ -269,19 +330,55 @@ var DETAILS = {
       '<ul>' +
         '<li><strong>Vakenhet (Active phase):</strong> Normal uppgiftslösning, inlärning och interaktion</li>' +
         '<li><strong>Skymning (Wind-down):</strong> Minskad aktivitet, sammanfattning av dagens erfarenheter</li>' +
-        '<li><strong>Sömn (Sleep phase):</strong> Ingen aktiv uppgiftslösning — istället körs minneskonsolidering</li>' +
-        '<li><strong>Drömfas (Dream phase):</strong> AI:n "drömmer" genom att kombinera och rekombinera minnen på kreativa sätt, vilket kan leda till nya insikter</li>' +
+        '<li><strong>Sömn (Sleep phase):</strong> Ingen aktiv uppgiftslösning — istället körs minneskonsolidering och autonom forskning</li>' +
+        '<li><strong>Drömfas (Dream phase):</strong> AI:n "drömmer" genom att kombinera och rekombinera minnen, samt forskar i olösta matematiska problem</li>' +
         '<li><strong>Gryning (Wake-up):</strong> Gradvis uppstart med uppdaterade modeller och förstärkta minnen</li>' +
       '</ul>' +
-      '<h4>Minneskonsolidering under sömn</h4>' +
-      '<p>Under sömnfasen händer flera viktiga saker:</p>' +
+      '<h4>Sömndriven forskning</h4>' +
+      '<p>Under sömnfasen körs två forskningsprocesser parallellt:</p>' +
+      '<ul>' +
+        '<li><strong>NREM (djupsömn):</strong> Systematisk Collatz-utforskning — hundratals sekvenser analyseras per cykel. Anomalier konverteras till upptäckter och lagras i Ebbinghaus-minnet</li>' +
+        '<li><strong>REM (drömfas):</strong> Kreativ matematisk forskning — Goldbach, tvillingprimtal, perfekta tal, Lonely Runner. AIF-driven problemval med hög nyfikenhet (exploration_weight=0.7)</li>' +
+        '<li><strong>Cross-domain discovery:</strong> I sista sömncykeln jämförs fynd från olika problem via HDC-similarity — mönster i Collatz kan ge insikter om primtal</li>' +
+      '</ul>' +
+      '<h4>Minneskonsolidering</h4>' +
+      '<p>Utöver forskning händer även:</p>' +
       '<ul>' +
         '<li>Svaga minnen som inte använts försvinner (Ebbinghaus glömskekurva)</li>' +
         '<li>Starka minnen förstärks och kopplas samman</li>' +
         '<li>Strategier som fungerat bra "promoteras" uppåt i systemhierarkin</li>' +
         '<li>Emotionella tillstånd återställs till baseline</li>' +
       '</ul>' +
-      '<div class="highlight"><strong>I Frankenstein:</strong> Dygnsrytmen gör att AI:n inte bara blir bättre genom övning — den blir bättre genom vila. Precis som en människa som "sover på saken" och vaknar med en lösning, kan Frankenstein konsolidera och optimera sina kunskaper under vilofasen.</div>'
+      '<div class="highlight"><strong>I Frankenstein:</strong> Dygnsrytmen gör att AI:n inte bara blir bättre genom övning — den blir bättre genom vila och forskning. Under sömn konsolideras minnen, utforskas matematiska problem, och cross-domain-insikter uppstår. 188 tester validerar hela sömnarkitekturen.</div>'
+  },
+  'math-research': {
+    icon: '🔬',
+    title: 'Matematisk forskning',
+    body: '<h4>Vad är det?</h4>' +
+      '<p>Frankenstein AI har en <strong>autonom matematisk forskningsmotor</strong> (MathResearchEngine) som utforskar olösta matematiska problem. Till skillnad från LLM:er som bara kan svara på frågor, <strong>formulerar Frankenstein egna hypoteser</strong> och testar dem systematiskt.</p>' +
+      '<h4>Fem olösta problem</h4>' +
+      '<ul>' +
+        '<li><strong>🔢 Goldbachs förmodan:</strong> Varje jämnt tal > 2 är summan av två primtal. Olöst sedan 1742. Frankenstein söker mönster i primtalssummor</li>' +
+        '<li><strong>👯 Tvillingprimtal:</strong> Finns det oändligt många primtal med avstånd 2? AI:n analyserar gap-distributioner och söker strukturella mönster</li>' +
+        '<li><strong>💎 Perfekta tal:</strong> Finns det udda perfekta tal? Frankenstein testar kandidater och söker algebraiska begränsningar</li>' +
+        '<li><strong>🏃 Lonely Runner:</strong> Bevisat för k ≤ 7 löpare. AI:n simulerar med hög precision och söker motexempel för k > 7</li>' +
+        '<li><strong>🌀 Syracuse/Collatz:</strong> Generaliserade varianter av 3n+1-problemet. Collatz Explorer kör systematisk utforskning</li>' +
+      '</ul>' +
+      '<h4>Forskningsmetodik</h4>' +
+      '<p>Varje problem implementeras som en <strong>ResearchProblem</strong> med tre faser:</p>' +
+      '<ul>' +
+        '<li><strong>Explore:</strong> Systematisk datainsamling — t.ex. testa alla jämna tal i ett intervall för Goldbach</li>' +
+        '<li><strong>Hypothesize:</strong> AIF-driven hypotesformulering baserad på insamlad data</li>' +
+        '<li><strong>Test:</strong> Rigorös testning av hypoteser med statistisk validering</li>' +
+      '</ul>' +
+      '<h4>HDC-kodning</h4>' +
+      '<p>Alla fynd kodas som <strong>hyperdimensionella vektorer</strong> (4096d) via MathHDCEncoder. Detta möjliggör:</p>' +
+      '<ul>' +
+        '<li>Semantisk sökning bland tusentals fynd</li>' +
+        '<li>Cross-domain discovery — likheter mellan problem som annars verkar orelaterade</li>' +
+        '<li>Persistent lagring i Ebbinghaus-minnet med glömskekurva</li>' +
+      '</ul>' +
+      '<div class="highlight"><strong>I Frankenstein:</strong> Matematisk forskning körs autonomt under sömnfasen. NREM-cykler driver Collatz-utforskning, REM-cykler driver kreativ forskning. Alla 188 tester passerar — inklusive 86 dedikerade math research-tester.</div>'
   }
 };
 
@@ -366,7 +463,7 @@ var revealObserver = new IntersectionObserver(function(entries) {
   });
 }, { threshold: 0.05, rootMargin: '0px 0px 50px 0px' });
 
-var revealEls = document.querySelectorAll('.feature-card:not(.clickable), .arch-card, .team-card, .stat, .section-title, .section-desc, .dash-card, .product-card, .hero-terminal, .logos-section');
+var revealEls = document.querySelectorAll('.feature-card:not(.clickable), .arch-card, .team-card, .stat, .section-title, .section-desc, .dash-card, .product-card, .hero-terminal, .logos-section, .research-card, .sleep-phase, .research-architecture, .research-live-stats, .rls-item');
 revealEls.forEach(function(el) {
   el.classList.add('reveal');
   revealObserver.observe(el);
@@ -400,4 +497,6 @@ window.addEventListener('scroll', function() {
 
 // Initial fetch + interval
 fetchStats();
+fetchResearchStats();
 setInterval(fetchStats, REFRESH_INTERVAL);
+setInterval(fetchResearchStats, REFRESH_INTERVAL);
