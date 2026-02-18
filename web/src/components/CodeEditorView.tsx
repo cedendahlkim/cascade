@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo, type DragEvent } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense, type DragEvent } from "react";
 import Editor, { DiffEditor, type Monaco } from "@monaco-editor/react";
 import {
   FolderOpen, ChevronRight, ChevronDown, Plus, Save,
@@ -9,9 +9,11 @@ import {
   Hash, Braces, Coffee, Gem, FileCode2, Globe, Cpu, Package,
   Columns, Undo2, Eye, GripVertical, Copy, Check, Maximize2, Minimize2, CheckCircle, AlertCircle, Info,
   Wand2, MessageSquare, FileEdit, SquareSlash, StopCircle,
+  Trash2, Upload, CircleDot, Eraser,
   type LucideIcon,
 } from "lucide-react";
 import { BRIDGE_URL } from "../config";
+import XTerminal from "./XTerminal";
 
 // ── Types ──
 
@@ -726,7 +728,7 @@ export default function CodeEditorView() {
     }
   }, []);
 
-  useEffect(() => { loadTree(); }, [loadTree]);
+  useEffect(() => { loadTree(); loadGitStatus(); }, [loadTree, loadGitStatus]);
 
   // ── Open file ──
   const openFile = async (node: FileNode) => {
@@ -1807,22 +1809,39 @@ export default function CodeEditorView() {
                     onChange={handleEditorChange}
                     onMount={handleMonacoMount}
                     options={{
-                      minimap: { enabled: showMinimap },
+                      minimap: { enabled: showMinimap, scale: 1, showSlider: "mouseover" },
                       fontSize,
                       lineNumbers: "on",
                       wordWrap,
                       tabSize: 2,
                       scrollBeyondLastLine: false,
                       automaticLayout: true,
-                      padding: { top: 8 },
+                      padding: { top: 8, bottom: 8 },
                       smoothScrolling: true,
                       cursorBlinking: "smooth",
                       cursorSmoothCaretAnimation: "on",
                       bracketPairColorization: { enabled: true },
-                      guides: { bracketPairs: true, indentation: true },
+                      guides: { bracketPairs: true, bracketPairsHorizontal: true, indentation: true, highlightActiveIndentation: true },
                       renderLineHighlight: "all",
                       fontLigatures: true,
-                      suggest: { preview: true, showMethods: true, showFunctions: true },
+                      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, Monaco, monospace",
+                      suggest: { preview: true, showMethods: true, showFunctions: true, showKeywords: true, showSnippets: true },
+                      stickyScroll: { enabled: true },
+                      linkedEditing: true,
+                      renderWhitespace: "selection",
+                      matchBrackets: "always",
+                      occurrencesHighlight: "singleFile",
+                      selectionHighlight: true,
+                      folding: true,
+                      foldingHighlight: true,
+                      showFoldingControls: "mouseover",
+                      colorDecorators: true,
+                      inlayHints: { enabled: "on" },
+                      quickSuggestions: { other: true, comments: false, strings: true },
+                      parameterHints: { enabled: true },
+                      formatOnPaste: true,
+                      dragAndDrop: true,
+                      mouseWheelZoom: true,
                     }}
                   />
                 </div>
@@ -1959,7 +1978,7 @@ export default function CodeEditorView() {
             )}
           </div>
 
-          {/* Terminal */}
+          {/* Terminal (xterm.js) */}
           {showTerminal && (
             <div className="border-t border-slate-700/50 bg-[#0d1117] flex flex-col relative" style={{ height: terminalHeight }}>
               <div
@@ -1968,47 +1987,18 @@ export default function CodeEditorView() {
               />
               <div className="flex items-center justify-between px-3 py-1 bg-[#161b22] border-b border-slate-700/50">
                 <div className="flex items-center gap-2">
-                  <Terminal className="w-3.5 h-3.5 text-slate-500" />
+                  <Terminal className="w-3.5 h-3.5 text-green-400" />
                   <span className="text-xs font-semibold text-slate-400">Terminal</span>
-                  <span className="text-[10px] text-slate-600">{terminalOutput.length} rader</span>
+                  <span className="text-[10px] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded-full">xterm</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => setTerminalOutput([])} className="p-0.5 hover:bg-slate-700 rounded" title="Rensa terminal">
-                    <RefreshCw className="w-3 h-3 text-slate-500" />
-                  </button>
                   <button onClick={() => setShowTerminal(false)} title="Stäng terminal">
-                    <X className="w-3.5 h-3.5 text-slate-500" />
+                    <X className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300" />
                   </button>
                 </div>
               </div>
-              <div ref={terminalRef} className="flex-1 overflow-y-auto p-2 font-mono text-xs text-slate-300 select-text">
-                {terminalOutput.length === 0 && (
-                  <div className="text-slate-600 text-center mt-4">Skriv ett kommando nedan...</div>
-                )}
-                {terminalOutput.map((line, i) => (
-                  <div key={i} className={
-                    line.startsWith("$ ") ? "text-green-400 font-semibold mt-1" :
-                    line.startsWith("[stderr]") ? "text-red-400" :
-                    line.startsWith("[exit: 0]") ? "text-slate-600 text-[10px] mb-1" :
-                    line.startsWith("[exit:") ? "text-red-500 text-[10px] mb-1" :
-                    line.startsWith("[error]") ? "text-red-400 italic" :
-                    "text-slate-300"
-                  }>{line}</div>
-                ))}
-              </div>
-              <div className="flex items-center gap-2 px-2 py-1.5 border-t border-slate-700/50">
-                <span className="text-green-400 text-xs font-mono">$</span>
-                <input
-                  type="text"
-                  value={terminalInput}
-                  onChange={(e) => setTerminalInput(e.target.value)}
-                  onKeyDown={handleTerminalKeyDown}
-                  placeholder="Skriv kommando... (↑↓ historik, Ctrl+L rensa)"
-                  className="flex-1 bg-transparent text-xs font-mono outline-none text-slate-200 placeholder:text-slate-600"
-                />
-                <button onClick={runCommand} className="p-1 hover:bg-slate-700 rounded" title="Kör">
-                  <Play className="w-3.5 h-3.5 text-green-400" />
-                </button>
+              <div className="flex-1 min-h-0">
+                <XTerminal visible={showTerminal} />
               </div>
             </div>
           )}
@@ -2168,20 +2158,40 @@ export default function CodeEditorView() {
               <div className="flex items-center gap-2">
                 <Bot className="w-4 h-4 text-violet-400" />
                 <span className="text-xs font-semibold text-slate-300">Frankenstein AI</span>
+                {aiMessages.length > 0 && (
+                  <span className="text-[9px] bg-violet-500/20 text-violet-400 px-1.5 py-0.5 rounded-full">{aiMessages.length}</span>
+                )}
               </div>
-              <button onClick={() => setShowAiPanel(false)} title="Stäng AI-panel">
-                <X className="w-3.5 h-3.5 text-slate-500" />
-              </button>
+              <div className="flex items-center gap-1">
+                {aiMessages.length > 0 && (
+                  <button
+                    onClick={() => setAiMessages([])}
+                    className="p-0.5 hover:bg-slate-700 rounded"
+                    title="Rensa chat"
+                  >
+                    <Eraser className="w-3 h-3 text-slate-500" />
+                  </button>
+                )}
+                <button onClick={() => setShowAiPanel(false)} title="Stäng AI-panel">
+                  <X className="w-3.5 h-3.5 text-slate-500" />
+                </button>
+              </div>
             </div>
 
-            {/* AI help */}
-            <div className="shrink-0 px-3 py-2 border-b border-slate-700/30 text-[10px] text-slate-500 space-y-0.5">
-              <div className="font-semibold text-slate-400 mb-1">Skriv vad du vill — Frankenstein kodar det</div>
-              <div>💬 &quot;Lägg till en login-sida med email och lösenord&quot;</div>
-              <div>✏️ &quot;Fixa bugg i rad 42 — variabeln är undefined&quot;</div>
-              <div>📄 &quot;Skapa en REST API med Express för users&quot;</div>
-              <div>🖥️ &quot;Kör npm test och visa resultatet&quot;</div>
-              <div>🔍 &quot;Förklara vad den här filen gör&quot;</div>
+            {/* Context chips — show what AI sees */}
+            <div className="shrink-0 px-3 py-1.5 border-b border-slate-700/30 flex items-center gap-1 flex-wrap">
+              <span className="text-[9px] text-slate-600 mr-1">Kontext:</span>
+              {currentTab ? (
+                <span className="text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                  <CircleDot className="w-2.5 h-2.5" /> {currentTab.name}
+                </span>
+              ) : (
+                <span className="text-[9px] text-slate-600">Ingen fil öppen</span>
+              )}
+              {tabs.filter((t) => t.path !== activeTab).slice(0, 4).map((t) => (
+                <span key={t.path} className="text-[9px] bg-slate-700/40 text-slate-500 px-1.5 py-0.5 rounded-full">{t.name}</span>
+              ))}
+              {tabs.length > 5 && <span className="text-[9px] text-slate-600">+{tabs.length - 5}</span>}
             </div>
 
             {/* Messages */}
@@ -2285,22 +2295,40 @@ export default function CodeEditorView() {
       </div>
 
       {/* Status Bar */}
-      <div className="flex items-center justify-between px-3 py-0.5 bg-[#161b22] border-t border-slate-700/50 text-[10px] text-slate-500">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-3 py-0.5 bg-[#161b22] border-t border-slate-700/50 text-[10px] text-slate-500 select-none">
+        <div className="flex items-center gap-2">
+          {/* Git branch */}
+          <button
+            onClick={() => setShowGitPanel((v) => !v)}
+            className={`flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-700/50 transition-colors ${showGitPanel ? "text-orange-400" : ""}`}
+            title="Git (Ctrl+G)"
+          >
+            <GitBranch className="w-3 h-3" />
+            <span>{gitStatus?.branch || "main"}</span>
+            {gitStatus && !gitStatus.clean && (
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            )}
+          </button>
+          <span className="text-slate-700">|</span>
           {currentTab && (
             <>
-              <span>Rad {cursorPosition.line}, Kol {cursorPosition.col}</span>
-              <span className="text-slate-600">|</span>
-              <span className="uppercase">{currentTab.language}</span>
-              <span className="text-slate-600">|</span>
+              <span>Ln {cursorPosition.line}, Col {cursorPosition.col}</span>
+              <span className="text-slate-700">|</span>
+              <span className="uppercase cursor-pointer hover:text-slate-300">{currentTab.language}</span>
+              <span className="text-slate-700">|</span>
               <span>UTF-8</span>
+              <span className="text-slate-700">|</span>
+              <span>LF</span>
             </>
           )}
-          {!currentTab && <span>Gracestack Editor</span>}
+          {!currentTab && <span>Gracestack Editor v2.0</span>}
         </div>
-        <div className="flex items-center gap-3">
-          {autoSave && <span className="text-green-500/60 flex items-center gap-0.5"><Zap className="w-2.5 h-2.5" /> Auto-save</span>}
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-violet-400/60"><Sparkles className="w-2.5 h-2.5" /> AI</span>
+          {autoSave && <span className="text-green-500/60 flex items-center gap-0.5"><Zap className="w-2.5 h-2.5" /> Auto</span>}
+          <span className="text-slate-700">|</span>
           <span>{tabs.length} flik{tabs.length !== 1 ? "ar" : ""}</span>
+          <span className="text-slate-700">|</span>
           <span className="cursor-pointer hover:text-slate-300" onClick={() => setShowThemePicker(true)}>{THEMES.find((t) => t.id === editorTheme)?.label || editorTheme}</span>
         </div>
       </div>
