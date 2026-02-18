@@ -1482,14 +1482,25 @@ Regler:
     );
 
     const planData = await planRes.json() as any;
+    if (planData?.error) {
+      return res.status(500).json({ error: `Gemini API error: ${planData.error.message || JSON.stringify(planData.error)}` });
+    }
     let planText = planData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    planText = planText.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "").trim();
+    // Strip code fences robustly (handles ```json, ``` json, whitespace variants)
+    planText = planText.replace(/^\s*```\s*\w*\s*\n?/, "").replace(/\n?\s*```\s*$/, "").trim();
 
     let plan: any;
     try {
       plan = JSON.parse(planText);
     } catch {
-      return res.status(500).json({ error: "AI kunde inte generera en giltig projektplan", raw: planText });
+      // Try to extract JSON from the text
+      const jsonMatch = planText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { plan = JSON.parse(jsonMatch[0]); } catch { /* fall through */ }
+      }
+      if (!plan) {
+        return res.status(500).json({ error: "AI kunde inte generera en giltig projektplan", raw: planText.slice(0, 500) });
+      }
     }
 
     if (!plan.files || !Array.isArray(plan.files)) {
@@ -1553,11 +1564,21 @@ Koden ska vara komplett, fungerande och följa best practices.`;
         );
 
         const fileData = await fileRes.json() as any;
+        if (fileData?.error) {
+          errors.push(`${filePath}: Gemini API error: ${fileData.error.message || "unknown"}`);
+          continue;
+        }
         let content = fileData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        content = content.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "").trim();
+        // Strip outer code fences (handles ```js, ```json, etc.)
+        content = content.replace(/^\s*```\s*\w*\s*\n/, "").replace(/\n\s*```\s*$/, "").trim();
 
         writeFileSync(fullPath, content, "utf-8");
         createdFiles.push(filePath);
+
+        // Rate limit: 1s delay between files to avoid Gemini 429
+        if (plan.files.indexOf(file) < plan.files.length - 1) {
+          await new Promise(r => setTimeout(r, 1000));
+        }
       } catch (err) {
         errors.push(`${filePath}: ${err}`);
       }

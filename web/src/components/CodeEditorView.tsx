@@ -1183,7 +1183,24 @@ export default function CodeEditorView() {
     setMvpResult(null);
     setMvpStep("Frankenstein planerar projektet...");
 
+    // Progress simulation while waiting
+    const steps = [
+      "Frankenstein planerar projektet...",
+      "Analyserar tech stack...",
+      "Genererar filer...",
+      "Skriver kod...",
+      "Installerar beroenden...",
+    ];
+    let stepIdx = 0;
+    const stepTimer = setInterval(() => {
+      stepIdx = Math.min(stepIdx + 1, steps.length - 1);
+      setMvpStep(steps[stepIdx]);
+    }, 8000);
+
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180_000); // 3 min timeout
+
       const res = await api("/ai/generate-mvp", {
         method: "POST",
         body: JSON.stringify({
@@ -1191,8 +1208,10 @@ export default function CodeEditorView() {
           projectName: mvpProjectName || undefined,
           attachments: chatAttachments.length > 0 ? chatAttachments : undefined,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeout);
       setMvpResult(res);
       setMvpStep("");
 
@@ -1206,9 +1225,12 @@ export default function CodeEditorView() {
         }
       }
     } catch (err) {
-      setMvpResult({ success: false, projectDir: "", plan: null, files: [], errors: [String(err)], commandResults: [] });
+      const msg = String(err);
+      const userMsg = msg.includes("abort") ? "Timeout — generering tog för lång tid (>3 min)" : msg;
+      setMvpResult({ success: false, projectDir: "", plan: null, files: [], errors: [userMsg], commandResults: [] });
       setMvpStep("");
     } finally {
+      clearInterval(stepTimer);
       setMvpGenerating(false);
     }
   };
