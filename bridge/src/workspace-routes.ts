@@ -975,6 +975,214 @@ router.post("/ai/terminal", async (req: Request, res: Response) => {
   }
 });
 
+// ── Git Integration ──
+
+/** Helper to run git commands */
+async function runGit(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    const proc = spawn("git", args, { cwd: WORKSPACE_ROOT, timeout: 15000 });
+    proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString("utf-8"); });
+    proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf-8"); });
+    proc.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 1 }));
+    proc.on("error", (err) => resolve({ stdout, stderr: String(err), exitCode: 1 }));
+  });
+}
+
+/** GET /api/workspace/git/status — Git status */
+router.get("/git/status", async (_req: Request, res: Response) => {
+  try {
+    const status = await runGit(["status", "--porcelain=v1", "-b"]);
+    const branch = await runGit(["branch", "--show-current"]);
+    const logResult = await runGit(["log", "--oneline", "-10", "--format=%h|%s|%an|%ar"]);
+
+    const files: Array<{ status: string; path: string; staged: boolean }> = [];
+    for (const line of status.stdout.split("\n").filter(Boolean)) {
+      if (line.startsWith("##")) continue;
+      const xy = line.slice(0, 2);
+      const filePath = line.slice(3).trim();
+      const staged = xy[0] !== " " && xy[0] !== "?";
+      let statusLabel = "modified";
+      if (xy.includes("A")) statusLabel = "added";
+      else if (xy.includes("D")) statusLabel = "deleted";
+      else if (xy.includes("?")) statusLabel = "untracked";
+      else if (xy.includes("R")) statusLabel = "renamed";
+      files.push({ status: statusLabel, path: filePath, staged });
+    }
+
+    const commits = logResult.stdout.split("\n").filter(Boolean).map((line) => {
+      const [hash, message, author, time] = line.split("|");
+      return { hash, message, author, time };
+    });
+
+    res.json({
+      branch: branch.stdout.trim(),
+      files,
+      commits,
+      clean: files.length === 0,
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** GET /api/workspace/git/diff?path=... — Git diff for a file */
+router.get("/git/diff", async (req: Request, res: Response) => {
+  const filePath = req.query.path as string;
+  const staged = req.query.staged === "true";
+  try {
+    const args = staged ? ["diff", "--cached"] : ["diff"];
+    if (filePath) args.push("--", filePath);
+    const result = await runGit(args);
+    res.json({ diff: result.stdout, path: filePath || "all" });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** POST /api/workspace/git/stage — Stage files */
+router.post("/git/stage", async (req: Request, res: Response) => {
+  const { paths } = req.body;
+  try {
+    const args = ["add", ...(paths?.length ? paths : ["."])];
+    const result = await runGit(args);
+    res.json({ ok: result.exitCode === 0, stderr: result.stderr });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** POST /api/workspace/git/unstage — Unstage files */
+router.post("/git/unstage", async (req: Request, res: Response) => {
+  const { paths } = req.body;
+  try {
+    const args = ["reset", "HEAD", ...(paths?.length ? paths : ["."])];
+    const result = await runGit(args);
+    res.json({ ok: result.exitCode === 0, stderr: result.stderr });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** POST /api/workspace/git/commit — Commit staged changes */
+router.post("/git/commit", async (req: Request, res: Response) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: "message required" });
+  try {
+    const result = await runGit(["commit", "-m", message]);
+    res.json({ ok: result.exitCode === 0, stdout: result.stdout, stderr: result.stderr });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** POST /api/workspace/git/push — Push to remote */
+router.post("/git/push", async (_req: Request, res: Response) => {
+  try {
+    const result = await runGit(["push"]);
+    res.json({ ok: result.exitCode === 0, stdout: result.stdout, stderr: result.stderr });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** POST /api/workspace/git/ai-commit — AI generates commit message */
+router.post("/git/ai-commit", async (_req: Request, res: Response) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || "";
+    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+    const diff = await runGit(["diff", "--cached"]);
+    if (!diff.stdout.trim()) {
+      const unstaged = await runGit(["diff"]);
+      if (!unstaged.stdout.trim()) return res.json({ message: "chore: minor updates" });
+      diff.stdout = unstaged.stdout;
+    }
+
+    const prompt = `Generate a concise, conventional commit message for these changes. Use format: type(scope): description. Types: feat, fix, refactor, docs, style, test, chore. Return ONLY the commit message, nothing else.\n\nDiff:\n${diff.stdout.slice(0, 8000)}`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 200 },
+        }),
+      }
+    );
+    const data = await response.json() as any;
+    const message = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "chore: update files";
+    res.json({ message });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── AI Autocomplete ──
+
+/** POST /api/workspace/ai/complete — Ghost text completion */
+router.post("/ai/complete", async (req: Request, res: Response) => {
+  const { path: relPath, content, line, column, prefix } = req.body;
+  if (!content) return res.status(400).json({ error: "content required" });
+
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+  try {
+    const ext = relPath ? extname(relPath) : ".txt";
+    const language = langFromExt(ext);
+
+    const lines = content.split("\n");
+    const currentLine = lines[line - 1] || "";
+    const contextBefore = lines.slice(Math.max(0, line - 30), line).join("\n");
+    const contextAfter = lines.slice(line, Math.min(lines.length, line + 10)).join("\n");
+
+    const prompt = `You are an AI code completion engine. Complete the code at the cursor position.
+
+LANGUAGE: ${language}
+FILE: ${relPath || "unknown"}
+
+CODE BEFORE CURSOR:
+${contextBefore}
+${currentLine.slice(0, column - 1)}█
+
+CODE AFTER CURSOR:
+${currentLine.slice(column - 1)}
+${contextAfter}
+
+RULES:
+- Return ONLY the completion text that should be inserted at the cursor (█)
+- Do NOT repeat any code that already exists before the cursor
+- Keep completions concise (1-5 lines typically)
+- Match the existing code style and indentation
+- If no meaningful completion, return empty string
+- No explanations, no markdown`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 512 },
+        }),
+      }
+    );
+
+    const data = await response.json() as any;
+    let completion = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    completion = completion.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "");
+
+    res.json({ completion, line, column });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // ── Terminal PTY via Socket.IO ──
 
 const terminals: Map<string, ChildProcess> = new Map();

@@ -371,21 +371,46 @@ function TreeNode({
   );
 }
 
-// ── AI Markdown renderer ──
+// ── AI Markdown renderer with Apply buttons ──
 
-function AiMarkdown({ content }: { content: string }) {
+interface AiMarkdownProps {
+  content: string;
+  onApplyCode?: (path: string, code: string, isNew: boolean) => void;
+  onOpenFile?: (path: string) => void;
+}
+
+function AiMarkdown({ content, onApplyCode, onOpenFile }: AiMarkdownProps) {
   const [copied, setCopied] = useState<number | null>(null);
+  const [applied, setApplied] = useState<Set<number>>(new Set());
 
   const parts = useMemo(() => {
-    const result: { type: "text" | "code"; lang?: string; value: string }[] = [];
-    const codeRegex = /```(\w*)\n([\s\S]*?)```/g;
+    const result: { type: "text" | "code"; lang?: string; value: string; filePath?: string; action?: "edit" | "create" | "run" }[] = [];
+    const codeRegex = /```([\w:.\/\\-]*)\n([\s\S]*?)```/g;
     let lastIdx = 0;
     let match;
     while ((match = codeRegex.exec(content)) !== null) {
       if (match.index > lastIdx) {
         result.push({ type: "text", value: content.slice(lastIdx, match.index) });
       }
-      result.push({ type: "code", lang: match[1] || "plaintext", value: match[2].trimEnd() });
+      const langTag = match[1] || "plaintext";
+      let lang = langTag;
+      let filePath: string | undefined;
+      let action: "edit" | "create" | "run" | undefined;
+
+      if (langTag.startsWith("EDIT:")) {
+        filePath = langTag.slice(5);
+        lang = filePath.split(".").pop() || "plaintext";
+        action = "edit";
+      } else if (langTag.startsWith("CREATE:")) {
+        filePath = langTag.slice(7);
+        lang = filePath.split(".").pop() || "plaintext";
+        action = "create";
+      } else if (langTag === "RUN") {
+        action = "run";
+        lang = "shell";
+      }
+
+      result.push({ type: "code", lang, value: match[2].trimEnd(), filePath, action });
       lastIdx = match.index + match[0].length;
     }
     if (lastIdx < content.length) {
@@ -407,23 +432,84 @@ function AiMarkdown({ content }: { content: string }) {
     setTimeout(() => setCopied(null), 2000);
   };
 
+  const handleApply = (part: typeof parts[0], idx: number) => {
+    if (part.filePath && onApplyCode) {
+      onApplyCode(part.filePath, part.value, part.action === "create");
+      setApplied((prev) => new Set(prev).add(idx));
+    }
+  };
+
   return (
     <div className="space-y-2">
       {parts.map((part, i) =>
         part.type === "code" ? (
-          <div key={i} className="relative group rounded-lg overflow-hidden border border-slate-700/50">
-            <div className="flex items-center justify-between px-3 py-1 bg-slate-800/80 border-b border-slate-700/30">
-              <span className="text-[10px] text-slate-500 uppercase">{part.lang}</span>
-              <button
-                onClick={() => handleCopy(part.value, i)}
-                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
-                title="Kopiera kod"
-              >
-                {copied === i ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                {copied === i ? "Kopierat!" : "Kopiera"}
-              </button>
+          <div key={i} className={`relative group rounded-lg overflow-hidden border ${
+            part.action === "edit" ? "border-amber-500/30" :
+            part.action === "create" ? "border-green-500/30" :
+            part.action === "run" ? "border-blue-500/30" :
+            "border-slate-700/50"
+          }`}>
+            <div className={`flex items-center justify-between px-3 py-1 border-b ${
+              part.action === "edit" ? "bg-amber-500/10 border-amber-500/20" :
+              part.action === "create" ? "bg-green-500/10 border-green-500/20" :
+              part.action === "run" ? "bg-blue-500/10 border-blue-500/20" :
+              "bg-slate-800/80 border-slate-700/30"
+            }`}>
+              <div className="flex items-center gap-2">
+                {part.action === "edit" && <FileEdit className="w-3 h-3 text-amber-400" />}
+                {part.action === "create" && <Plus className="w-3 h-3 text-green-400" />}
+                {part.action === "run" && <Play className="w-3 h-3 text-blue-400" />}
+                <span className="text-[10px] text-slate-400">
+                  {part.filePath ? part.filePath : part.lang?.toUpperCase()}
+                </span>
+                {part.action && (
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                    part.action === "edit" ? "bg-amber-500/20 text-amber-400" :
+                    part.action === "create" ? "bg-green-500/20 text-green-400" :
+                    "bg-blue-500/20 text-blue-400"
+                  }`}>
+                    {part.action === "edit" ? "EDIT" : part.action === "create" ? "NEW" : "CMD"}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                {part.filePath && onApplyCode && (
+                  applied.has(i) ? (
+                    <span className="flex items-center gap-1 text-[10px] text-green-400">
+                      <CheckCircle className="w-3 h-3" /> Applicerad
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleApply(part, i)}
+                      className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded transition-colors ${
+                        part.action === "create"
+                          ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                          : "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                      }`}
+                    >
+                      <Wand2 className="w-3 h-3" /> Applicera
+                    </button>
+                  )
+                )}
+                {part.filePath && onOpenFile && (
+                  <button
+                    onClick={() => onOpenFile(part.filePath!)}
+                    className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                    title="Öppna fil"
+                  >
+                    <Eye className="w-3 h-3" />
+                  </button>
+                )}
+                <button
+                  onClick={() => handleCopy(part.value, i)}
+                  className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                  title="Kopiera kod"
+                >
+                  {copied === i ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                </button>
+              </div>
             </div>
-            <pre className="p-3 bg-[#0d1117] overflow-x-auto text-[11px] leading-relaxed">
+            <pre className="p-3 bg-[#0d1117] overflow-x-auto text-[11px] leading-relaxed max-h-64 overflow-y-auto">
               <code className="text-slate-300">{part.value}</code>
             </pre>
           </div>
@@ -550,6 +636,10 @@ export default function CodeEditorView() {
   const [showDiff, setShowDiff] = useState(false);
   const [diffContent, setDiffContent] = useState<{ original: string; modified: string } | null>(null);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showGitPanel, setShowGitPanel] = useState(false);
+  const [gitStatus, setGitStatus] = useState<{ branch: string; files: any[]; commits: any[]; clean: boolean } | null>(null);
+  const [gitLoading, setGitLoading] = useState(false);
+  const [commitMsg, setCommitMsg] = useState("");
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [editorTheme, setEditorTheme] = useState("gracestack-midnight");
   const [showMinimap, setShowMinimap] = useState(false);
@@ -1124,6 +1214,117 @@ export default function CodeEditorView() {
     setDiffContent(null);
   };
 
+  // ── Git functions ──
+  const loadGitStatus = useCallback(async () => {
+    setGitLoading(true);
+    try {
+      const data = await api("/git/status");
+      setGitStatus(data);
+    } catch { setGitStatus(null); }
+    finally { setGitLoading(false); }
+  }, []);
+
+  const stageFiles = async (paths?: string[]) => {
+    await api("/git/stage", { method: "POST", body: JSON.stringify({ paths }) });
+    await loadGitStatus();
+    addToast("success", "Filer stagade");
+  };
+
+  const unstageFiles = async (paths?: string[]) => {
+    await api("/git/unstage", { method: "POST", body: JSON.stringify({ paths }) });
+    await loadGitStatus();
+  };
+
+  const commitChanges = async () => {
+    if (!commitMsg.trim()) return;
+    try {
+      const result = await api("/git/commit", { method: "POST", body: JSON.stringify({ message: commitMsg }) });
+      if (result.ok) {
+        addToast("success", "Commit skapad!");
+        setCommitMsg("");
+        await loadGitStatus();
+      } else {
+        addToast("error", result.stderr || "Commit misslyckades");
+      }
+    } catch (err) { addToast("error", `Commit-fel: ${err}`); }
+  };
+
+  const pushChanges = async () => {
+    try {
+      const result = await api("/git/push", { method: "POST" });
+      if (result.ok) addToast("success", "Push lyckades!");
+      else addToast("error", result.stderr || "Push misslyckades");
+    } catch (err) { addToast("error", `Push-fel: ${err}`); }
+  };
+
+  const aiCommitMsg = async () => {
+    try {
+      const data = await api("/git/ai-commit", { method: "POST" });
+      setCommitMsg(data.message || "");
+    } catch { addToast("error", "Kunde inte generera commit-meddelande"); }
+  };
+
+  useEffect(() => { if (showGitPanel) loadGitStatus(); }, [showGitPanel, loadGitStatus]);
+
+  // ── AI Autocomplete (ghost text) ──
+  const autocompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autocompleteAbortRef = useRef<AbortController | null>(null);
+
+  const setupAutocomplete = useCallback((editor: any, monaco: any) => {
+    if (!editor || !monaco) return;
+
+    const provider = monaco.languages.registerInlineCompletionsProvider("*", {
+      provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
+        // Debounce — only trigger after user stops typing
+        if (autocompleteAbortRef.current) autocompleteAbortRef.current.abort();
+        const abortController = new AbortController();
+        autocompleteAbortRef.current = abortController;
+
+        await new Promise((r) => setTimeout(r, 800));
+        if (token.isCancellationRequested || abortController.signal.aborted) return { items: [] };
+
+        const content = model.getValue();
+        const line = position.lineNumber;
+        const column = position.column;
+        const currentLine = model.getLineContent(line);
+
+        // Skip if line is empty or just whitespace, or if content is too short
+        if (currentLine.trim().length < 3 || content.length < 20) return { items: [] };
+
+        try {
+          const activeFile = tabs.find((t) => t.path === activeTab);
+          const res = await fetch(`${BRIDGE_URL}/api/workspace/ai/complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              path: activeFile?.path || "",
+              content,
+              line,
+              column,
+            }),
+            signal: abortController.signal,
+          });
+
+          if (!res.ok) return { items: [] };
+          const data = await res.json();
+          if (!data.completion?.trim()) return { items: [] };
+
+          return {
+            items: [{
+              insertText: data.completion,
+              range: new monaco.Range(line, column, line, column),
+            }],
+          };
+        } catch {
+          return { items: [] };
+        }
+      },
+      freeInlineCompletions: () => {},
+    });
+
+    return () => provider.dispose();
+  }, [activeTab, tabs]);
+
   const currentTab = tabs.find((t) => t.path === activeTab);
   const splitTabData = tabs.find((t) => t.path === splitTab);
 
@@ -1149,7 +1350,9 @@ export default function CodeEditorView() {
     { id: "mdpreview", label: `${showMarkdownPreview ? "Dölj" : "Visa"} Markdown-förhandsvisning`, icon: Eye, action: () => setShowMarkdownPreview((v) => !v), category: "Vy" },
     { id: "clearterminal", label: "Rensa terminal", icon: Terminal, action: () => setTerminalOutput([]), category: "Terminal" },
     { id: "refresh", label: "Uppdatera filträd", icon: RefreshCw, action: loadTree, category: "Navigering" },
-  ], [activeTab, showMinimap, wordWrap, autoSave, showSplit, isFullscreen, showMarkdownPreview, currentTab]);
+    { id: "git", label: "Visa/dölj Git-panel", shortcut: "Ctrl+G", icon: GitBranch, action: () => setShowGitPanel((v) => !v), category: "Git" },
+    { id: "inlineai", label: "Inline AI Edit", shortcut: "Ctrl+K", icon: Wand2, action: triggerInlineEdit, category: "AI" },
+  ], [activeTab, showMinimap, wordWrap, autoSave, showSplit, isFullscreen, showMarkdownPreview, currentTab, triggerInlineEdit]);
 
   // ── Keyboard shortcuts ──
   useEffect(() => {
@@ -1199,6 +1402,10 @@ export default function CodeEditorView() {
         e.preventDefault();
         triggerInlineEdit();
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === "g") {
+        e.preventDefault();
+        setShowGitPanel((v) => !v);
+      }
       if (e.key === "Escape" && inlineEdit.visible) {
         dismissInlineEdit();
       }
@@ -1215,7 +1422,9 @@ export default function CodeEditorView() {
     _editor.onDidChangeCursorPosition((e: any) => {
       setCursorPosition({ line: e.position.lineNumber, col: e.position.column });
     });
-  }, []);
+    // Register AI autocomplete
+    setupAutocomplete(_editor, monaco);
+  }, [setupAutocomplete]);
 
   // ── Breadcrumbs ──
   const breadcrumbs = currentTab ? currentTab.path.split("/") : [];
@@ -1290,6 +1499,13 @@ export default function CodeEditorView() {
           title="Frankenstein AI (Ctrl+I)"
         >
           <Bot className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setShowGitPanel((v) => !v)}
+          className={`p-1.5 rounded ${showGitPanel ? "bg-orange-500/20 text-orange-400" : "hover:bg-slate-700"}`}
+          title="Git (Ctrl+G)"
+        >
+          <GitBranch className="w-4 h-4" />
         </button>
         <div className="w-px h-5 bg-slate-700" />
         <button
@@ -1737,7 +1953,7 @@ export default function CodeEditorView() {
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+`</kbd> Terminal</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+I</kbd> AI Panel</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-violet-500/10 border border-violet-500/20 rounded-lg text-violet-300"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+K</kbd> Inline AI</div>
-                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+\</kbd> Split vy</div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-orange-500/10 border border-orange-500/20 rounded-lg text-orange-300"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+G</kbd> Git</div>
                 </div>
               </div>
             )}
@@ -1798,6 +2014,149 @@ export default function CodeEditorView() {
           )}
         </div>
 
+        {/* Git Panel */}
+        {showGitPanel && (
+          <div className="shrink-0 bg-[#0d1117] border-l border-slate-700/50 flex flex-col min-h-0" style={{ width: 280 }}>
+            <div className="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-slate-700/50">
+              <div className="flex items-center gap-2">
+                <GitBranch className="w-4 h-4 text-orange-400" />
+                <span className="text-xs font-semibold text-slate-300">Git</span>
+                {gitStatus?.branch && (
+                  <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded-full">{gitStatus.branch}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={loadGitStatus} className="p-0.5 hover:bg-slate-700 rounded" title="Uppdatera">
+                  <RefreshCw className={`w-3 h-3 text-slate-500 ${gitLoading ? "animate-spin" : ""}`} />
+                </button>
+                <button onClick={() => setShowGitPanel(false)} title="Stäng">
+                  <X className="w-3.5 h-3.5 text-slate-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* Commit input */}
+            <div className="px-3 py-2 border-b border-slate-700/30 space-y-2">
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={commitMsg}
+                  onChange={(e) => setCommitMsg(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && commitChanges()}
+                  placeholder="Commit-meddelande..."
+                  className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded px-2 py-1.5 text-xs outline-none text-slate-200 placeholder:text-slate-500 focus:border-orange-500/50"
+                />
+                <button onClick={aiCommitMsg} className="p-1.5 bg-violet-500/20 text-violet-400 rounded hover:bg-violet-500/30" title="AI generera meddelande">
+                  <Wand2 className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={commitChanges}
+                  disabled={!commitMsg.trim()}
+                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[11px] bg-orange-500/20 text-orange-400 rounded hover:bg-orange-500/30 disabled:opacity-40 transition-colors"
+                >
+                  <Check className="w-3 h-3" /> Commit
+                </button>
+                <button
+                  onClick={() => stageFiles()}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors"
+                >
+                  <Plus className="w-3 h-3" /> Stage All
+                </button>
+                <button
+                  onClick={pushChanges}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors"
+                >
+                  <ArrowUp className="w-3 h-3" /> Push
+                </button>
+              </div>
+            </div>
+
+            {/* Changed files */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {gitLoading && !gitStatus && (
+                <div className="flex items-center justify-center py-8 text-xs text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Laddar...
+                </div>
+              )}
+              {gitStatus?.clean && (
+                <div className="text-center py-8 text-xs text-slate-500">
+                  <CheckCircle className="w-6 h-6 mx-auto mb-2 text-green-500/50" />
+                  Inga ändringar
+                </div>
+              )}
+              {gitStatus && !gitStatus.clean && (
+                <div className="py-1">
+                  {/* Staged files */}
+                  {gitStatus.files.filter((f: any) => f.staged).length > 0 && (
+                    <div>
+                      <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-green-400 font-semibold">Stagade</div>
+                      {gitStatus.files.filter((f: any) => f.staged).map((f: any) => (
+                        <div key={`s-${f.path}`} className="flex items-center gap-2 px-3 py-1 hover:bg-slate-800/50 group text-xs">
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            f.status === "added" ? "bg-green-400" :
+                            f.status === "deleted" ? "bg-red-400" :
+                            "bg-amber-400"
+                          }`} />
+                          <span className="flex-1 truncate text-slate-300">{f.path}</span>
+                          <button
+                            onClick={() => unstageFiles([f.path])}
+                            className="opacity-0 group-hover:opacity-100 text-[10px] text-red-400 hover:text-red-300"
+                            title="Unstage"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Unstaged files */}
+                  {gitStatus.files.filter((f: any) => !f.staged).length > 0 && (
+                    <div>
+                      <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Ändrade</div>
+                      {gitStatus.files.filter((f: any) => !f.staged).map((f: any) => (
+                        <div key={`u-${f.path}`} className="flex items-center gap-2 px-3 py-1 hover:bg-slate-800/50 group text-xs">
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            f.status === "untracked" ? "bg-green-400" :
+                            f.status === "deleted" ? "bg-red-400" :
+                            "bg-amber-400"
+                          }`} />
+                          <span className="flex-1 truncate text-slate-400">{f.path}</span>
+                          <span className="text-[9px] text-slate-600">{f.status === "untracked" ? "U" : f.status === "deleted" ? "D" : "M"}</span>
+                          <button
+                            onClick={() => stageFiles([f.path])}
+                            className="opacity-0 group-hover:opacity-100 text-[10px] text-green-400 hover:text-green-300"
+                            title="Stage"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Recent commits */}
+              {(gitStatus?.commits?.length ?? 0) > 0 && (
+                <div className="border-t border-slate-700/30 mt-1">
+                  <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Senaste commits</div>
+                  {gitStatus!.commits.slice(0, 8).map((c: any, i: number) => (
+                    <div key={i} className="px-3 py-1 text-xs hover:bg-slate-800/30">
+                      <div className="flex items-center gap-2">
+                        <span className="text-orange-400/70 font-mono text-[10px] shrink-0">{c.hash}</span>
+                        <span className="truncate text-slate-400">{c.message}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-600 mt-0.5">{c.author} · {c.time}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* AI Panel */}
         {showAiPanel && (
           <div className="shrink-0 bg-[#0d1117] border-l border-slate-700/50 flex flex-col relative min-h-0" style={{ width: aiPanelWidth }}>
@@ -1849,7 +2208,31 @@ export default function CodeEditorView() {
                   {msg.role === "user" ? (
                     <div className="whitespace-pre-wrap">{msg.content}</div>
                   ) : (
-                    <AiMarkdown content={msg.content} />
+                    <AiMarkdown
+                      content={msg.content}
+                      onApplyCode={async (path, code, isNew) => {
+                        try {
+                          if (isNew) {
+                            await api("/file", { method: "POST", body: JSON.stringify({ path, content: code }) });
+                          } else {
+                            await api("/file", { method: "PUT", body: JSON.stringify({ path, content: code }) });
+                          }
+                          const existingTab = tabs.find((t) => t.path === path);
+                          if (existingTab) {
+                            setTabs((prev) => prev.map((t) => t.path === path ? { ...t, content: code, originalContent: code, modified: false } : t));
+                          } else {
+                            const name = path.split("/").pop() || path;
+                            setTabs((prev) => [...prev, { path, name, language: "plaintext", content: code, originalContent: code, modified: false }]);
+                            setActiveTab(path);
+                          }
+                          await loadTree();
+                          addToast("success", `${isNew ? "Skapade" : "Uppdaterade"} ${path}`);
+                        } catch (err) {
+                          addToast("error", `Kunde inte spara ${path}: ${err}`);
+                        }
+                      }}
+                      onOpenFile={(path) => openFile({ name: path.split("/").pop() || path, path, type: "file" })}
+                    />
                   )}
                 </div>
               ))}
