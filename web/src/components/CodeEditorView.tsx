@@ -9,7 +9,7 @@ import {
   Hash, Braces, Coffee, Gem, FileCode2, Globe, Cpu, Package,
   Columns, Undo2, Eye, Copy, Check, Maximize2, Minimize2, CheckCircle, AlertCircle, Info,
   Wand2, FileEdit, StopCircle,
-  CircleDot, Eraser,
+  CircleDot, Eraser, Pencil, Files, Replace, ChevronsRight,
   type LucideIcon,
 } from "lucide-react";
 import { BRIDGE_URL } from "../config";
@@ -675,6 +675,16 @@ export default function CodeEditorView() {
   // Markdown preview
   const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
 
+  // Rename inline
+  const [renameState, setRenameState] = useState<{ path: string; name: string } | null>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // Tab context menu
+  const [tabContextMenu, setTabContextMenu] = useState<{ x: number; y: number; path: string } | null>(null);
+
+  // Selection count for status bar
+  const [selectionInfo, setSelectionInfo] = useState<{ chars: number; lines: number }>({ chars: 0, lines: 0 });
+
   // Toasts
   const [toasts, setToasts] = useState<Toast[]>([]);
   const addToast = useCallback((type: Toast["type"], message: string) => {
@@ -945,6 +955,76 @@ export default function CodeEditorView() {
       await loadTree();
     } catch (err) {
       setError(String(err));
+    }
+  };
+
+  // ── Rename file/dir ──
+  const handleRename = async (oldPath: string, newName: string) => {
+    if (!newName.trim() || newName === oldPath.split("/").pop()) {
+      setRenameState(null);
+      return;
+    }
+    const dir = oldPath.includes("/") ? oldPath.substring(0, oldPath.lastIndexOf("/") + 1) : "";
+    const newPath = dir + newName;
+    try {
+      await api("/rename", { method: "POST", body: JSON.stringify({ oldPath, newPath }) });
+      // Update tab if open
+      setTabs((prev) => prev.map((t) =>
+        t.path === oldPath ? { ...t, path: newPath, name: newName } : t
+      ));
+      if (activeTab === oldPath) setActiveTab(newPath);
+      if (splitTab === oldPath) setSplitTab(newPath);
+      await loadTree();
+      addToast("success", `Döpte om till ${newName}`);
+    } catch (err) {
+      addToast("error", `Kunde inte döpa om: ${err}`);
+    }
+    setRenameState(null);
+  };
+
+  // ── Duplicate file ──
+  const handleDuplicate = async (path: string) => {
+    const ext = path.includes(".") ? "." + path.split(".").pop() : "";
+    const base = ext ? path.slice(0, -ext.length) : path;
+    const newPath = base + "-copy" + ext;
+    try {
+      const data = await api(`/file?path=${encodeURIComponent(path)}`);
+      await api("/file", { method: "POST", body: JSON.stringify({ path: newPath, content: data.content || "" }) });
+      await loadTree();
+      openFile({ name: newPath.split("/").pop() || newPath, path: newPath, type: "file" });
+      addToast("success", `Duplicerade till ${newPath.split("/").pop()}`);
+    } catch (err) {
+      addToast("error", `Kunde inte duplicera: ${err}`);
+    }
+  };
+
+  // ── Close other/right/saved tabs ──
+  const closeOtherTabs = (keepPath: string) => {
+    const keep = tabs.filter((t) => t.path === keepPath);
+    const closing = tabs.filter((t) => t.path !== keepPath);
+    setClosedTabs((prev) => [...closing, ...prev].slice(0, 20));
+    setTabs(keep);
+    setActiveTab(keepPath);
+  };
+  const closeTabsToRight = (path: string) => {
+    const idx = tabs.findIndex((t) => t.path === path);
+    if (idx < 0) return;
+    const closing = tabs.slice(idx + 1);
+    setClosedTabs((prev) => [...closing, ...prev].slice(0, 20));
+    setTabs(tabs.slice(0, idx + 1));
+    if (!tabs.slice(0, idx + 1).find((t) => t.path === activeTab)) {
+      setActiveTab(path);
+    }
+  };
+  const closeSavedTabs = () => {
+    const unsaved = tabs.filter((t) => t.modified);
+    const saved = tabs.filter((t) => !t.modified);
+    setClosedTabs((prev) => [...saved, ...prev].slice(0, 20));
+    setTabs(unsaved);
+    if (unsaved.length > 0 && !unsaved.find((t) => t.path === activeTab)) {
+      setActiveTab(unsaved[0].path);
+    } else if (unsaved.length === 0) {
+      setActiveTab("");
     }
   };
 
@@ -1347,6 +1427,14 @@ export default function CodeEditorView() {
     { id: "refresh", label: "Uppdatera filträd", icon: RefreshCw, action: loadTree, category: "Navigering" },
     { id: "git", label: "Visa/dölj Git-panel", shortcut: "Ctrl+G", icon: GitBranch, action: () => setShowGitPanel((v) => !v), category: "Git" },
     { id: "inlineai", label: "Inline AI Edit", shortcut: "Ctrl+K", icon: Wand2, action: triggerInlineEdit, category: "AI" },
+    { id: "rename", label: "Döp om fil", shortcut: "F2", icon: Pencil, action: () => { if (activeTab) { const name = activeTab.split("/").pop() || activeTab; setRenameState({ path: activeTab, name }); setTimeout(() => renameInputRef.current?.focus(), 50); } }, category: "Fil" },
+    { id: "duplicate", label: "Duplicera fil", icon: Files, action: () => { if (activeTab) handleDuplicate(activeTab); }, category: "Fil" },
+    { id: "findreplace", label: "Sök & Ersätt", shortcut: "Ctrl+H", icon: Replace, action: () => { editorRef.current?.getAction("editor.action.startFindReplaceAction")?.run(); }, category: "Redigering" },
+    { id: "closeothers", label: "Stäng andra flikar", icon: X, action: () => { if (activeTab) closeOtherTabs(activeTab); }, category: "Fil" },
+    { id: "closeright", label: "Stäng flikar till höger", icon: ChevronsRight, action: () => { if (activeTab) closeTabsToRight(activeTab); }, category: "Fil" },
+    { id: "closesaved", label: "Stäng sparade flikar", icon: Save, action: closeSavedTabs, category: "Fil" },
+    { id: "gotoline", label: "Gå till rad", shortcut: "Ctrl+G", icon: Hash, action: () => { editorRef.current?.getAction("editor.action.gotoLine")?.run(); }, category: "Navigering" },
+    { id: "format", label: "Formatera dokument", shortcut: "Shift+Alt+F", icon: FileEdit, action: () => { editorRef.current?.getAction("editor.action.formatDocument")?.run(); }, category: "Redigering" },
   ], [activeTab, showMinimap, wordWrap, autoSave, showSplit, isFullscreen, showMarkdownPreview, currentTab, triggerInlineEdit]);
 
   // ── Keyboard shortcuts ──
@@ -1403,21 +1491,29 @@ export default function CodeEditorView() {
         e.preventDefault();
         setShowGitPanel((v) => !v);
       }
-      if (e.key === "Escape" && inlineEdit.visible) {
-        dismissInlineEdit();
+      if (e.key === "F2" && activeTab) {
+        e.preventDefault();
+        const name = activeTab.split("/").pop() || activeTab;
+        setRenameState({ path: activeTab, name });
+        setTimeout(() => renameInputRef.current?.focus(), 50);
+      }
+      if (e.key === "Escape") {
+        if (inlineEdit.visible) dismissInlineEdit();
+        if (renameState) setRenameState(null);
+        if (tabContextMenu) setTabContextMenu(null);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [activeTab, tabs, showSplit, closedTabs, inlineEdit.visible, triggerInlineEdit]);
 
-  // ── Dismiss context menu on click outside ──
+  // ── Dismiss context menus on click outside ──
   useEffect(() => {
-    if (!contextMenu) return;
-    const handler = () => setContextMenu(null);
+    if (!contextMenu && !tabContextMenu) return;
+    const handler = () => { setContextMenu(null); setTabContextMenu(null); };
     window.addEventListener("click", handler);
     return () => window.removeEventListener("click", handler);
-  }, [contextMenu]);
+  }, [contextMenu, tabContextMenu]);
 
   // ── Monaco mount handler ──
   const handleMonacoMount = useCallback((_editor: any, monaco: Monaco) => {
@@ -1426,6 +1522,18 @@ export default function CodeEditorView() {
     setMonacoReady(true);
     _editor.onDidChangeCursorPosition((e: any) => {
       setCursorPosition({ line: e.position.lineNumber, col: e.position.column });
+    });
+    _editor.onDidChangeCursorSelection((e: any) => {
+      const sel = e.selection;
+      if (sel.isEmpty()) {
+        setSelectionInfo({ chars: 0, lines: 0 });
+      } else {
+        const model = _editor.getModel();
+        if (model) {
+          const text = model.getValueInRange(sel);
+          setSelectionInfo({ chars: text.length, lines: text.split("\n").length });
+        }
+      }
     });
     // Register AI autocomplete
     setupAutocomplete(_editor, monaco);
@@ -1500,33 +1608,61 @@ export default function CodeEditorView() {
       {/* Context Menu */}
       {contextMenu && (
         <div
-          className="fixed z-50 bg-[#1c2128] border border-slate-600/50 rounded-lg shadow-2xl py-1 min-w-[160px]"
+          className="fixed z-50 bg-[#1c2128] border border-slate-600/50 rounded-lg shadow-2xl py-1 min-w-[180px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={() => setContextMenu(null)}
         >
           {contextMenu.node.type === "file" && (
+            <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={() => openFile(contextMenu.node)}>
+              <FolderOpen className="w-3 h-3 text-slate-500" /> Öppna fil
+            </button>
+          )}
+          <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={() => {
+            setRenameState({ path: contextMenu.node.path, name: contextMenu.node.name });
+            setTimeout(() => renameInputRef.current?.focus(), 50);
+          }}>
+            <Pencil className="w-3 h-3 text-slate-500" /> Döp om <span className="ml-auto text-[10px] text-slate-600">F2</span>
+          </button>
+          {contextMenu.node.type === "file" && (
+            <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={() => handleDuplicate(contextMenu.node.path)}>
+              <Files className="w-3 h-3 text-slate-500" /> Duplicera
+            </button>
+          )}
+          <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={() => {
+            navigator.clipboard.writeText(contextMenu.node.path);
+            addToast("info", "Sökväg kopierad");
+          }}>
+            <Copy className="w-3 h-3 text-slate-500" /> Kopiera sökväg
+          </button>
+          {contextMenu.node.type === "directory" && (
             <>
-              <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50" onClick={() => openFile(contextMenu.node)}>
-                Öppna fil
-              </button>
-              <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50" onClick={() => {
-                navigator.clipboard.writeText(contextMenu.node.path);
-                addToast("info", "Sökväg kopierad");
+              <div className="border-t border-slate-700/50 my-1" />
+              <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={async () => {
+                const name = prompt(`Ny fil i ${contextMenu.node.name}/`);
+                if (!name) return;
+                const path = contextMenu.node.path + "/" + name;
+                try {
+                  await api("/file", { method: "POST", body: JSON.stringify({ path, content: "" }) });
+                  await loadTree();
+                  openFile({ name: name.split("/").pop() || name, path, type: "file" });
+                } catch (err) { addToast("error", `Kunde inte skapa: ${err}`); }
               }}>
-                Kopiera sökväg
+                <Plus className="w-3 h-3 text-slate-500" /> Ny fil här
+              </button>
+              <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={async () => {
+                const name = prompt(`Ny mapp i ${contextMenu.node.name}/`);
+                if (!name) return;
+                try {
+                  await api("/dir", { method: "POST", body: JSON.stringify({ path: contextMenu.node.path + "/" + name }) });
+                  await loadTree();
+                } catch (err) { addToast("error", `Kunde inte skapa mapp: ${err}`); }
+              }}>
+                <FolderPlus className="w-3 h-3 text-slate-500" /> Ny mapp här
               </button>
             </>
           )}
-          {contextMenu.node.type === "directory" && (
-            <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50" onClick={() => {
-              navigator.clipboard.writeText(contextMenu.node.path);
-              addToast("info", "Sökväg kopierad");
-            }}>
-              Kopiera sökväg
-            </button>
-          )}
           <div className="border-t border-slate-700/50 my-1" />
-          <button className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-slate-700/50" onClick={async () => {
+          <button className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-slate-700/50 flex items-center gap-2" onClick={async () => {
             if (!confirm(`Radera ${contextMenu.node.name}?`)) return;
             try {
               await api(`/file?path=${encodeURIComponent(contextMenu.node.path)}`, { method: "DELETE" });
@@ -1535,8 +1671,90 @@ export default function CodeEditorView() {
               addToast("success", `Raderade ${contextMenu.node.name}`);
             } catch (err) { addToast("error", `Kunde inte radera: ${err}`); }
           }}>
-            Radera
+            <X className="w-3 h-3" /> Radera
           </button>
+        </div>
+      )}
+
+      {/* Rename Dialog */}
+      {renameState && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/40" onClick={() => setRenameState(null)}>
+          <div className="w-[400px] max-w-[90vw] bg-[#1c2128] border border-slate-600/50 rounded-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50">
+              <Pencil className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-semibold text-slate-300">Döp om</span>
+              <span className="text-[10px] text-slate-500 ml-auto">{renameState.path}</span>
+            </div>
+            <div className="px-4 py-3">
+              <input
+                ref={renameInputRef}
+                type="text"
+                defaultValue={renameState.name}
+                placeholder="Nytt namn..."
+                title="Döp om fil"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRename(renameState.path, (e.target as HTMLInputElement).value);
+                  if (e.key === "Escape") setRenameState(null);
+                }}
+                className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm outline-none text-slate-200 placeholder:text-slate-500 focus:border-amber-500/50"
+                autoFocus
+                onFocus={(e) => {
+                  const val = e.target.value;
+                  const dotIdx = val.lastIndexOf(".");
+                  if (dotIdx > 0) e.target.setSelectionRange(0, dotIdx);
+                  else e.target.select();
+                }}
+              />
+              <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-600">
+                <kbd className="px-1 py-0.5 bg-slate-800 rounded">Enter</kbd> bekräfta
+                <kbd className="px-1 py-0.5 bg-slate-800 rounded">Esc</kbd> avbryt
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Context Menu */}
+      {tabContextMenu && (
+        <div
+          className="fixed z-50 bg-[#1c2128] border border-slate-600/50 rounded-lg shadow-2xl py-1 min-w-[180px]"
+          style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
+          onClick={() => setTabContextMenu(null)}
+        >
+          <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={() => closeTab(tabContextMenu.path)}>
+            <X className="w-3 h-3 text-slate-500" /> Stäng
+          </button>
+          <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={() => closeOtherTabs(tabContextMenu.path)}>
+            <X className="w-3 h-3 text-slate-500" /> Stäng andra
+          </button>
+          <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={() => closeTabsToRight(tabContextMenu.path)}>
+            <ChevronsRight className="w-3 h-3 text-slate-500" /> Stäng till höger
+          </button>
+          <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={closeSavedTabs}>
+            <Save className="w-3 h-3 text-slate-500" /> Stäng sparade
+          </button>
+          <div className="border-t border-slate-700/50 my-1" />
+          <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={() => {
+            navigator.clipboard.writeText(tabContextMenu.path);
+            addToast("info", "Sökväg kopierad");
+          }}>
+            <Copy className="w-3 h-3 text-slate-500" /> Kopiera sökväg
+          </button>
+          <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={() => {
+            const name = tabContextMenu.path.split("/").pop() || tabContextMenu.path;
+            setRenameState({ path: tabContextMenu.path, name });
+            setTimeout(() => renameInputRef.current?.focus(), 50);
+          }}>
+            <Pencil className="w-3 h-3 text-slate-500" /> Döp om <span className="ml-auto text-[10px] text-slate-600">F2</span>
+          </button>
+          {!showSplit && (
+            <button className="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2" onClick={() => {
+              setShowSplit(true);
+              setSplitTab(tabContextMenu.path);
+            }}>
+              <Columns className="w-3 h-3 text-slate-500" /> Öppna i delad vy
+            </button>
+          )}
         </div>
       )}
 
@@ -1764,6 +1982,7 @@ export default function CodeEditorView() {
                     } ${dragOverIdx === idx ? "border-l-2 border-l-blue-400" : ""} ${dragIdx === idx ? "opacity-50" : ""}`}
                     onClick={() => setActiveTab(tab.path)}
                     onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(tab.path); } }}
+                    onContextMenu={(e) => { e.preventDefault(); setTabContextMenu({ x: e.clientX, y: e.clientY, path: tab.path }); }}
                     title={tab.path}
                   >
                     <TabIcon className={`w-3 h-3 ${tabIcon.color}`} />
@@ -2071,12 +2290,15 @@ export default function CodeEditorView() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
+                <div className="grid grid-cols-3 gap-2 text-xs text-slate-600">
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+S</kbd> Spara</div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+P</kbd> Sök fil</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+H</kbd> Sök/Ersätt</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+`</kbd> Terminal</div>
-                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+I</kbd> AI Panel</div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">F2</kbd> Döp om</div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+\\</kbd> Delad vy</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-violet-500/10 border border-violet-500/20 rounded-lg text-violet-300"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+K</kbd> Inline AI</div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-violet-500/10 border border-violet-500/20 rounded-lg text-violet-300"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+I</kbd> AI Panel</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-orange-500/10 border border-orange-500/20 rounded-lg text-orange-300"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+G</kbd> Git</div>
                 </div>
               </div>
@@ -2427,12 +2649,17 @@ export default function CodeEditorView() {
           {currentTab && (
             <>
               <span>Ln {cursorPosition.line}, Col {cursorPosition.col}</span>
+              {selectionInfo.chars > 0 && (
+                <span className="text-blue-400/70">({selectionInfo.chars} tecken, {selectionInfo.lines} rad{selectionInfo.lines !== 1 ? "er" : ""})</span>
+              )}
               <span className="text-slate-700">|</span>
-              <span className="uppercase cursor-pointer hover:text-slate-300">{currentTab.language}</span>
+              <span className="uppercase cursor-pointer hover:text-slate-300" onClick={() => setShowCommandPalette(true)}>{currentTab.language}</span>
               <span className="text-slate-700">|</span>
               <span>UTF-8</span>
               <span className="text-slate-700">|</span>
               <span>LF</span>
+              <span className="text-slate-700">|</span>
+              <span>{currentTab.content.split("\n").length} rader</span>
             </>
           )}
           {!currentTab && <span>Gracestack Editor v2.0</span>}
@@ -2442,6 +2669,7 @@ export default function CodeEditorView() {
           {autoSave && <span className="text-green-500/60 flex items-center gap-0.5"><Zap className="w-2.5 h-2.5" /> Auto</span>}
           <span className="text-slate-700">|</span>
           <span>{tabs.length} flik{tabs.length !== 1 ? "ar" : ""}</span>
+          {currentTab?.modified && <span className="text-amber-400/70">● osparad</span>}
           <span className="text-slate-700">|</span>
           <span className="cursor-pointer hover:text-slate-300" onClick={() => setShowThemePicker(true)}>{THEMES.find((t) => t.id === editorTheme)?.label || editorTheme}</span>
         </div>
