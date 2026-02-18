@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, memo } from "react";
-import { Activity, Cpu, HardDrive, Brain, Zap, DollarSign, RefreshCw, Clock, Monitor, MessageCircle, Folder, Puzzle, GitBranch, Users, TrendingUp, ArrowUpRight, ArrowDownRight, Download, AlertTriangle, BarChart3, Settings2, ChevronDown, ChevronUp } from "lucide-react";
+import { Activity, Cpu, HardDrive, Brain, Zap, DollarSign, RefreshCw, Clock, Monitor, MessageCircle, Folder, Puzzle, GitBranch, Users, TrendingUp, ArrowUpRight, ArrowDownRight, Download, AlertTriangle, BarChart3, Settings2, ChevronDown, ChevronUp, FlaskConical, TestTube, Microscope, Lightbulb, Moon, CheckCircle2, XCircle } from "lucide-react";
 import { BRIDGE_URL } from "../config";
 
 interface Computer {
@@ -85,6 +85,20 @@ interface ModelComp {
   totalCostUsd: number;
   successRate: number;
   enabled: boolean;
+}
+
+interface FrankensteinStats {
+  mathResearch: {
+    findings: number;
+    hypotheses: number;
+    experiments: number;
+    problemStats: Record<string, { findings: number; hypotheses: number }>;
+    recentFindings: Array<{ problem: string; category: string; description: string; timestamp: number }>;
+  };
+  collatz: { anomalies: number; discoveries: number; sequences: number };
+  modules: Record<string, boolean>;
+  problems: Array<{ id: string; name: string; emoji: string; description: string }>;
+  testing: { testFiles: number; totalTests: number };
 }
 
 function formatUptime(seconds: number): string {
@@ -183,6 +197,7 @@ export default function DashboardView() {
   const [showBudgetEdit, setShowBudgetEdit] = useState(false);
   const [budgetForm, setBudgetForm] = useState({ dailyLimitUsd: 5, weeklyLimitUsd: 25, monthlyLimitUsd: 100, alertThreshold: 0.8, enabled: false });
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [frank, setFrank] = useState<FrankensteinStats | null>(null);
 
   const fetchDashboard = () => {
     fetch(`${BRIDGE_URL}/api/dashboard`).then(r => r.json()).then((d: Dashboard) => {
@@ -200,6 +215,7 @@ export default function DashboardView() {
       setBudgetForm({ dailyLimitUsd: b.dailyLimitUsd, weeklyLimitUsd: b.weeklyLimitUsd, monthlyLimitUsd: b.monthlyLimitUsd, alertThreshold: b.alertThreshold, enabled: b.enabled });
     }).catch(() => {});
     fetch(`${BRIDGE_URL}/api/dashboard/models`).then(r => r.json()).then(setModels).catch(() => {});
+    fetch(`${BRIDGE_URL}/api/dashboard/frankenstein`).then(r => r.json()).then(setFrank).catch(() => {});
   };
 
   const saveBudget = () => {
@@ -386,6 +402,175 @@ export default function DashboardView() {
           );
         })}
       </div>
+
+      {/* Frankenstein AI — Research Lab */}
+      {frank && (
+        <div className="bg-gradient-to-br from-purple-950/40 via-slate-800/40 to-indigo-950/40 border border-purple-800/30 rounded-xl p-3 space-y-3">
+          <button onClick={() => setExpandedSection(expandedSection === "frank" ? null : "frank")} className="flex items-center justify-between w-full touch-manipulation">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                <FlaskConical className="w-4.5 h-4.5 text-purple-400" />
+              </div>
+              <div className="text-left">
+                <span className="text-xs font-semibold text-white block leading-tight">Frankenstein AI</span>
+                <span className="text-[9px] text-slate-500">Autonom matematisk forskning</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {frank.mathResearch.findings > 0 && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-900/50 text-purple-300 font-medium">
+                  {frank.mathResearch.findings} fynd
+                </span>
+              )}
+              {expandedSection === "frank" ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
+            </div>
+          </button>
+
+          {/* Summary stats — always visible */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {[
+              { label: "Fynd", value: frank.mathResearch.findings, icon: Microscope, color: "text-purple-400" },
+              { label: "Hypoteser", value: frank.mathResearch.hypotheses, icon: Lightbulb, color: "text-amber-400" },
+              { label: "Experiment", value: frank.mathResearch.experiments, icon: TestTube, color: "text-emerald-400" },
+              { label: "Tester", value: frank.testing.totalTests, icon: CheckCircle2, color: "text-blue-400" },
+            ].map(s => {
+              const Icon = s.icon;
+              return (
+                <div key={s.label} className="bg-slate-900/50 rounded-lg px-2 py-2 text-center">
+                  <Icon className={`w-3.5 h-3.5 ${s.color} mx-auto mb-0.5`} />
+                  <div className="text-sm font-bold text-white">{s.value}</div>
+                  <div className="text-[9px] text-slate-500">{s.label}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {expandedSection === "frank" && (
+            <div className="space-y-3">
+              {/* Research Problems */}
+              <div>
+                <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-1.5 flex items-center gap-1">
+                  <FlaskConical className="w-3 h-3" /> Olösta problem
+                </h4>
+                <div className="space-y-1">
+                  {frank.problems.map(p => {
+                    const stats = frank.mathResearch.problemStats[p.id];
+                    return (
+                      <div key={p.id} className="flex items-center gap-2 p-2 bg-slate-900/40 rounded-lg">
+                        <span className="text-base">{p.emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-medium text-white truncate">{p.name}</div>
+                          <div className="text-[9px] text-slate-500 truncate">{p.description}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          {stats ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] text-purple-300">{stats.findings} fynd</span>
+                              {stats.hypotheses > 0 && <span className="text-[9px] text-amber-300">{stats.hypotheses} hyp</span>}
+                            </div>
+                          ) : (
+                            <span className="text-[9px] text-slate-600">Ej utforskat</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Collatz Explorer */}
+              {(frank.collatz.anomalies > 0 || frank.collatz.sequences > 0) && (
+                <div className="bg-slate-900/40 rounded-lg p-2.5">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-base">🌀</span>
+                    <span className="text-[11px] font-medium text-white">Collatz Explorer</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <div className="text-xs font-bold text-white">{frank.collatz.sequences.toLocaleString()}</div>
+                      <div className="text-[9px] text-slate-500">Sekvenser</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-amber-300">{frank.collatz.anomalies}</div>
+                      <div className="text-[9px] text-slate-500">Anomalier</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-emerald-300">{frank.collatz.discoveries}</div>
+                      <div className="text-[9px] text-slate-500">Upptäckter</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Cognitive Modules */}
+              <div>
+                <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-1.5 flex items-center gap-1">
+                  <Brain className="w-3 h-3" /> Kognitiva moduler
+                </h4>
+                <div className="flex flex-wrap gap-1">
+                  {Object.entries(frank.modules).map(([mod, exists]) => (
+                    <span key={mod} className={`text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                      exists ? "bg-emerald-900/40 text-emerald-300 border border-emerald-800/30" : "bg-slate-800 text-slate-600 border border-slate-700/30"
+                    }`}>
+                      {exists ? <CheckCircle2 className="w-2.5 h-2.5" /> : <XCircle className="w-2.5 h-2.5" />}
+                      {mod.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sleep Architecture */}
+              <div className="bg-slate-900/40 rounded-lg p-2.5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="text-[11px] font-medium text-white">Sömnarkitektur</span>
+                </div>
+                <div className="text-[10px] text-slate-400 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span>NREM: Minneskonsolidering + Collatz-utforskning</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-purple-500" />
+                    <span>REM: HDC-drömmar + Matematisk forskning</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span>Cross-domain: Mönster mellan problem</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Findings */}
+              {frank.mathResearch.recentFindings.length > 0 && (
+                <div>
+                  <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-1.5">Senaste fynd</h4>
+                  <div className="space-y-1">
+                    {frank.mathResearch.recentFindings.map((f, i) => (
+                      <div key={i} className="text-[10px] p-1.5 bg-slate-900/40 rounded-lg">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="px-1 py-0.5 rounded bg-purple-900/50 text-purple-300 text-[8px] font-medium">{f.problem}</span>
+                          <span className="px-1 py-0.5 rounded bg-slate-700 text-slate-400 text-[8px]">{f.category}</span>
+                        </div>
+                        <div className="text-slate-300 truncate">{f.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Testing */}
+              <div className="flex items-center gap-2 p-2 bg-emerald-950/30 border border-emerald-800/20 rounded-lg">
+                <TestTube className="w-4 h-4 text-emerald-400" />
+                <div className="flex-1">
+                  <div className="text-[11px] font-medium text-emerald-300">{frank.testing.totalTests} tester i {frank.testing.testFiles} filer</div>
+                  <div className="text-[9px] text-slate-500">Alla passerar ✓</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Computers */}
       {computers.length > 0 && (

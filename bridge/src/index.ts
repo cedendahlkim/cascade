@@ -2649,6 +2649,133 @@ app.get("/api/dashboard/export/snapshots", (_req, res) => {
   res.send(exportSnapshotsCsv());
 });
 
+// --- Frankenstein AI Research Stats ---
+app.get("/api/dashboard/frankenstein", (_req, res) => {
+  try {
+    const frankDir = join(WORKSPACE_ROOT, "frankenstein-ai");
+    const mathDir = join(frankDir, "training_data", "math_research");
+    const collatzDir = join(frankDir, "training_data", "collatz_journal");
+
+    // Read math research journal entries
+    let mathFindings = 0, mathHypotheses = 0, mathExperiments = 0;
+    const problemStats: Record<string, { findings: number; hypotheses: number }> = {};
+    const recentFindings: Array<{ problem: string; category: string; description: string; timestamp: number }> = [];
+
+    if (existsSync(mathDir)) {
+      const files = readdirSync(mathDir).filter(f => f.endsWith(".jsonl"));
+      for (const file of files) {
+        try {
+          const lines = readFileSync(join(mathDir, file), "utf-8").split("\n").filter(Boolean);
+          for (const line of lines) {
+            try {
+              const entry = JSON.parse(line);
+              if (entry.type === "finding") {
+                mathFindings++;
+                const p = entry.problem || "unknown";
+                if (!problemStats[p]) problemStats[p] = { findings: 0, hypotheses: 0 };
+                problemStats[p].findings++;
+                if (recentFindings.length < 10) {
+                  recentFindings.push({
+                    problem: p,
+                    category: entry.category || "",
+                    description: (entry.description || "").slice(0, 120),
+                    timestamp: entry.timestamp || 0,
+                  });
+                }
+              } else if (entry.type === "hypothesis") {
+                mathHypotheses++;
+                const p = entry.problem || "unknown";
+                if (!problemStats[p]) problemStats[p] = { findings: 0, hypotheses: 0 };
+                problemStats[p].hypotheses++;
+              } else if (entry.type === "experiment") {
+                mathExperiments++;
+              }
+            } catch { /* skip bad line */ }
+          }
+        } catch { /* skip bad file */ }
+      }
+    }
+
+    // Read collatz journal
+    let collatzAnomalies = 0, collatzDiscoveries = 0, collatzSequences = 0;
+    if (existsSync(collatzDir)) {
+      const files = readdirSync(collatzDir).filter(f => f.endsWith(".jsonl"));
+      for (const file of files) {
+        try {
+          const lines = readFileSync(join(collatzDir, file), "utf-8").split("\n").filter(Boolean);
+          for (const line of lines) {
+            try {
+              const entry = JSON.parse(line);
+              if (entry.type === "anomaly") collatzAnomalies++;
+              else if (entry.type === "discovery") collatzDiscoveries++;
+              else if (entry.type === "batch") collatzSequences += entry.count || 0;
+            } catch { /* skip */ }
+          }
+        } catch { /* skip */ }
+      }
+    }
+
+    // Check which modules exist
+    const modules = {
+      math_research: existsSync(join(frankDir, "math_research.py")),
+      collatz_explorer: existsSync(join(frankDir, "collatz_explorer.py")),
+      circadian: existsSync(join(frankDir, "circadian.py")),
+      cognition: existsSync(join(frankDir, "cognition.py")),
+      agency: existsSync(join(frankDir, "agency.py")),
+      memory: existsSync(join(frankDir, "memory.py")),
+      gut_feeling: existsSync(join(frankDir, "gut_feeling.py")),
+    };
+
+    // Count test results
+    let testFiles = 0, totalTests = 0;
+    if (existsSync(frankDir)) {
+      const pyFiles = readdirSync(frankDir).filter(f => f.endsWith("_test.py"));
+      testFiles = pyFiles.length;
+      for (const f of pyFiles) {
+        try {
+          const content = readFileSync(join(frankDir, f), "utf-8");
+          totalTests += (content.match(/def test_/g) || []).length;
+        } catch { /* skip */ }
+      }
+    }
+
+    // Math research problems
+    const problems = [
+      { id: "goldbach", name: "Goldbachs förmodan", emoji: "🔢", description: "Varje jämnt tal > 2 är summan av två primtal" },
+      { id: "twin_prime", name: "Tvillingprimtal", emoji: "👯", description: "Oändligt många primtal med avstånd 2" },
+      { id: "perfect_number", name: "Perfekta tal", emoji: "💎", description: "Finns det udda perfekta tal?" },
+      { id: "lonely_runner", name: "Lonely Runner", emoji: "🏃", description: "Varje löpare blir ensam på banan" },
+      { id: "syracuse", name: "Syracuse/Collatz", emoji: "🌀", description: "Generaliserade Collatz-varianter" },
+    ];
+
+    res.json({
+      mathResearch: {
+        findings: mathFindings,
+        hypotheses: mathHypotheses,
+        experiments: mathExperiments,
+        problemStats,
+        recentFindings: recentFindings.slice(-5),
+      },
+      collatz: {
+        anomalies: collatzAnomalies,
+        discoveries: collatzDiscoveries,
+        sequences: collatzSequences,
+      },
+      modules,
+      problems,
+      testing: { testFiles, totalTests },
+    });
+  } catch (err) {
+    res.json({
+      mathResearch: { findings: 0, hypotheses: 0, experiments: 0, problemStats: {}, recentFindings: [] },
+      collatz: { anomalies: 0, discoveries: 0, sequences: 0 },
+      modules: {},
+      problems: [],
+      testing: { testFiles: 0, totalTests: 0 },
+    });
+  }
+});
+
 // --- Workflows API ---
 
 app.get("/api/workflows", (_req, res) => {
