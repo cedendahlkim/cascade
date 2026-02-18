@@ -143,6 +143,9 @@ function updateUI(data) {
     if (dashParties) dashParties.textContent = data.debate_parties || '8';
   }
 
+  // Update terminal demo
+  updateTerminalDemo(data);
+
   lastData = data;
 }
 
@@ -318,6 +321,41 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeModal();
 });
 
+// ── Update terminal demo with live data ──
+function updateTerminalDemo(data) {
+  var termMemories = document.getElementById('termMemories');
+  var termMood = document.getElementById('termMood');
+  var termTask = document.getElementById('termTask');
+  var termResult = document.getElementById('termResult');
+
+  if (termMemories && data.learnings) {
+    termMemories.textContent = (data.learnings.total || 5717).toLocaleString('sv-SE');
+  }
+  if (termMood && data.wellbeing) {
+    termMood.textContent = data.wellbeing.mood || 'nyfiken';
+  }
+
+  // Rotate task display
+  var tasks = [
+    { name: 'api-emitter — EventEmitter', time: '572ms' },
+    { name: 'graph-bfs — Breadth-First Search', time: '834ms' },
+    { name: 'dp-knapsack — Dynamic Programming', time: '1.2s' },
+    { name: 'tree-balance — AVL Rotation', time: '445ms' },
+    { name: 'regex-parse — Pattern Matching', time: '691ms' },
+    { name: 'sort-merge — Merge Sort', time: '312ms' },
+    { name: 'crypto-hash — SHA-256', time: '523ms' },
+  ];
+  var task = tasks[Math.floor(Math.random() * tasks.length)];
+  if (termTask) termTask.innerHTML = '<span class="term-violet">►</span> Löser: ' + task.name;
+  if (termResult) termResult.innerHTML = '<span class="term-green">✅</span> 1/1 — ' + task.time;
+
+  // Footer status
+  var footerStatus = document.getElementById('footerStatus');
+  if (footerStatus) {
+    footerStatus.textContent = data.training_running ? 'Träning aktiv — alla system online' : 'Alla system online';
+  }
+}
+
 // Scroll reveal
 var revealObserver = new IntersectionObserver(function(entries) {
   entries.forEach(function(e) {
@@ -328,7 +366,7 @@ var revealObserver = new IntersectionObserver(function(entries) {
   });
 }, { threshold: 0.05, rootMargin: '0px 0px 50px 0px' });
 
-var revealEls = document.querySelectorAll('.feature-card:not(.clickable), .arch-card, .team-card, .stat, .section-title, .section-desc, .dash-card');
+var revealEls = document.querySelectorAll('.feature-card:not(.clickable), .arch-card, .team-card, .stat, .section-title, .section-desc, .dash-card, .product-card, .hero-terminal, .logos-section');
 revealEls.forEach(function(el) {
   el.classList.add('reveal');
   revealObserver.observe(el);
@@ -348,6 +386,16 @@ document.querySelectorAll('.nav-links a').forEach(function(a) {
   a.addEventListener('click', function() {
     document.querySelector('.nav-links').classList.remove('open');
   });
+});
+
+// Nav scroll effect — darken on scroll
+window.addEventListener('scroll', function() {
+  var nav = document.querySelector('nav');
+  if (window.scrollY > 50) {
+    nav.style.background = 'rgba(2,6,23,0.92)';
+  } else {
+    nav.style.background = 'rgba(2,6,23,0.75)';
+  }
 });
 
 // Initial fetch + interval

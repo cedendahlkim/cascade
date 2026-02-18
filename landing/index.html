@@ -3,28 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gracestack — Frankenstein AI | Realtidsdata</title>
-  <meta name="description" content="Frankenstein AI — realtidsdata direkt från servern. Kognitiv arkitektur, neurovetenskap, maskininlärning.">
+  <title>Gracestack — AI-plattform med kognitiv arkitektur</title>
+  <meta name="description" content="Gracestack bygger Frankenstein AI — en kognitiv AI-plattform med neurovetenskap, persistent minne och autonom inlärning. Code Editor, AI Chat, Research Lab.">
+  <meta property="og:title" content="Gracestack — AI som tänker, minns och förbättras">
+  <meta property="og:description" content="Frankenstein AI: kognitiv arkitektur, persistent minne, 21/21 superhuman benchmark. Testa live.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://gracestack.se">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%233b82f6'/><stop offset='100%25' stop-color='%238b5cf6'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='url(%23g)'/><text x='50' y='68' font-family='system-ui' font-size='55' font-weight='900' fill='white' text-anchor='middle'>G</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <div class="bg-gradient"></div>
   <div class="grid-pattern"></div>
 
+  <!-- Floating orbs -->
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
   <nav>
     <div class="container">
-      <div class="logo">Gracestack</div>
+      <a href="/" class="logo-link">
+        <div class="logo-icon">G</div>
+        <div class="logo">Gracestack</div>
+      </a>
       <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Meny">
         <span></span><span></span><span></span>
       </button>
       <div class="nav-links">
+        <a href="#products">Produkter</a>
         <a href="#technology">Teknologi</a>
-        <a href="#architecture">Arkitektur</a>
         <a href="#live">Live Data</a>
-        <a href="#comparison">Jämförelse</a>
+        <a href="#architecture">Arkitektur</a>
         <a href="https://app.gracestack.se" class="btn btn-primary btn-sm">Öppna appen →</a>
       </div>
     </div>
@@ -37,11 +49,35 @@
         <span class="dot"></span>
         <span id="heroStatus">Ansluter till servern...</span>
       </div>
-      <h1>AI som <span class="gradient">tänker, minns<br>och förbättras</span> — autonomt</h1>
-      <p>Frankenstein AI kombinerar neurovetenskap, kognitiv arkitektur och maskininlärning till en plattform som löser uppgifter med <strong id="heroRate">—</strong> precision — och lär sig av varje misstag.</p>
+      <h1>AI som <span class="gradient-text">tänker, minns<br>och förbättras</span> — autonomt</h1>
+      <p class="hero-sub">Frankenstein AI kombinerar neurovetenskap, kognitiv arkitektur och maskininlärning till en plattform som löser uppgifter med <strong id="heroRate">—</strong> precision — och lär sig av varje misstag.</p>
       <div class="hero-buttons">
-        <a href="https://app.gracestack.se" class="btn btn-primary">Testa live demo →</a>
-        <a href="#technology" class="btn btn-outline">Läs mer om teknologin</a>
+        <a href="https://app.gracestack.se" class="btn btn-primary btn-lg">
+          <span>Testa live demo</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </a>
+        <a href="#technology" class="btn btn-outline btn-lg">Läs mer om teknologin</a>
+      </div>
+
+      <!-- Terminal demo -->
+      <div class="hero-terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dots"><span></span><span></span><span></span></div>
+          <div class="terminal-title">frankenstein-ai — live</div>
+        </div>
+        <div class="terminal-body" id="terminalDemo">
+          <div class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">frankenstein train --autonomous</span></div>
+          <div class="term-line term-out">🧟 FRANKENSTEIN 2.0 — Autonom träning startad</div>
+          <div class="term-line term-out dim">Laddar kognitiv arkitektur...</div>
+          <div class="term-line term-out"><span class="term-green">✓</span> HDC-vektorer (4096d) — redo</div>
+          <div class="term-line term-out"><span class="term-green">✓</span> Active Inference (pymdp) — redo</div>
+          <div class="term-line term-out"><span class="term-green">✓</span> Ebbinghaus-minne — <span id="termMemories">5 717</span> minnen</div>
+          <div class="term-line term-out"><span class="term-green">✓</span> Emotionell motor — <span id="termMood">nyfiken</span></div>
+          <div class="term-line term-out dim">─────────────────────────────────</div>
+          <div class="term-line term-out" id="termTask"><span class="term-violet">►</span> Löser: api-emitter — EventEmitter</div>
+          <div class="term-line term-out" id="termResult"><span class="term-green">✅</span> 1/1 — 572ms</div>
+          <div class="term-line"><span class="term-cursor"></span></div>
+        </div>
       </div>
 
       <!-- Live Stats -->
@@ -70,6 +106,70 @@
         <div class="chip" id="chipMood"><span id="chipMoodText">—</span></div>
         <div class="chip" id="chipLearnings"><span id="chipLearningsText">—</span></div>
         <div class="chip" id="chipUpdated"><span id="chipUpdatedText">Uppdateras...</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Trusted by / Social proof -->
+  <section class="logos-section">
+    <div class="container">
+      <p class="logos-label">Byggt med</p>
+      <div class="logos-row">
+        <span class="tech-logo">Gemini 2.0 Flash</span>
+        <span class="tech-logo">Python</span>
+        <span class="tech-logo">TypeScript</span>
+        <span class="tech-logo">ChromaDB</span>
+        <span class="tech-logo">pymdp</span>
+        <span class="tech-logo">Docker</span>
+        <span class="tech-logo">Monaco Editor</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Products -->
+  <section id="products">
+    <div class="container">
+      <div class="section-label">🚀 Produkter</div>
+      <h2 class="section-title">En komplett AI-plattform</h2>
+      <p class="section-desc">Allt du behöver — från AI-driven kodredigering till autonom träning och forskning.</p>
+      <div class="products-grid">
+        <div class="product-card featured">
+          <div class="product-badge">Nytt</div>
+          <div class="product-icon">💻</div>
+          <h3>Gracestack Editor</h3>
+          <p>Windsurf-nivå kodredigerare med AI-autocomplete, inline edit (Ctrl+K), Git-integration, xterm.js terminal och streaming AI-chat.</p>
+          <ul class="product-features">
+            <li>AI ghost text completions</li>
+            <li>Fuzzy file search (Ctrl+P)</li>
+            <li>Git: stage, commit, push</li>
+            <li>Multi-file AI-kontext</li>
+          </ul>
+          <a href="https://app.gracestack.se" class="btn btn-primary btn-sm">Öppna editorn →</a>
+        </div>
+        <div class="product-card">
+          <div class="product-icon">🧟</div>
+          <h3>Frankenstein AI</h3>
+          <p>Kognitiv AI som tränar autonomt 24/7. Neurovetenskap möter maskininlärning. 21/21 på superhuman benchmark.</p>
+          <ul class="product-features">
+            <li>Persistent Ebbinghaus-minne</li>
+            <li>Active Inference (pymdp)</li>
+            <li>Emotionell motor</li>
+            <li>System 0/1/2 arkitektur</li>
+          </ul>
+          <a href="#technology" class="btn btn-outline btn-sm">Läs mer →</a>
+        </div>
+        <div class="product-card">
+          <div class="product-icon">💬</div>
+          <h3>AI Chat & Arena</h3>
+          <p>Chatta med Claude och Gemini. Kör AI-debatter i Arena-läge. Multi-agent Research Lab med konsensus.</p>
+          <ul class="product-features">
+            <li>Streaming SSE-svar</li>
+            <li>Konversationshistorik</li>
+            <li>Multi-agent debatter</li>
+            <li>Sandbox-kodexekvering</li>
+          </ul>
+          <a href="https://app.gracestack.se" class="btn btn-outline btn-sm">Testa chatten →</a>
+        </div>
       </div>
     </div>
   </section>
@@ -202,9 +302,13 @@
       <div class="section-label">👤 Team</div>
       <h2 class="section-title">Grundare</h2>
       <div class="team-card">
+        <div class="team-avatar">KC</div>
         <h4>Kim Cedendahl</h4>
         <div class="role">Grundare & CTO — Gracestack AB</div>
         <p>Bygger Frankenstein AI från grunden — från kognitiv arkitektur till produktionsinfrastruktur. Baserad i Sverige.</p>
+        <div class="team-links">
+          <a href="mailto:kim@gracestack.se">kim@gracestack.se</a>
+        </div>
       </div>
     </div>
   </section>
@@ -212,11 +316,15 @@
   <!-- CTA -->
   <section class="cta">
     <div class="container">
+      <div class="cta-glow"></div>
       <h2>Redo att se framtidens AI?</h2>
-      <p>Testa Frankenstein AI live eller kontakta oss för en djupare demo.</p>
+      <p>Testa Frankenstein AI live — se realtidsdata, kör kod i editorn, eller chatta med AI:n.</p>
       <div class="cta-buttons">
-        <a href="https://app.gracestack.se" class="btn btn-primary">Öppna appen →</a>
-        <a href="mailto:kim@gracestack.se" class="btn btn-outline">Kontakta oss</a>
+        <a href="https://app.gracestack.se" class="btn btn-primary btn-lg">
+          <span>Öppna appen</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </a>
+        <a href="mailto:kim@gracestack.se" class="btn btn-outline btn-lg">Kontakta oss</a>
       </div>
     </div>
   </section>
@@ -233,14 +341,44 @@
 
   <footer>
     <div class="container">
-      <div class="copy">© 2026 Gracestack AB. Alla rättigheter förbehållna.</div>
-      <div class="links">
-        <a href="https://app.gracestack.se">App</a>
-        <a href="mailto:kim@gracestack.se">Kontakt</a>
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="logo-link">
+            <div class="logo-icon">G</div>
+            <div class="logo">Gracestack</div>
+          </div>
+          <p class="footer-desc">AI-plattform med kognitiv arkitektur. Byggt i Sverige.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Produkter</h5>
+          <a href="https://app.gracestack.se">Gracestack Editor</a>
+          <a href="https://app.gracestack.se">AI Chat</a>
+          <a href="https://app.gracestack.se">Frankenstein AI</a>
+          <a href="https://app.gracestack.se">Research Lab</a>
+        </div>
+        <div class="footer-col">
+          <h5>Teknologi</h5>
+          <a href="#technology">Kognitiv arkitektur</a>
+          <a href="#architecture">System 0/1/2</a>
+          <a href="#live">Live Data</a>
+          <a href="#comparison">Jämförelse</a>
+        </div>
+        <div class="footer-col">
+          <h5>Företag</h5>
+          <a href="mailto:kim@gracestack.se">Kontakt</a>
+          <a href="https://github.com/cedendahlkim">GitHub</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="copy">© 2026 Gracestack AB. Alla rättigheter förbehållna.</div>
+        <div class="footer-status">
+          <span class="dot-sm"></span>
+          <span id="footerStatus">Alla system online</span>
+        </div>
       </div>
     </div>
   </footer>
 
-  <script src="live.js?v=2"></script>
+  <script src="live.js?v=3"></script>
 </body>
 </html>
