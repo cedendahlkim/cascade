@@ -662,6 +662,285 @@ Exempel: [{"action":"edit","path":"src/app.ts","content":"import...\\n..."},{"ac
   }
 });
 
+/** POST /api/workspace/ai/chat/stream — Streaming AI chat via SSE */
+router.post("/ai/chat/stream", async (req: Request, res: Response) => {
+  const { message, currentFile, currentContent, openFiles, history } = req.body;
+  if (!message) return res.status(400).json({ error: "message required" });
+
+  // Gather context from open files
+  const fileContexts: string[] = [];
+  if (openFiles?.length) {
+    for (const f of openFiles.slice(0, 5)) {
+      if (f === currentFile) continue;
+      const abs = safePath(f);
+      if (abs && existsSync(abs)) {
+        try {
+          const st = statSync(abs);
+          if (st.size < 50000) {
+            const content = readFileSync(abs, "utf-8");
+            fileContexts.push(`--- ${f} ---\n${content.slice(0, 3000)}`);
+          }
+        } catch { /* skip */ }
+      }
+    }
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+  // Build conversation history for multi-turn
+  const contents: any[] = [];
+  if (history?.length) {
+    for (const h of history.slice(-10)) {
+      contents.push({
+        role: h.role === "user" ? "user" : "model",
+        parts: [{ text: h.content }],
+      });
+    }
+  }
+
+  const systemContext = `Du är Frankenstein, en expert AI-kodassistent i Gracestack Editor. Du kan:
+- Redigera filer (svara med kodblock markerade med filsökväg)
+- Förklara kod
+- Föreslå förbättringar
+- Köra kommandon
+
+WORKSPACE: ${WORKSPACE_ROOT}
+${currentFile ? `AKTUELL FIL: ${currentFile}` : ""}
+${currentContent ? `FILINNEHÅLL:\n\`\`\`\n${currentContent.slice(0, 8000)}\n\`\`\`` : ""}
+${fileContexts.length ? `\nANDRA ÖPPNA FILER:\n${fileContexts.join("\n\n")}` : ""}
+
+REGLER:
+- Svara på svenska om användaren skriver svenska
+- Var koncis och handlingsorienterad
+- Om du föreslår kodändringar, visa HELA den uppdaterade filen i ett kodblock med filsökvägen som kommentar
+- Markera filändringar med: \`\`\`EDIT:sökväg/till/fil\n...ny kod...\n\`\`\`
+- Markera nya filer med: \`\`\`CREATE:sökväg/till/fil\n...kod...\n\`\`\`
+- Markera kommandon med: \`\`\`RUN\nkommando\n\`\`\``;
+
+  contents.push({
+    role: "user",
+    parts: [{ text: `${systemContext}\n\nANVÄNDAREN: ${message}` }],
+  });
+
+  try {
+    // SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    const streamRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents,
+          generationConfig: { temperature: 0.3, maxOutputTokens: 16384 },
+        }),
+      }
+    );
+
+    if (!streamRes.ok || !streamRes.body) {
+      res.write(`data: ${JSON.stringify({ error: "Gemini API error" })}\n\n`);
+      res.end();
+      return;
+    }
+
+    const reader = streamRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr || jsonStr === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          if (text) {
+            fullText += text;
+            res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
+          }
+        } catch { /* skip malformed */ }
+      }
+    }
+
+    // Parse file actions from the full response
+    const fileActions: any[] = [];
+    const editRegex = /```(?:EDIT|CREATE):([^\n]+)\n([\s\S]*?)```/g;
+    const runRegex = /```RUN\n([\s\S]*?)```/g;
+    let match;
+
+    while ((match = editRegex.exec(fullText)) !== null) {
+      const filePath = match[1].trim();
+      const content = match[2].trimEnd();
+      const abs = safePath(filePath);
+      if (abs) {
+        const isNew = !existsSync(abs);
+        const dir = dirname(abs);
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        writeFileSync(abs, content, "utf-8");
+        fileActions.push({
+          action: isNew ? "create" : "edit",
+          path: filePath,
+          content,
+          language: langFromExt(extname(filePath)),
+          success: true,
+          isNew,
+        });
+      }
+    }
+
+    while ((match = runRegex.exec(fullText)) !== null) {
+      const command = match[1].trim();
+      try {
+        const cmdResult = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve) => {
+          let stdout = "";
+          let stderr = "";
+          const isWin = process.platform === "win32";
+          const sh = isWin ? "cmd.exe" : "/bin/bash";
+          const args = isWin ? ["/c", command] : ["-c", command];
+          const proc = spawn(sh, args, { cwd: WORKSPACE_ROOT, timeout: 30000 });
+          proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString("utf-8"); });
+          proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf-8"); });
+          proc.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 1 }));
+          proc.on("error", (err) => resolve({ stdout, stderr: String(err), exitCode: 1 }));
+        });
+        fileActions.push({ action: "run", command, success: cmdResult.exitCode === 0, ...cmdResult });
+      } catch (err) {
+        fileActions.push({ action: "run", command, success: false, error: String(err) });
+      }
+    }
+
+    // Send final summary with file actions
+    res.write(`data: ${JSON.stringify({ done: true, fileActions })}\n\n`);
+    res.end();
+  } catch (err) {
+    res.write(`data: ${JSON.stringify({ error: String(err) })}\n\n`);
+    res.end();
+  }
+});
+
+/** POST /api/workspace/ai/inline — Inline AI edit (Ctrl+K style) */
+router.post("/ai/inline", async (req: Request, res: Response) => {
+  const { path: relPath, selection, instruction, fullContent, selectionRange } = req.body;
+  if (!instruction) return res.status(400).json({ error: "instruction required" });
+
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+  try {
+    const ext = relPath ? extname(relPath) : ".txt";
+    const language = langFromExt(ext);
+
+    // SSE for streaming inline edit
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    const prompt = selection
+      ? `Du är en expert-programmerare. Redigera BARA den markerade koden enligt instruktionen.
+
+FIL: ${relPath || "unknown"}
+SPRÅK: ${language}
+
+HELA FILEN:
+\`\`\`${language}
+${(fullContent || "").slice(0, 10000)}
+\`\`\`
+
+MARKERAD KOD (rad ${selectionRange?.startLine || "?"}-${selectionRange?.endLine || "?"}):
+\`\`\`${language}
+${selection}
+\`\`\`
+
+INSTRUKTION: ${instruction}
+
+Svara med BARA den uppdaterade markerade koden. Ingen förklaring, inga markdown-fences, bara koden som ska ersätta markeringen.`
+      : `Du är en expert-programmerare. Generera kod enligt instruktionen.
+
+FIL: ${relPath || "unknown"}
+SPRÅK: ${language}
+KONTEXT (filen):
+\`\`\`${language}
+${(fullContent || "").slice(0, 10000)}
+\`\`\`
+
+INSTRUKTION: ${instruction}
+
+Svara med BARA koden som ska infogas. Ingen förklaring, inga markdown-fences.`;
+
+    const streamRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+        }),
+      }
+    );
+
+    if (!streamRes.ok || !streamRes.body) {
+      res.write(`data: ${JSON.stringify({ error: "Gemini API error" })}\n\n`);
+      res.end();
+      return;
+    }
+
+    const reader = streamRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr || jsonStr === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          if (text) {
+            fullText += text;
+            res.write(`data: ${JSON.stringify({ token: text })}\n\n`);
+          }
+        } catch { /* skip */ }
+      }
+    }
+
+    // Strip markdown fences from final result
+    let cleanResult = fullText.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "");
+
+    res.write(`data: ${JSON.stringify({ done: true, result: cleanResult })}\n\n`);
+    res.end();
+  } catch (err) {
+    res.write(`data: ${JSON.stringify({ error: String(err) })}\n\n`);
+    res.end();
+  }
+});
+
 /** POST /api/workspace/ai/terminal — AI runs a terminal command */
 router.post("/ai/terminal", async (req: Request, res: Response) => {
   const { command, cwd } = req.body;

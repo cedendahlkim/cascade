@@ -8,6 +8,7 @@ import {
   FileJson, FileText, FileCode, FileType, Image, Settings, Database,
   Hash, Braces, Coffee, Gem, FileCode2, Globe, Cpu, Package,
   Columns, Undo2, Eye, GripVertical, Copy, Check, Maximize2, Minimize2, CheckCircle, AlertCircle, Info,
+  Wand2, MessageSquare, FileEdit, SquareSlash, StopCircle,
   type LucideIcon,
 } from "lucide-react";
 import { BRIDGE_URL } from "../config";
@@ -42,6 +43,16 @@ interface SearchResult {
   path: string;
   line: number;
   content: string;
+}
+
+interface InlineEditState {
+  visible: boolean;
+  instruction: string;
+  selection: string;
+  selectionRange: { startLine: number; endLine: number; startCol: number; endCol: number } | null;
+  loading: boolean;
+  result: string;
+  streaming: boolean;
 }
 
 interface CommandItem {
@@ -600,7 +611,17 @@ export default function CodeEditorView() {
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiStreaming, setAiStreaming] = useState(false);
   const aiRef = useRef<HTMLDivElement>(null);
+  const aiAbortRef = useRef<AbortController | null>(null);
+
+  // Inline AI (Ctrl+K)
+  const [inlineEdit, setInlineEdit] = useState<InlineEditState>({
+    visible: false, instruction: "", selection: "", selectionRange: null,
+    loading: false, result: "", streaming: false,
+  });
+  const inlineInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<any>(null);
 
   // Auto-save timer
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -860,106 +881,233 @@ export default function CodeEditorView() {
     }
   }, [activeTab]);
 
-  // ── AI Chat (smart — natural language → code actions) ──
+  // ── AI Chat (streaming SSE) ──
   const sendAiMessage = async () => {
     if (!aiInput.trim()) return;
     const msg = aiInput.trim();
     setAiInput("");
     setAiMessages((prev) => [...prev, { role: "user", content: msg, timestamp: Date.now() }]);
     setAiLoading(true);
+    setAiStreaming(true);
+
+    // Add placeholder AI message for streaming
+    const aiMsgIdx = Date.now();
+    setAiMessages((prev) => [...prev, { role: "ai", content: "", timestamp: aiMsgIdx }]);
+
+    const abortController = new AbortController();
+    aiAbortRef.current = abortController;
 
     try {
       const activeFile = tabs.find((t) => t.path === activeTab);
 
-      // Send everything to the smart /ai/chat endpoint
-      const response = await api("/ai/chat", {
+      const response = await fetch(`${BRIDGE_URL}/api/workspace/ai/chat/stream`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: msg,
           currentFile: activeFile?.path || null,
           currentContent: activeFile?.content || null,
           openFiles: tabs.map((t) => t.path),
+          history: aiMessages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok || !response.body) throw new Error("Stream failed");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.token) {
+              accumulated += data.token;
+              setAiMessages((prev) =>
+                prev.map((m) => m.timestamp === aiMsgIdx ? { ...m, content: accumulated } : m)
+              );
+              // Auto-scroll
+              setTimeout(() => aiRef.current?.scrollTo(0, aiRef.current.scrollHeight), 10);
+            }
+            if (data.done && data.fileActions?.length) {
+              for (const fa of data.fileActions) {
+                if ((fa.action === "edit" || fa.action === "create") && fa.success) {
+                  const existingTab = tabs.find((t) => t.path === fa.path);
+                  if (existingTab) {
+                    setTabs((prev) =>
+                      prev.map((t) =>
+                        t.path === fa.path
+                          ? { ...t, content: fa.content, originalContent: fa.content, modified: false }
+                          : t
+                      )
+                    );
+                  } else {
+                    const name = fa.path.split("/").pop() || fa.path;
+                    setTabs((prev) => [...prev, {
+                      path: fa.path, name, language: fa.language || "plaintext",
+                      content: fa.content, originalContent: fa.content, modified: false,
+                    }]);
+                    setActiveTab(fa.path);
+                  }
+                }
+                if (fa.action === "run") {
+                  setTerminalOutput((prev) => [
+                    ...prev, `$ ${fa.command}`,
+                    ...(fa.stdout ? [fa.stdout] : []),
+                    ...(fa.stderr ? [`[stderr] ${fa.stderr}`] : []),
+                    `[exit: ${fa.exitCode}]`,
+                  ]);
+                }
+              }
+              await loadTree();
+            }
+            if (data.error) {
+              accumulated += `\n\n**Fel:** ${data.error}`;
+              setAiMessages((prev) =>
+                prev.map((m) => m.timestamp === aiMsgIdx ? { ...m, content: accumulated } : m)
+              );
+            }
+          } catch { /* skip malformed SSE */ }
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        setAiMessages((prev) =>
+          prev.map((m) => m.timestamp === aiMsgIdx ? { ...m, content: `Fel: ${err}` } : m)
+        );
+      }
+    } finally {
+      setAiLoading(false);
+      setAiStreaming(false);
+      aiAbortRef.current = null;
+      setTimeout(() => aiRef.current?.scrollTo(0, aiRef.current.scrollHeight), 50);
+    }
+  };
+
+  const stopAiStream = () => {
+    aiAbortRef.current?.abort();
+    setAiLoading(false);
+    setAiStreaming(false);
+  };
+
+  // ── Inline AI (Ctrl+K) ──
+  const triggerInlineEdit = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const selection = editor.getSelection();
+    const model = editor.getModel();
+    if (!model) return;
+
+    const selectedText = selection ? model.getValueInRange(selection) : "";
+    const range = selection ? {
+      startLine: selection.startLineNumber,
+      endLine: selection.endLineNumber,
+      startCol: selection.startColumn,
+      endCol: selection.endColumn,
+    } : null;
+
+    setInlineEdit({
+      visible: true,
+      instruction: "",
+      selection: selectedText,
+      selectionRange: range,
+      loading: false,
+      result: "",
+      streaming: false,
+    });
+    setTimeout(() => inlineInputRef.current?.focus(), 50);
+  }, []);
+
+  const executeInlineEdit = async () => {
+    if (!inlineEdit.instruction.trim()) return;
+    const currentFile = tabs.find((t) => t.path === activeTab);
+    if (!currentFile) return;
+
+    setInlineEdit((prev) => ({ ...prev, loading: true, streaming: true, result: "" }));
+
+    try {
+      const response = await fetch(`${BRIDGE_URL}/api/workspace/ai/inline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: currentFile.path,
+          selection: inlineEdit.selection,
+          instruction: inlineEdit.instruction,
+          fullContent: currentFile.content,
+          selectionRange: inlineEdit.selectionRange,
         }),
       });
 
-      const { results } = response as { results: any[] };
-      const parts: string[] = [];
-      let filesChanged = false;
+      if (!response.ok || !response.body) throw new Error("Inline edit failed");
 
-      for (const r of results) {
-        switch (r.action) {
-          case "edit":
-          case "create": {
-            if (r.success) {
-              filesChanged = true;
-              const icon = r.isNew ? "📄" : "✏️";
-              parts.push(`${icon} **${r.isNew ? "Skapade" : "Uppdaterade"}** \`${r.path}\``);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
 
-              // If this file is currently open, update its content in the tab
-              const existingTab = tabs.find((t) => t.path === r.path);
-              if (existingTab) {
-                setTabs((prev) =>
-                  prev.map((t) =>
-                    t.path === r.path
-                      ? { ...t, content: r.content, originalContent: r.content, modified: false }
-                      : t
-                  )
-                );
-              } else {
-                // Auto-open newly created/edited files
-                const name = r.path.split("/").pop() || r.path;
-                setTabs((prev) => [
-                  ...prev,
-                  {
-                    path: r.path,
-                    name,
-                    language: r.language || "plaintext",
-                    content: r.content,
-                    originalContent: r.content,
-                    modified: false,
-                  },
-                ]);
-                setActiveTab(r.path);
-              }
-            } else {
-              parts.push(`❌ Kunde inte ${r.action === "create" ? "skapa" : "redigera"} \`${r.path}\`: ${r.error}`);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.token) {
+              accumulated += data.token;
+              setInlineEdit((prev) => ({ ...prev, result: accumulated }));
             }
-            break;
-          }
-          case "run": {
-            const output = [r.stdout, r.stderr].filter(Boolean).join("\n") || "(ingen output)";
-            const status = r.success ? "✅" : "❌";
-            parts.push(`${status} Körde: \`${r.command}\`\n\`\`\`\n${output.slice(0, 2000)}\n[exit: ${r.exitCode}]\n\`\`\``);
-            // Also show in terminal
-            setTerminalOutput((prev) => [...prev, `$ ${r.command}`, ...(r.stdout ? [r.stdout] : []), ...(r.stderr ? [`[stderr] ${r.stderr}`] : []), `[exit: ${r.exitCode}]`]);
-            break;
-          }
-          case "answer": {
-            parts.push(r.text);
-            break;
-          }
-          default:
-            if (r.error) parts.push(`⚠️ ${r.error}`);
+            if (data.done) {
+              setInlineEdit((prev) => ({ ...prev, result: data.result || accumulated, loading: false, streaming: false }));
+            }
+          } catch { /* skip */ }
         }
       }
-
-      if (filesChanged) await loadTree();
-
-      setAiMessages((prev) => [
-        ...prev,
-        { role: "ai", content: parts.join("\n\n"), timestamp: Date.now() },
-      ]);
     } catch (err) {
-      setAiMessages((prev) => [
-        ...prev,
-        { role: "ai", content: `Fel: ${err}`, timestamp: Date.now() },
-      ]);
-    } finally {
-      setAiLoading(false);
-      setTimeout(() => {
-        aiRef.current?.scrollTo(0, aiRef.current.scrollHeight);
-      }, 50);
+      setInlineEdit((prev) => ({ ...prev, loading: false, streaming: false, result: `Fel: ${err}` }));
     }
+  };
+
+  const acceptInlineEdit = () => {
+    if (!inlineEdit.result || !inlineEdit.selectionRange) return;
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const model = editor.getModel();
+    if (!model) return;
+
+    const range = inlineEdit.selectionRange;
+    const monacoRange = new (window as any).monaco.Range(
+      range.startLine, range.startCol, range.endLine, range.endCol
+    );
+
+    editor.executeEdits("inline-ai", [{
+      range: monacoRange,
+      text: inlineEdit.result,
+    }]);
+
+    setInlineEdit({ visible: false, instruction: "", selection: "", selectionRange: null, loading: false, result: "", streaming: false });
+    addToast("success", "AI-ändring applicerad");
+  };
+
+  const dismissInlineEdit = () => {
+    setInlineEdit({ visible: false, instruction: "", selection: "", selectionRange: null, loading: false, result: "", streaming: false });
   };
 
   // ── Accept diff ──
@@ -1047,13 +1195,21 @@ export default function CodeEditorView() {
         e.preventDefault();
         setIsFullscreen((v) => !v);
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        triggerInlineEdit();
+      }
+      if (e.key === "Escape" && inlineEdit.visible) {
+        dismissInlineEdit();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeTab, tabs, showSplit, closedTabs]);
+  }, [activeTab, tabs, showSplit, closedTabs, inlineEdit.visible, triggerInlineEdit]);
 
   // ── Monaco mount handler ──
   const handleMonacoMount = useCallback((_editor: any, monaco: Monaco) => {
+    editorRef.current = _editor;
     defineGracestackThemes(monaco);
     setMonacoReady(true);
     _editor.onDidChangeCursorPosition((e: any) => {
@@ -1345,6 +1501,84 @@ export default function CodeEditorView() {
               </div>
             )}
 
+            {/* Inline AI Widget (Ctrl+K) */}
+            {inlineEdit.visible && currentTab && (
+              <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 w-[500px] max-w-[90%] bg-[#1c2128] border border-violet-500/40 rounded-xl shadow-2xl overflow-hidden animate-[slideIn_0.2s_ease-out]">
+                <div className="flex items-center gap-2 px-3 py-2 bg-violet-500/10 border-b border-violet-500/20">
+                  <Wand2 className="w-4 h-4 text-violet-400" />
+                  <span className="text-xs font-semibold text-violet-300">Inline AI Edit</span>
+                  {inlineEdit.selection && (
+                    <span className="text-[10px] text-slate-500 ml-auto">
+                      {inlineEdit.selectionRange ? `Rad ${inlineEdit.selectionRange.startLine}-${inlineEdit.selectionRange.endLine}` : "Markering"}
+                    </span>
+                  )}
+                  <button onClick={dismissInlineEdit} className="p-0.5 hover:bg-slate-700 rounded ml-1" title="Avbryt (Esc)">
+                    <X className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                </div>
+
+                {inlineEdit.selection && (
+                  <div className="max-h-24 overflow-y-auto px-3 py-2 bg-slate-900/50 border-b border-slate-700/30">
+                    <pre className="text-[11px] text-slate-400 font-mono whitespace-pre-wrap">{inlineEdit.selection.slice(0, 500)}{inlineEdit.selection.length > 500 ? "..." : ""}</pre>
+                  </div>
+                )}
+
+                <div className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={inlineInputRef}
+                      type="text"
+                      value={inlineEdit.instruction}
+                      onChange={(e) => setInlineEdit((prev) => ({ ...prev, instruction: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !inlineEdit.loading) executeInlineEdit();
+                        if (e.key === "Escape") dismissInlineEdit();
+                      }}
+                      placeholder={inlineEdit.selection ? "Beskriv ändringen..." : "Beskriv vad som ska genereras..."}
+                      className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 text-xs outline-none text-slate-200 placeholder:text-slate-500 focus:border-violet-500/50"
+                      disabled={inlineEdit.loading}
+                    />
+                    <button
+                      onClick={executeInlineEdit}
+                      disabled={inlineEdit.loading || !inlineEdit.instruction.trim()}
+                      className="p-2 bg-violet-500/20 text-violet-400 rounded-lg hover:bg-violet-500/30 disabled:opacity-50"
+                    >
+                      {inlineEdit.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {inlineEdit.result && (
+                  <div className="border-t border-slate-700/30">
+                    <div className="max-h-48 overflow-y-auto px-3 py-2 bg-green-500/5">
+                      <div className="flex items-center gap-1 mb-1 text-[10px] text-green-400">
+                        <FileEdit className="w-3 h-3" />
+                        {inlineEdit.streaming ? "Genererar..." : "Förslag"}
+                      </div>
+                      <pre className="text-[11px] text-slate-300 font-mono whitespace-pre-wrap">{inlineEdit.result}</pre>
+                    </div>
+                    {!inlineEdit.streaming && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-[#161b22] border-t border-slate-700/30">
+                        <button
+                          onClick={acceptInlineEdit}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
+                        >
+                          <Check className="w-3 h-3" /> Acceptera
+                        </button>
+                        <button
+                          onClick={dismissInlineEdit}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                        >
+                          <X className="w-3 h-3" /> Avvisa
+                        </button>
+                        <span className="text-[10px] text-slate-600 ml-auto">Enter = acceptera, Esc = avvisa</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {!loading && !showDiff && currentTab && (
               <div className="flex h-full">
                 {/* Primary editor */}
@@ -1501,9 +1735,9 @@ export default function CodeEditorView() {
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+S</kbd> Spara</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+H</kbd> Sök/Ersätt</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+`</kbd> Terminal</div>
-                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+I</kbd> AI</div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+I</kbd> AI Panel</div>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-violet-500/10 border border-violet-500/20 rounded-lg text-violet-300"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+K</kbd> Inline AI</div>
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+\</kbd> Split vy</div>
-                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/30 rounded-lg"><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px]">Ctrl+Shift+T</kbd> Återöppna</div>
                 </div>
               </div>
             )}
@@ -1619,7 +1853,7 @@ export default function CodeEditorView() {
                   )}
                 </div>
               ))}
-              {aiLoading && (
+              {aiLoading && !aiStreaming && (
                 <div className="flex items-center gap-2 text-xs text-violet-400">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   <span>Frankenstein tänker...</span>
@@ -1639,13 +1873,28 @@ export default function CodeEditorView() {
                   className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 text-xs outline-none text-slate-200 placeholder:text-slate-500 focus:border-violet-500/50"
                   disabled={aiLoading}
                 />
-                <button
-                  onClick={sendAiMessage}
-                  disabled={aiLoading || !aiInput.trim()}
-                  className="p-2 bg-violet-500/20 text-violet-400 rounded-lg hover:bg-violet-500/30 disabled:opacity-50"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
+                {aiStreaming ? (
+                  <button
+                    onClick={stopAiStream}
+                    className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30"
+                    title="Stoppa streaming"
+                  >
+                    <StopCircle className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={sendAiMessage}
+                    disabled={aiLoading || !aiInput.trim()}
+                    className="p-2 bg-violet-500/20 text-violet-400 rounded-lg hover:bg-violet-500/30 disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-1.5 text-[10px] text-slate-600">
+                <kbd className="px-1 py-0.5 bg-slate-800 rounded">Ctrl+K</kbd> Inline AI
+                <span className="text-slate-700">|</span>
+                <kbd className="px-1 py-0.5 bg-slate-800 rounded">Ctrl+I</kbd> Panel
               </div>
             </div>
           </div>
