@@ -27,9 +27,12 @@ import time
 import math
 import random
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger("circadian")
 
 
 # === Circadian Phases ===
@@ -128,6 +131,18 @@ class DreamResult:
 
 
 @dataclass
+class MathDreamResult:
+    """Resultat från matematisk forskning under sömn."""
+    problem: str
+    findings_count: int
+    hypotheses_count: int
+    experiments_count: int
+    cross_domain_count: int
+    cycle: int
+    details: dict = field(default_factory=dict)
+
+
+@dataclass
 class SleepReport:
     """Rapport efter en sömncykel."""
     duration_seconds: float
@@ -137,6 +152,9 @@ class SleepReport:
     dreams: list[DreamResult]
     insights: list[DreamResult]
     rules_generalized: int
+    math_dreams: list[MathDreamResult] = field(default_factory=list)
+    collatz_anomalies: int = 0
+    collatz_sequences: int = 0
 
 
 class CircadianClock:
@@ -334,6 +352,8 @@ class SleepEngine:
     Implementerar:
     - NREM Stage 3: Minneskonsolidering via Ebbinghaus-förstärkning
     - REM: HDC-vektorbindning av slumpmässiga minnen → insikter
+    - REM Math Dreams: Matematisk forskning (Goldbach, Twin Primes, etc.)
+    - NREM Collatz: Systematisk Collatz-utforskning under djupsömn
     """
 
     def __init__(self, cycles_per_night: int = 3):
@@ -342,13 +362,54 @@ class SleepEngine:
         self.total_insights = 0
         self.total_consolidated = 0
         self.total_decayed = 0
+        self.total_math_findings = 0
+        self.total_collatz_anomalies = 0
         self.dream_journal: list[DreamResult] = []
+        self.math_journal: list[MathDreamResult] = []
+
+        # Lazy-loaded research engines (skapas vid behov)
+        self._math_engine = None
+        self._collatz_explorer = None
+
+    def _get_math_engine(self, episodic_memory=None, hdc_bridge=None):
+        """Lazy-load MathResearchEngine."""
+        if self._math_engine is None:
+            try:
+                from math_research import MathResearchEngine
+                self._math_engine = MathResearchEngine(
+                    memory=episodic_memory,
+                    bridge=hdc_bridge,
+                    exploration_weight=0.7,  # Hög nyfikenhet under sömn
+                )
+                logger.info("MathResearchEngine loaded for dream research")
+            except ImportError:
+                logger.warning("math_research module not available")
+        return self._math_engine
+
+    def _get_collatz_explorer(self, episodic_memory=None, hdc_bridge=None):
+        """Lazy-load CollatzExplorer."""
+        if self._collatz_explorer is None:
+            try:
+                from collatz_explorer import CollatzExplorer
+                self._collatz_explorer = CollatzExplorer(
+                    memory=episodic_memory,
+                    bridge=hdc_bridge,
+                    exploration_weight=0.7,
+                )
+                logger.info("CollatzExplorer loaded for dream research")
+            except ImportError:
+                logger.warning("collatz_explorer module not available")
+        return self._collatz_explorer
 
     def run_sleep_cycle(
         self,
         episodic_memory,
         hdc_bridge=None,
         concept_code: dict | None = None,
+        enable_math_dreams: bool = True,
+        enable_collatz_dreams: bool = True,
+        math_range_size: int = 2000,
+        collatz_batch_size: int = 500,
     ) -> SleepReport:
         """Kör en komplett sömncykel.
         
@@ -356,46 +417,189 @@ class SleepEngine:
             episodic_memory: EbbinghausMemory-instans
             hdc_bridge: NeuroSymbolicBridge för HDC-operationer
             concept_code: Dict med concept_name → code
+            enable_math_dreams: Aktivera matematisk forskning under REM
+            enable_collatz_dreams: Aktivera Collatz-utforskning under NREM
+            math_range_size: Storlek på intervall för matematisk utforskning
+            collatz_batch_size: Antal Collatz-sekvenser per cykel
             
         Returns:
             SleepReport med konsolideringsresultat
         """
         dreams: list[DreamResult] = []
         insights: list[DreamResult] = []
+        math_dreams: list[MathDreamResult] = []
         consolidated = 0
         decayed = 0
         rules = 0
+        collatz_anomalies_total = 0
+        collatz_sequences_total = 0
 
         for cycle in range(self.cycles_per_night):
-            # NREM Stage 3: Minneskonsolidering
+            # ── NREM Stage 3: Minneskonsolidering ──
             c, d = self._nrem_consolidation(episodic_memory, cycle)
             consolidated += c
             decayed += d
 
-            # REM: Drömmar via HDC-bindning
+            # ── NREM: Collatz-utforskning (tidiga cykler = djupsömn) ──
+            if enable_collatz_dreams and cycle < self.cycles_per_night // 2 + 1:
+                ca, cs = self._nrem_collatz(episodic_memory, hdc_bridge, cycle, collatz_batch_size)
+                collatz_anomalies_total += ca
+                collatz_sequences_total += cs
+
+            # ── REM: Drömmar via HDC-bindning ──
             if hdc_bridge and concept_code:
                 cycle_dreams = self._rem_dreams(hdc_bridge, concept_code, cycle)
                 dreams.extend(cycle_dreams)
-                # Insikter = drömmar med hög potential
                 cycle_insights = [d for d in cycle_dreams if d.insight_potential > 0.6]
                 insights.extend(cycle_insights)
+
+            # ── REM: Matematisk forskning (sena cykler = mer REM) ──
+            if enable_math_dreams and cycle >= self.cycles_per_night // 2:
+                md = self._rem_math_research(episodic_memory, hdc_bridge, cycle, math_range_size)
+                if md:
+                    math_dreams.append(md)
 
         self.total_dreams += len(dreams)
         self.total_insights += len(insights)
         self.total_consolidated += consolidated
         self.total_decayed += decayed
-        self.dream_journal.extend(dreams[-10:])  # Behåll senaste 10
+        self.total_math_findings += sum(md.findings_count for md in math_dreams)
+        self.total_collatz_anomalies += collatz_anomalies_total
+        self.dream_journal.extend(dreams[-10:])
+        self.math_journal.extend(math_dreams)
 
         report = SleepReport(
-            duration_seconds=0,  # Komprimerad tid
+            duration_seconds=0,
             cycles_completed=self.cycles_per_night,
             memories_consolidated=consolidated,
             memories_decayed=decayed,
             dreams=dreams,
             insights=insights,
             rules_generalized=rules,
+            math_dreams=math_dreams,
+            collatz_anomalies=collatz_anomalies_total,
+            collatz_sequences=collatz_sequences_total,
         )
+
+        if math_dreams or collatz_anomalies_total > 0:
+            logger.info(
+                f"Sleep research: {sum(md.findings_count for md in math_dreams)} math findings, "
+                f"{collatz_anomalies_total} Collatz anomalies, "
+                f"{collatz_sequences_total} Collatz sequences"
+            )
+
         return report
+
+    def _nrem_collatz(
+        self, episodic_memory, hdc_bridge, cycle: int, batch_size: int
+    ) -> tuple[int, int]:
+        """NREM Collatz: Systematisk utforskning under djupsömn.
+        
+        Tidiga cykler → mer djupsömn → mer systematisk utforskning.
+        Returnerar (anomalier, sekvenser).
+        """
+        explorer = self._get_collatz_explorer(episodic_memory, hdc_bridge)
+        if explorer is None:
+            return 0, 0
+
+        try:
+            from collatz_explorer import CollatzDiscovery
+
+            # Djupsömn-intensitet: starkare i tidiga cykler
+            intensity = 1.0 - (cycle / max(self.cycles_per_night, 1)) * 0.5
+            adjusted_batch = int(batch_size * intensity)
+
+            # Bestäm intervall baserat på vad som redan utforskats
+            stats = explorer.get_stats()
+            start = stats.get("sequences_computed", 0) + 1
+            end = start + adjusted_batch
+
+            anomalies = explorer.analyze_range(start, end)
+
+            # Konvertera anomalier till discoveries och lagra
+            for anomaly in anomalies[:5]:  # Max 5 per cykel
+                discovery = CollatzDiscovery(
+                    discovery_id=f"sleep_collatz_{anomaly.n}_{int(time.time())}",
+                    hypothesis=f"Collatz anomaly at n={anomaly.n}: {anomaly.description}",
+                    evidence=[anomaly.n],
+                    confidence=min(0.9, anomaly.severity),
+                    category="anomaly",
+                    surprise_score=anomaly.z_score,
+                )
+                explorer.store_discovery(discovery)
+
+            logger.debug(
+                f"NREM Collatz cycle {cycle}: {len(anomalies)} anomalies "
+                f"in [{start}, {end}]"
+            )
+            return len(anomalies), adjusted_batch
+
+        except Exception as e:
+            logger.warning(f"Collatz dream error: {e}")
+            return 0, 0
+
+    def _rem_math_research(
+        self, episodic_memory, hdc_bridge, cycle: int, range_size: int
+    ) -> Optional[MathDreamResult]:
+        """REM Math Research: Kreativ matematisk forskning under REM-sömn.
+        
+        Sena cykler → mer REM → mer kreativ forskning.
+        """
+        engine = self._get_math_engine(episodic_memory, hdc_bridge)
+        if engine is None:
+            return None
+
+        try:
+            # REM-intensitet: starkare i sena cykler
+            rem_intensity = 0.3 + (cycle / max(self.cycles_per_night, 1)) * 0.7
+
+            # Välj problem via AIF
+            problem_name = engine.select_problem()
+            counter = engine._exploration_counter[problem_name]
+            start = counter * range_size + 1
+            end = start + int(range_size * rem_intensity)
+
+            # Utforska
+            findings = engine.explore_problem(problem_name, start, end)
+
+            # Formulera hypoteser (under intensiv REM)
+            hypotheses = []
+            if rem_intensity > 0.5 and findings:
+                hypotheses = engine.generate_hypotheses(problem_name)
+
+            # Testa hypoteser (under mycket intensiv REM)
+            experiments = []
+            if rem_intensity > 0.7:
+                experiments = engine.test_hypotheses(problem_name, sample_size=200)
+
+            # Cross-domain discovery (sista cykeln)
+            cross_domain = []
+            if cycle == self.cycles_per_night - 1:
+                cross_domain = engine.find_cross_domain_patterns()
+
+            result = MathDreamResult(
+                problem=problem_name,
+                findings_count=len(findings),
+                hypotheses_count=len(hypotheses),
+                experiments_count=len(experiments),
+                cross_domain_count=len(cross_domain),
+                cycle=cycle,
+                details={
+                    "range": [start, end],
+                    "rem_intensity": round(rem_intensity, 3),
+                    "surprise": engine.aif.get_surprise(),
+                },
+            )
+
+            logger.debug(
+                f"REM Math cycle {cycle}: [{problem_name}] "
+                f"{len(findings)} findings, {len(hypotheses)} hypotheses"
+            )
+            return result
+
+        except Exception as e:
+            logger.warning(f"Math dream error: {e}")
+            return None
 
     def _nrem_consolidation(self, episodic_memory, cycle: int) -> tuple[int, int]:
         """NREM Stage 3: Förstärk viktiga minnen, försvaga oviktiga.
@@ -533,13 +737,21 @@ class SleepEngine:
         )
 
     def get_stats(self) -> dict:
-        return {
+        stats = {
             "total_dreams": self.total_dreams,
             "total_insights": self.total_insights,
             "total_consolidated": self.total_consolidated,
             "total_decayed": self.total_decayed,
             "dream_journal_size": len(self.dream_journal),
+            "total_math_findings": self.total_math_findings,
+            "total_collatz_anomalies": self.total_collatz_anomalies,
+            "math_journal_size": len(self.math_journal),
         }
+        if self._math_engine:
+            stats["math_research"] = self._math_engine.get_stats()
+        if self._collatz_explorer:
+            stats["collatz"] = self._collatz_explorer.get_stats()
+        return stats
 
 
 # Need torch for HDC operations in dreams
