@@ -469,7 +469,12 @@ app.get("/api/public/stats", (_req, res) => {
       success_rate: parseFloat(successRate),
       skill_count: skillCount,
       current_difficulty: progress.current_difficulty,
-      training_running: frankTrainState.running,
+      training_running: frankTrainState.running || (() => {
+        try {
+          const stat = statSync(progressPath);
+          return (Date.now() - stat.mtimeMs) < 90_000; // file updated within 90s = training active
+        } catch { return false; }
+      })(),
       training_started_at: frankTrainState.started_at,
       wellbeing: {
         overall: wellbeing.overall,
