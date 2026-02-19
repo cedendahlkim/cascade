@@ -719,6 +719,17 @@ export default function CodeEditorView() {
   const [mvpResult, setMvpResult] = useState<{ success: boolean; projectDir: string; plan: any; files: string[]; errors: string[]; commandResults: any[] } | null>(null);
   const [mvpStep, setMvpStep] = useState("");
 
+  // Knowledge Base (Archon)
+  const [showKnowledgeBase, setShowKnowledgeBase] = useState(false);
+  const [kbQuery, setKbQuery] = useState("");
+  const [kbResults, setKbResults] = useState<any[]>([]);
+  const [kbSearching, setKbSearching] = useState(false);
+  const [kbSources, setKbSources] = useState<any[]>([]);
+  const [kbCrawlUrl, setKbCrawlUrl] = useState("");
+  const [kbCrawlTitle, setKbCrawlTitle] = useState("");
+  const [kbCrawling, setKbCrawling] = useState(false);
+  const [kbTab, setKbTab] = useState<"search" | "sources" | "crawl">("search");
+
   // File attachments for AI chat
   const [chatAttachments, setChatAttachments] = useState<Array<{ name: string; content: string; type: string; language?: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1235,6 +1246,58 @@ export default function CodeEditorView() {
     }
   };
 
+  // ── Knowledge Base (Archon) ──
+  const loadKbSources = async () => {
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/archon/sources`);
+      if (res.ok) { const data = await res.json(); setKbSources(data.sources || []); }
+    } catch { /* ignore */ }
+  };
+
+  const searchKb = async () => {
+    if (!kbQuery.trim()) return;
+    setKbSearching(true);
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/archon/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: kbQuery, top_k: 8 }),
+      });
+      if (res.ok) { const data = await res.json(); setKbResults(data.results || []); }
+    } catch (err) { addToast("error", String(err)); }
+    finally { setKbSearching(false); }
+  };
+
+  const crawlKbUrl = async () => {
+    if (!kbCrawlUrl.trim()) return;
+    setKbCrawling(true);
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/archon/crawl`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: kbCrawlUrl, title: kbCrawlTitle || kbCrawlUrl }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        addToast("success", `Crawlad! ${data.chunks_created} chunks, ${data.code_examples} kodexempel`);
+        setKbCrawlUrl(""); setKbCrawlTitle("");
+        loadKbSources();
+      } else {
+        const err = await res.json().catch(() => ({ error: "Crawl failed" }));
+        addToast("error", err.error || "Crawl failed");
+      }
+    } catch (err) { addToast("error", String(err)); }
+    finally { setKbCrawling(false); }
+  };
+
+  const deleteKbSource = async (id: string) => {
+    try {
+      await fetch(`${BRIDGE_URL}/api/archon/sources/${id}`, { method: "DELETE" });
+      loadKbSources();
+      addToast("info", "Källa borttagen");
+    } catch { /* ignore */ }
+  };
+
   // ── File attachment helpers ──
   const readFileAsText = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -1740,6 +1803,7 @@ export default function CodeEditorView() {
     { id: "ai-diagnose", label: "🧟 AI Diagnostisera fel", icon: Bug, action: () => { if (lastTermError) runDiagnosis(); else addToast("info", "Kör ett kommando i terminalen som ger fel först"); }, category: "AI" },
     { id: "semantic-search", label: "🧟 AI Semantisk sökning", icon: SearchCode, action: () => setShowSemanticSearch(true), category: "AI" },
     { id: "mvp-generator", label: "🧟 MVP Generator — Skapa projekt från prompt", icon: Rocket, action: () => setShowMvpGenerator(true), category: "AI" },
+    { id: "knowledge-base", label: "🧠 Knowledge Base — Sök & hantera dokumentation (Archon)", icon: BookOpen, action: () => { setShowKnowledgeBase(true); loadKbSources(); }, category: "AI" },
   ], [activeTab, showMinimap, wordWrap, autoSave, showSplit, isFullscreen, showMarkdownPreview, currentTab, triggerInlineEdit, lastTermError]);
 
   // ── Keyboard shortcuts ──
@@ -2418,6 +2482,109 @@ export default function CodeEditorView() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Knowledge Base (Archon) Dialog */}
+      {showKnowledgeBase && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowKnowledgeBase(false)}>
+          <div className="w-[720px] max-w-[95vw] max-h-[85vh] bg-[#1c2128] border border-slate-600/50 rounded-xl shadow-2xl overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50 shrink-0">
+              <BookOpen className="w-4 h-4 text-violet-400" />
+              <span className="text-sm font-semibold text-slate-300">Knowledge Base</span>
+              <span className="text-[10px] bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded-full">Archon RAG</span>
+              <div className="ml-auto flex items-center gap-1">
+                {(["search", "sources", "crawl"] as const).map((t) => (
+                  <button key={t} onClick={() => setKbTab(t)} className={`px-2.5 py-1 text-[11px] rounded-md transition-colors ${kbTab === t ? "bg-violet-500/20 text-violet-400" : "text-slate-500 hover:text-slate-300"}`}>
+                    {t === "search" ? "Sök" : t === "sources" ? "Källor" : "Crawla"}
+                  </button>
+                ))}
+                <button onClick={() => setShowKnowledgeBase(false)} className="ml-2 p-1 hover:bg-slate-700 rounded" title="Stäng">
+                  <X className="w-4 h-4 text-slate-400" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+              {kbTab === "search" && (
+                <>
+                  <div className="flex gap-2">
+                    <input type="text" value={kbQuery} onChange={(e) => setKbQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchKb()} placeholder="Sök i kunskapsbasen..." title="Sökfråga" className="flex-1 bg-[#0d1117] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/50" />
+                    <button onClick={searchKb} disabled={kbSearching || !kbQuery.trim()} className="px-4 py-2 text-sm bg-violet-500/20 text-violet-400 rounded-lg hover:bg-violet-500/30 disabled:opacity-40 transition-colors">
+                      {kbSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sök"}
+                    </button>
+                  </div>
+                  {kbResults.length > 0 && (
+                    <div className="space-y-2">
+                      {kbResults.map((r, i) => (
+                        <div key={i} className="px-3 py-2 bg-slate-800/50 border border-slate-700/30 rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] bg-violet-500/10 text-violet-400 px-1.5 py-0.5 rounded">{(r.similarity * 100).toFixed(0)}% match</span>
+                            {r.url && <span className="text-[10px] text-slate-500 truncate max-w-[300px]">{r.url}</span>}
+                          </div>
+                          <div className="text-xs text-slate-300 leading-relaxed max-h-32 overflow-y-auto whitespace-pre-wrap">{r.content?.slice(0, 500)}{r.content?.length > 500 ? "..." : ""}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {kbResults.length === 0 && !kbSearching && kbQuery && (
+                    <div className="text-center py-8 text-slate-500 text-sm">Inga resultat. Crawla dokumentation först via "Crawla"-fliken.</div>
+                  )}
+                </>
+              )}
+
+              {kbTab === "sources" && (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400 font-medium">{kbSources.length} källor</span>
+                    <button onClick={loadKbSources} className="text-[10px] text-slate-500 hover:text-slate-300">Uppdatera</button>
+                  </div>
+                  {kbSources.length === 0 && <div className="text-center py-8 text-slate-500 text-sm">Inga källor ännu. Crawla en URL för att börja.</div>}
+                  {kbSources.map((s) => (
+                    <div key={s.id} className="flex items-center gap-3 px-3 py-2 bg-slate-800/50 border border-slate-700/30 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-slate-300 font-medium truncate">{s.title}</div>
+                        <div className="text-[10px] text-slate-500 truncate">{s.url || "Manuell text"}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.status === "ready" ? "bg-green-500/10 text-green-400" : s.status === "error" ? "bg-red-500/10 text-red-400" : "bg-yellow-500/10 text-yellow-400"}`}>{s.status}</span>
+                          {s.metadata?.chunks != null && <span className="text-[10px] text-slate-500">{s.metadata.chunks} chunks</span>}
+                        </div>
+                      </div>
+                      <button onClick={() => deleteKbSource(s.id)} className="p-1 hover:bg-red-500/20 rounded text-slate-500 hover:text-red-400" title="Ta bort">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {kbTab === "crawl" && (
+                <div className="space-y-3">
+                  <div className="px-3 py-2 bg-violet-500/5 border border-violet-500/20 rounded-lg text-[11px] text-violet-300">
+                    Crawla en webbsida för att lägga till den i kunskapsbasen. Innehållet chunkas, vektoriseras och blir sökbart.
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1 font-medium">URL att crawla</label>
+                    <input type="text" value={kbCrawlUrl} onChange={(e) => setKbCrawlUrl(e.target.value)} placeholder="https://docs.example.com/guide" title="URL" className="w-full bg-[#0d1117] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/50" disabled={kbCrawling} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1 font-medium">Titel (valfritt)</label>
+                    <input type="text" value={kbCrawlTitle} onChange={(e) => setKbCrawlTitle(e.target.value)} placeholder="T.ex. React Docs" title="Titel" className="w-full bg-[#0d1117] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/50" disabled={kbCrawling} />
+                  </div>
+                  {kbCrawling && (
+                    <div className="flex items-center gap-3 px-4 py-3 bg-violet-500/5 border border-violet-500/20 rounded-lg">
+                      <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
+                      <div className="text-xs text-violet-400 font-medium">Crawlar och vektoriserar... (kan ta 30-60s)</div>
+                    </div>
+                  )}
+                  <button onClick={crawlKbUrl} disabled={kbCrawling || !kbCrawlUrl.trim()} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium bg-violet-500/20 text-violet-400 rounded-lg hover:bg-violet-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                    {kbCrawling ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+                    {kbCrawling ? "Crawlar..." : "Crawla & indexera"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
