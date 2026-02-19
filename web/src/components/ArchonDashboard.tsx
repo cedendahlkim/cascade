@@ -5,13 +5,14 @@
  * API: /api/archon/*
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   BookOpen, Database, Search, ListTodo, FolderKanban,
   Plus, Trash2, RefreshCw, Loader2, Globe, FileText,
   CheckCircle, AlertCircle, Clock, ArrowUpRight, ArrowRight, X,
-  Brain, Zap, BarChart3,
+  Brain, Zap, BarChart3, MessageCircle, Send, StopCircle,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { BRIDGE_URL } from "../config";
 
 // ── Types ──
@@ -65,7 +66,7 @@ interface KBStats {
   tasks_by_status: Record<string, number>;
 }
 
-type Tab = "overview" | "sources" | "search" | "tasks" | "projects";
+type Tab = "overview" | "sources" | "search" | "tasks" | "projects" | "chat";
 
 // ── Helpers ──
 
@@ -129,6 +130,14 @@ export default function ArchonDashboard() {
   const [newProjTitle, setNewProjTitle] = useState("");
   const [newProjDesc, setNewProjDesc] = useState("");
   const [showNewProject, setShowNewProject] = useState(false);
+
+  // Chat
+  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string; sources?: string[]; kbCount?: number }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatStreaming, setChatStreaming] = useState(false);
+  const [chatStreamText, setChatStreamText] = useState("");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // ── API calls ──
 
@@ -257,6 +266,88 @@ export default function ArchonDashboard() {
     loadStats();
   };
 
+  // Chat: auto-scroll
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, chatStreamText]);
+
+  const sendChat = async () => {
+    const msg = chatInput.trim();
+    if (!msg || chatStreaming) return;
+    setChatInput("");
+    setChatMessages((prev) => [...prev, { role: "user", content: msg }]);
+    setChatStreaming(true);
+    setChatStreamText("");
+
+    const history = chatMessages.map((m) => ({ role: m.role, content: m.content }));
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    let fullText = "";
+    let sources: string[] = [];
+    let kbCount = 0;
+
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/archon/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg, history }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        setChatMessages((prev) => [...prev, { role: "assistant", content: "❌ Fel vid anslutning till Archon." }]);
+        setChatStreaming(false);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.type === "text") {
+              fullText += data.text;
+              setChatStreamText(fullText);
+            } else if (data.type === "sources") {
+              sources = data.sources;
+            } else if (data.type === "kb_count") {
+              kbCount = data.count;
+            } else if (data.type === "error") {
+              fullText += `\n\n❌ ${data.error}`;
+              setChatStreamText(fullText);
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        fullText += "\n\n❌ Anslutningsfel.";
+      }
+    }
+
+    setChatMessages((prev) => [...prev, { role: "assistant", content: fullText || "Inget svar.", sources, kbCount }]);
+    setChatStreamText("");
+    setChatStreaming(false);
+    abortRef.current = null;
+  };
+
+  const stopChat = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  };
+
   // ── Render helpers ──
 
   const StatCard = ({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: number | string; color: string }) => (
@@ -272,6 +363,7 @@ export default function ArchonDashboard() {
   );
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+    { id: "chat", label: "Chatt", icon: MessageCircle },
     { id: "overview", label: "Översikt", icon: BarChart3 },
     { id: "sources", label: "Källor", icon: Database },
     { id: "search", label: "Sök", icon: Search },
@@ -319,8 +411,131 @@ export default function ArchonDashboard() {
         })}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+      {/* ═══ CHAT ═══ */}
+      {tab === "chat" && (
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {/* Messages */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
+            {chatMessages.length === 0 && !chatStreaming && (
+              <div className="flex flex-col items-center justify-center h-full text-center py-16">
+                <Brain className="w-12 h-12 text-violet-500/30 mb-4" />
+                <h3 className="text-sm font-semibold text-slate-400 mb-1">Frankenstein × Archon</h3>
+                <p className="text-xs text-slate-600 max-w-md">
+                  Ställ en fråga — Frankenstein söker automatiskt i kunskapsbasen och svarar baserat på crawlad dokumentation.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-4 max-w-lg justify-center">
+                  {["Hitta all information om AI-utveckling", "Vilka kodexempel finns i kunskapsbasen?", "Sammanfatta dokumentationen om Python", "Hur fungerar React hooks?"].map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => { setChatInput(q); }}
+                      className="text-[11px] px-3 py-1.5 bg-violet-500/10 text-violet-400 rounded-lg hover:bg-violet-500/20 transition-colors border border-violet-500/20"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {chatMessages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] rounded-xl px-4 py-3 ${
+                  m.role === "user"
+                    ? "bg-violet-500/20 text-violet-100 border border-violet-500/30"
+                    : "bg-[#161b22] text-slate-200 border border-slate-700/40"
+                }`}>
+                  {m.role === "assistant" && m.kbCount != null && m.kbCount > 0 && (
+                    <div className="flex items-center gap-1.5 mb-2 text-[10px] text-violet-400 font-medium">
+                      <Database className="w-3 h-3" />
+                      {m.kbCount} dokument från kunskapsbasen
+                    </div>
+                  )}
+                  {m.role === "user" ? (
+                    <p className="text-sm">{m.content}</p>
+                  ) : (
+                    <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-li:my-0.5 prose-pre:my-2 prose-code:text-violet-300 text-sm leading-relaxed">
+                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                    </div>
+                  )}
+                  {m.sources && m.sources.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-slate-700/30 space-y-1">
+                      <div className="text-[10px] text-slate-500 font-medium">Källor:</div>
+                      {m.sources.map((s, j) => (
+                        <a key={j} href={s} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] text-violet-400 hover:underline truncate">
+                          <ArrowUpRight className="w-2.5 h-2.5 shrink-0" /> {s}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Streaming message */}
+            {chatStreaming && chatStreamText && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-xl px-4 py-3 bg-[#161b22] text-slate-200 border border-violet-500/30">
+                  <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-li:my-0.5 prose-pre:my-2 prose-code:text-violet-300 text-sm leading-relaxed">
+                    <ReactMarkdown>{chatStreamText}</ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {chatStreaming && !chatStreamText && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2 px-4 py-3 bg-[#161b22] rounded-xl border border-slate-700/40 text-xs text-slate-400">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-400" />
+                  Söker i kunskapsbasen och genererar svar...
+                </div>
+              </div>
+            )}
+
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="shrink-0 px-4 py-3 border-t border-slate-700/30 bg-[#0d1117]">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendChat()}
+                placeholder="Fråga Frankenstein om kunskapsbasen..."
+                title="Chattmeddelande"
+                className="flex-1 bg-[#161b22] border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/50"
+                disabled={chatStreaming}
+              />
+              {chatStreaming ? (
+                <button
+                  onClick={stopChat}
+                  title="Stoppa"
+                  className="px-4 py-2.5 text-sm font-medium bg-red-500/20 text-red-400 rounded-xl hover:bg-red-500/30 transition-colors flex items-center gap-2"
+                >
+                  <StopCircle className="w-4 h-4" /> Stopp
+                </button>
+              ) : (
+                <button
+                  onClick={sendChat}
+                  disabled={!chatInput.trim()}
+                  title="Skicka"
+                  className="px-4 py-2.5 text-sm font-medium bg-violet-500/20 text-violet-400 rounded-xl hover:bg-violet-500/30 disabled:opacity-40 transition-colors flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" /> Skicka
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-600">
+              <span className="flex items-center gap-1"><Database className="w-2.5 h-2.5" /> RAG-sökning aktiv</span>
+              <span>{stats?.sources ?? 0} källor • {stats?.chunks ?? 0} chunks</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content (non-chat tabs) */}
+      <div className={`flex-1 min-h-0 overflow-y-auto p-4 space-y-4 ${tab === "chat" ? "hidden" : ""}`}>
 
         {/* ═══ OVERVIEW ═══ */}
         {tab === "overview" && (

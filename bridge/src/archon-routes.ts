@@ -476,4 +476,153 @@ router.get("/stats", async (_req: Request, res: Response) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════
+// RAG CHAT — Search KB + stream Gemini answer
+// ══════════════════════════════════════════════════════════
+
+/** POST /api/archon/chat — RAG chat: search KB → build context → stream Gemini answer */
+router.post("/chat", async (req: Request, res: Response) => {
+  const { message, history } = req.body;
+  if (!message) return res.status(400).json({ error: "message required" });
+
+  try {
+    // 1. Search knowledge base for relevant context
+    let kbContext = "";
+    let kbSources: string[] = [];
+    try {
+      const queryEmbed = await embed(message);
+      const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/match_knowledge_chunks`, {
+        method: "POST",
+        headers: supaHeaders(),
+        body: JSON.stringify({ query_embedding: queryEmbed, match_count: 5 }),
+      });
+      if (rpcRes.ok) {
+        const results = (await rpcRes.json()) as any[];
+        const relevant = results.filter((r: any) => r.similarity > 0.35);
+        if (relevant.length > 0) {
+          kbContext = relevant
+            .map((r: any, i: number) => `[Dokument ${i + 1} | Relevans: ${(r.similarity * 100).toFixed(0)}% | Källa: ${r.url || "KB"}]\n${r.content}`)
+            .join("\n\n---\n\n");
+          kbSources = [...new Set(relevant.map((r: any) => r.url).filter(Boolean))];
+        }
+      }
+    } catch { /* KB search failed silently */ }
+
+    // 2. Also search code examples
+    let codeContext = "";
+    try {
+      const codeEmbed = await embed(message);
+      const codeRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/match_code_examples`, {
+        method: "POST",
+        headers: supaHeaders(),
+        body: JSON.stringify({ query_embedding: codeEmbed, match_count: 3 }),
+      });
+      if (codeRes.ok) {
+        const codeResults = (await codeRes.json()) as any[];
+        const relevantCode = codeResults.filter((r: any) => r.similarity > 0.4);
+        if (relevantCode.length > 0) {
+          codeContext = "\n\nKODEXEMPEL FRÅN KUNSKAPSBASEN:\n" + relevantCode
+            .map((r: any) => `\`\`\`${r.language || ""}\n${r.code}\n\`\`\`${r.summary ? `\n${r.summary}` : ""}`)
+            .join("\n\n");
+        }
+      }
+    } catch { /* code search failed silently */ }
+
+    // 3. Build system prompt
+    const systemPrompt = `Du är Frankenstein, en AI-assistent kopplad till Archon Knowledge Base.
+Du har tillgång till en kunskapsbas med crawlad dokumentation och kodexempel.
+
+INSTRUKTIONER:
+- Svara på svenska om användaren skriver svenska
+- Basera dina svar på kunskapsbasens innehåll när det är relevant
+- Citera källor med [Källa: URL] när du refererar till specifik information
+- Om kunskapsbasen inte har relevant information, säg det tydligt och svara med din allmänna kunskap
+- Var koncis, strukturerad och handlingsorienterad
+- Använd markdown-formatering (rubriker, listor, kodblock)
+${kbContext ? `\nKUNSKAPSBAS — RELEVANT DOKUMENTATION:\n${kbContext}` : "\nKunskapsbasen innehåller ingen relevant information för denna fråga."}
+${codeContext}`;
+
+    // 4. Build conversation
+    const contents: any[] = [];
+    if (history?.length) {
+      for (const h of history.slice(-8)) {
+        contents.push({
+          role: h.role === "user" ? "user" : "model",
+          parts: [{ text: h.content }],
+        });
+      }
+    }
+    contents.push({
+      role: "user",
+      parts: [{ text: `${systemPrompt}\n\nANVÄNDAREN: ${message}` }],
+    });
+
+    // 5. Stream response via SSE
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    // Send KB sources as first event
+    if (kbSources.length > 0) {
+      res.write(`data: ${JSON.stringify({ type: "sources", sources: kbSources })}\n\n`);
+    }
+    res.write(`data: ${JSON.stringify({ type: "kb_count", count: kbContext ? kbContext.split("---").length : 0 })}\n\n`);
+
+    const streamRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents,
+          generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
+        }),
+      }
+    );
+
+    if (!streamRes.ok || !streamRes.body) {
+      res.write(`data: ${JSON.stringify({ type: "error", error: `Gemini ${streamRes.status}` })}\n\n`);
+      res.end();
+      return;
+    }
+
+    const reader = streamRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr || jsonStr === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            res.write(`data: ${JSON.stringify({ type: "text", text })}\n\n`);
+          }
+        } catch { /* skip malformed */ }
+      }
+    }
+
+    res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+    res.end();
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: String(err) });
+    } else {
+      res.write(`data: ${JSON.stringify({ type: "error", error: String(err) })}\n\n`);
+      res.end();
+    }
+  }
+});
+
 export default router;
