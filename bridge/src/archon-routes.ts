@@ -19,7 +19,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
-const EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent";
+const EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
 
 function supaHeaders() {
   return {
@@ -37,8 +37,8 @@ async function embed(text: string): Promise<number[]> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "models/text-embedding-004",
       content: { parts: [{ text }] },
+      outputDimensionality: 768,
     }),
   });
   if (!res.ok) throw new Error(`Embed failed: ${res.status}`);

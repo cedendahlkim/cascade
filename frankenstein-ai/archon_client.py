@@ -29,8 +29,8 @@ SUPABASE_URL = _env_vars.get("SUPABASE_URL", os.environ.get("SUPABASE_URL", ""))
 SUPABASE_KEY = _env_vars.get("SUPABASE_SERVICE_ROLE_KEY", os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""))
 GEMINI_API_KEY = _env_vars.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
 
-# Gemini embedding endpoint (text-embedding-004, 768 dim, free)
-EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent"
+# Gemini embedding endpoint (gemini-embedding-001, 768 dim, free)
+EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
 
 
 class ArchonClient:
@@ -56,7 +56,7 @@ class ArchonClient:
         """Generate embedding via Gemini text-embedding-004 (768 dim)."""
         resp = requests.post(
             f"{EMBED_URL}?key={self.gemini_key}",
-            json={"model": "models/text-embedding-004", "content": {"parts": [{"text": text}]}},
+            json={"content": {"parts": [{"text": text}]}, "outputDimensionality": 768},
             timeout=15,
         )
         resp.raise_for_status()
