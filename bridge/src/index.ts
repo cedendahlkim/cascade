@@ -120,6 +120,7 @@ import { FrankensteinAgent } from "./agent-frankenstein.js";
 import { getTodaysLearnings, getRecentLearnings, getLearningStats, searchLearnings as searchFrankLearnings } from "./frank-learning.js";
 import debateRoutes, { initDebateSocket } from "./debate-routes.js";
 import workspaceRoutes, { initWorkspaceSocket } from "./workspace-routes.js";
+import archonRoutes from "./archon-routes.js";
 
 const PORT = parseInt(process.env.PORT || "3031", 10);
 const WORKSPACE_ROOT = process.env.CASCADE_REMOTE_WORKSPACE || join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")), "..", "..");
@@ -503,6 +504,7 @@ app.use(userDataRoutes);
 app.use(gitRoutes);
 app.use("/api/debate", debateRoutes);
 app.use("/api/workspace", workspaceRoutes);
+app.use("/api/archon", archonRoutes);
 
 // Mount Cascade API
 app.use("/cascade", cascadeApi);
