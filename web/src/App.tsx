@@ -79,6 +79,11 @@ const GitView = lazy(() => import("./components/GitView"));
 const DebateView = lazy(() => import("./components/DebateView"));
 const CodeEditorView = lazy(() => import("./components/CodeEditorView"));
 const ArchonDashboard = lazy(() => import("./components/ArchonDashboard"));
+const AnalyticsView = lazy(() => import("./components/AnalyticsView"));
+const PromptLabView = lazy(() => import("./components/PromptLabView"));
+const VisionView = lazy(() => import("./components/VisionView"));
+const SnapshotsView = lazy(() => import("./components/SnapshotsView"));
+const WebhooksView = lazy(() => import("./components/WebhooksView"));
 
 const LazyFallback = () => <div className="flex-1 flex items-center justify-center"><div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -2492,6 +2497,11 @@ export default function App() {
               { id: "hierarchy", label: "🏗️ Hierarki" },
               { id: "debate", label: "🏛️ Debatt" },
               { id: "archon", label: "🧠 Archon" },
+              { id: "analytics", label: "📊 Analytik" },
+              { id: "promptlab", label: "🧪 Prompt Lab" },
+              { id: "vision", label: "👁️ Vision" },
+              { id: "snapshots", label: "📸 Snapshots" },
+              { id: "webhooks", label: "🔗 Webhooks" },
               { id: "editor", label: "💻 Editor" },
               { id: "git", label: "🔀 Git" },
               { id: "install", label: "📦 Installera" },
@@ -2528,6 +2538,11 @@ export default function App() {
             {moreTab === "hierarchy" && <HierarchyView />}
             {moreTab === "debate" && <DebateView />}
             {moreTab === "archon" && <ArchonDashboard />}
+            {moreTab === "analytics" && <AnalyticsView />}
+            {moreTab === "promptlab" && <PromptLabView />}
+            {moreTab === "vision" && <VisionView />}
+            {moreTab === "snapshots" && <SnapshotsView />}
+            {moreTab === "webhooks" && <WebhooksView />}
             {/* Editor rendered persistently outside More section */}
             {moreTab === "git" && <GitView />}
             {moreTab === "install" && <InstallView />}

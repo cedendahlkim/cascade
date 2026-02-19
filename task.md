@@ -258,7 +258,64 @@
 - [x] Jämförelse mellan AI-modeller (`getModelComparison()` — latens, $/request, $/1k tokens, snabbast/billigast-highlight)
 - [x] Exportera metrics till CSV (`/api/dashboard/export/csv` + `/api/dashboard/export/snapshots`, download-knappar i UI)
 
-### � Lägre prioritet / Experimentellt
+#### J2. Conversation Analytics ✅
+- [x] Token usage trends per modell (hourly/daily/weekly buckets, persisterade till disk)
+- [x] Kostnadsprognos med linjär regression (dagligt snitt, projicerat vecka/månad, trend %)
+- [x] Aktivitets-heatmap (timme × veckodag, anrop/tokens/kostnad)
+- [x] Sessionsstatistik (snitt längd, meddelanden per session, mest aktiv timme)
+- [x] Modelljämförelse (6 modeller: claude/gemini/deepseek/grok/ollama/frankenstein)
+- [x] CSV-export av all analytikdata
+- [x] 8 API-endpoints (`/api/analytics/*`)
+- [x] Frontend: `AnalyticsView.tsx` med KPI-kort, stapeldiagram, heatmap, tabeller
+- Implementation: `bridge/src/conversation-analytics.ts` (450+ rader), `web/src/components/AnalyticsView.tsx`
+
+#### J3. Prompt Lab ✅
+- [x] A/B-testa prompt-varianter mot flera LLM:er samtidigt
+- [x] Skapa experiment med 2+ varianter, olika system prompts och temperatur
+- [x] Kör mot 1-5 modeller (gemini/claude/deepseek/grok/ollama)
+- [x] AI-domare (Gemini) poängsätter 0-100 varje svar
+- [x] Manuell 1-5 betygsättning per svar
+- [x] Automatisk vinnarval (AI score → kvalitet → latens)
+- [x] Statistikjämförelse per variant och modell
+- [x] 6 API-endpoints (`/api/prompt-lab/*`)
+- [x] Frontend: `PromptLabView.tsx` med experiment-lista, skapningsmodal, resultatjämförelse
+- Implementation: `bridge/src/prompt-lab.ts` (400+ rader), `web/src/components/PromptLabView.tsx`
+
+#### J4. Vision & Multimodal ✅
+- [x] Bildanalys via Gemini Vision och Claude Vision (base64-encoded)
+- [x] 5 analyslägen: Beskriv, OCR, Analysera, Jämför, Custom fråga
+- [x] Drag-and-drop, filväljare, clipboard paste (Ctrl+V)
+- [x] Multi-bild jämförelse
+- [x] Tagg-extraktion och OCR-textutdrag
+- [x] 2 API-endpoints (`/api/vision/*`)
+- [x] Frontend: `VisionView.tsx` med dropzone, bildförhandsgranskning, resultatvy
+- Implementation: `bridge/src/vision.ts` (250+ rader), `web/src/components/VisionView.tsx`
+
+#### J5. Snapshot & Rollback ✅
+- [x] Skapa namngivna snapshots av AI-tillstånd (minnen, konversationer, settings)
+- [x] Återställ till valfri snapshot (auto-sparar nuvarande tillstånd först)
+- [x] Diff mellan snapshots (filjämförelse: added/removed/modified/unchanged)
+- [x] Auto-prune (behåll max 50 snapshots)
+- [x] Tagg-system för att kategorisera snapshots
+- [x] Stats: total storlek, antal, äldsta/nyaste
+- [x] 8 API-endpoints (`/api/snapshots/*`)
+- [x] Frontend: `SnapshotsView.tsx` med snapshot-lista, skapa-form, diff-verktyg, stats
+- Implementation: `bridge/src/snapshots.ts` (250+ rader), `web/src/components/SnapshotsView.tsx`
+
+#### J6. Webhook & API Gateway ✅
+- [x] Skapa webhook-endpoints med egna URL-paths
+- [x] Mappa webhooks till valfri AI-modell (claude/gemini/deepseek/grok/ollama)
+- [x] API-nyckelautentisering per webhook (`gsk_` prefix)
+- [x] Rate limiting per webhook (konfigurerbart max/min)
+- [x] Request/response-loggning med historik
+- [x] 4 mallar: Custom, Slack, Discord, GitHub
+- [x] 3 svarsformat: JSON, text, markdown
+- [x] Curl-exempel direkt i UI
+- [x] 7+ API-endpoints (`/api/webhooks/*`)
+- [x] Frontend: `WebhooksView.tsx` med webhook-lista, skapningsform, loggar, API-nyckelhantering
+- Implementation: `bridge/src/webhooks.ts` (300+ rader), `web/src/components/WebhooksView.tsx`
+
+### 🔮 Lägre prioritet / Experimentellt
 
 #### J. Lokal modell-finetuning
 - [ ] Exportera konversationer som training data (JSONL)
@@ -381,7 +438,7 @@
 
 ## Alla filer i projektet
 
-### Bridge (Backend — 46 filer)
+### Bridge (Backend — 51 filer)
 
 | Fil | Beskrivning |
 |---|---|
@@ -429,9 +486,14 @@
 | `bridge/src/user-data.ts` | Per-user konversationer, meddelanden, workspace-delning (15 endpoints) |
 | `bridge/src/git-routes.ts` | Git-integration: status, diff, log, branches, commit, push, AI commit msg (14 endpoints) |
 | `bridge/src/api-cascade.ts` | Cascade MCP API routes |
+| `bridge/src/conversation-analytics.ts` | Conversation Analytics — token trends, heatmap, kostnadsprognos, sessions |
+| `bridge/src/prompt-lab.ts` | Prompt Lab — A/B-testning av prompts mot flera LLM:er |
+| `bridge/src/vision.ts` | Vision & Multimodal — bildanalys via Gemini/Claude Vision |
+| `bridge/src/snapshots.ts` | Snapshot & Rollback — version control för AI-tillstånd |
+| `bridge/src/webhooks.ts` | Webhook & API Gateway — exponera AI som webhook-endpoints |
 | `bridge/plugins/` | 20 community-plugins (math, crypto, network, etc.) |
 
-### Web (Frontend — 27 views + lib)
+### Web (Frontend — 32 views + lib)
 
 | Fil | Beskrivning |
 |---|---|
@@ -466,6 +528,11 @@
 | `web/src/components/ToolsView.tsx` | Verktyg och snabbkommandon |
 | `web/src/components/VoiceButton.tsx` | Röstinput/output |
 | `web/src/components/WorkflowsView.tsx` | Workflow-builder |
+| `web/src/components/AnalyticsView.tsx` | Conversation Analytics — KPI-kort, heatmap, stapeldiagram |
+| `web/src/components/PromptLabView.tsx` | Prompt Lab — experiment, varianter, AI-domare |
+| `web/src/components/VisionView.tsx` | Vision & Multimodal — drag-and-drop bildanalys |
+| `web/src/components/SnapshotsView.tsx` | Snapshot & Rollback — skapa, återställ, diff |
+| `web/src/components/WebhooksView.tsx` | Webhooks & API Gateway — CRUD, loggar, curl-exempel |
 | `web/src/contexts/AuthContext.tsx` | React auth context (Supabase) med role/isAdmin/isViewer |
 | `web/src/hooks/useMobile.ts` | Haptic feedback + mobil-detection |
 | `web/src/lib/api.ts` | API-klient |

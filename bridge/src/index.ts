@@ -121,6 +121,22 @@ import { getTodaysLearnings, getRecentLearnings, getLearningStats, searchLearnin
 import debateRoutes, { initDebateSocket } from "./debate-routes.js";
 import workspaceRoutes, { initWorkspaceSocket } from "./workspace-routes.js";
 import archonRoutes from "./archon-routes.js";
+import {
+  recordTokenEvent, recordQualityFeedback, getAnalyticsOverview,
+  getModelAnalytics, getActivityHeatmap, getCostForecast,
+  getSessionStats, getDailyCosts, getHourlyTrend, exportAnalyticsCsv,
+} from "./conversation-analytics.js";
+import {
+  listExperiments, getExperiment, createExperiment, deleteExperiment,
+  runExperiment, rateResult, getVariantStats, registerLLMRunner,
+  type LabModel,
+} from "./prompt-lab.js";
+import { analyzeImage, getAvailableVisionModels, type VisionRequest } from "./vision.js";
+import {
+  createSnapshot, listSnapshots, getSnapshot, deleteSnapshot,
+  restoreSnapshot, diffSnapshots, getSnapshotStats, pruneSnapshots,
+} from "./snapshots.js";
+import { createWebhookRouter, registerWebhookAIHandler } from "./webhooks.js";
 
 const PORT = parseInt(process.env.PORT || "3031", 10);
 const WORKSPACE_ROOT = process.env.CASCADE_REMOTE_WORKSPACE || join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")), "..", "..");
@@ -505,6 +521,135 @@ app.use(gitRoutes);
 app.use("/api/debate", debateRoutes);
 app.use("/api/workspace", workspaceRoutes);
 app.use("/api/archon", archonRoutes);
+
+// --- Conversation Analytics API ---
+app.get("/api/analytics/overview", (_req, res) => {
+  const days = parseInt(String(_req.query.days) || "30", 10);
+  res.json(getAnalyticsOverview(days));
+});
+app.get("/api/analytics/models", (_req, res) => {
+  const days = parseInt(String(_req.query.days) || "30", 10);
+  res.json(getModelAnalytics(days));
+});
+app.get("/api/analytics/heatmap", (_req, res) => {
+  const days = parseInt(String(_req.query.days) || "30", 10);
+  res.json(getActivityHeatmap(days));
+});
+app.get("/api/analytics/forecast", (_req, res) => {
+  res.json(getCostForecast());
+});
+app.get("/api/analytics/sessions", (_req, res) => {
+  res.json(getSessionStats());
+});
+app.get("/api/analytics/costs", (_req, res) => {
+  const days = parseInt(String(_req.query.days) || "30", 10);
+  res.json(getDailyCosts(days));
+});
+app.get("/api/analytics/hourly", (_req, res) => {
+  const hours = parseInt(String(_req.query.hours) || "48", 10);
+  res.json(getHourlyTrend(hours));
+});
+app.get("/api/analytics/export/csv", (_req, res) => {
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", "attachment; filename=analytics.csv");
+  res.send(exportAnalyticsCsv());
+});
+
+// --- Prompt Lab API ---
+app.get("/api/prompt-lab/experiments", (_req, res) => {
+  res.json(listExperiments());
+});
+app.get("/api/prompt-lab/experiments/:id", (req, res) => {
+  const experiment = getExperiment(req.params.id);
+  if (!experiment) return res.status(404).json({ error: "Not found" });
+  res.json({ ...experiment, stats: getVariantStats(experiment) });
+});
+app.post("/api/prompt-lab/experiments", (req, res) => {
+  try {
+    const experiment = createExperiment(req.body);
+    res.json(experiment);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Failed" });
+  }
+});
+app.delete("/api/prompt-lab/experiments/:id", (req, res) => {
+  const ok = deleteExperiment(req.params.id);
+  res.json({ ok });
+});
+app.post("/api/prompt-lab/experiments/:id/run", async (req, res) => {
+  try {
+    const experiment = await runExperiment(req.params.id);
+    if (!experiment) return res.status(404).json({ error: "Not found" });
+    res.json({ ...experiment, stats: getVariantStats(experiment) });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
+  }
+});
+app.post("/api/prompt-lab/experiments/:id/rate", (req, res) => {
+  const { variantId, model, quality } = req.body;
+  const ok = rateResult(req.params.id, variantId, model, quality);
+  res.json({ ok });
+});
+
+// --- Snapshot & Rollback API ---
+app.get("/api/snapshots", (_req, res) => res.json(listSnapshots()));
+app.get("/api/snapshots/stats", (_req, res) => res.json(getSnapshotStats()));
+app.get("/api/snapshots/:id", (req, res) => {
+  const snap = getSnapshot(req.params.id);
+  if (!snap) return res.status(404).json({ error: "Not found" });
+  res.json(snap);
+});
+app.post("/api/snapshots", (req, res) => {
+  try {
+    const { name, description, tags } = req.body;
+    const snap = createSnapshot(name || `Snapshot ${new Date().toISOString()}`, description, false, tags);
+    res.json(snap);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
+  }
+});
+app.post("/api/snapshots/:id/restore", (req, res) => {
+  try {
+    const result = restoreSnapshot(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
+  }
+});
+app.post("/api/snapshots/diff", (req, res) => {
+  try {
+    const { idA, idB } = req.body;
+    res.json(diffSnapshots(idA, idB));
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Failed" });
+  }
+});
+app.delete("/api/snapshots/:id", (req, res) => {
+  const ok = deleteSnapshot(req.params.id);
+  res.json({ ok });
+});
+app.post("/api/snapshots/prune", (req, res) => {
+  const keep = parseInt(String(req.body.keep) || "20", 10);
+  const removed = pruneSnapshots(keep);
+  res.json({ removed });
+});
+
+// --- Webhook & API Gateway ---
+app.use("/api/webhooks", createWebhookRouter());
+
+// --- Vision & Multimodal API ---
+app.get("/api/vision/models", (_req, res) => {
+  res.json(getAvailableVisionModels());
+});
+app.post("/api/vision/analyze", async (req, res) => {
+  try {
+    const request: VisionRequest = req.body;
+    const result = await analyzeImage(request);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Vision analysis failed" });
+  }
+});
 
 // Mount Cascade API
 app.use("/cascade", cascadeApi);

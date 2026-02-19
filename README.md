@@ -1,15 +1,37 @@
 # Gracestack AI Lab
 
-Mobile/web AI command center by **Gracestack AB** — multi-LLM orchestration, research lab, bot networks, and remote computer control.
+<p align="center">
+  <strong>Mobile/web AI command center by Gracestack AB</strong><br/>
+  Multi-LLM orchestration · Cognitive AI research · Swarm intelligence · Remote computer control
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" alt="React" />
+  <img src="https://img.shields.io/badge/LLMs-5_Models-blueviolet" alt="5 LLMs" />
+  <img src="https://img.shields.io/badge/Views-35+-green" alt="35+ Views" />
+  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="MIT License" />
+</p>
 
 Inspired by [Happy Coder](https://github.com/slopus/happy) and [MCP Bridge API](https://github.com/INQUIRELAB/mcp-bridge-api).
+
+---
 
 ## Architecture
 
 ```
-Windsurf/IDE ←→ MCP Server (stdio) ←→ Bridge Server (Express+Socket.IO) ←→ PWA (mobile/web)
-                                                    ↕                              ↕
-                                          Computer Agents (remote PCs)    Cloudflare Tunnel
+┌──────────────┐     stdio      ┌──────────────────────────────┐     HTTPS      ┌───────────────┐
+│ Windsurf/IDE │ ←──────────→  │   Bridge Server               │ ←───────────→  │  PWA (mobile) │
+└──────────────┘               │   Express + Socket.IO         │                └───────────────┘
+                               │                               │
+                               │   ┌─────────┐ ┌──────────┐   │     Agent
+                               │   │ Claude   │ │ Gemini   │   │ ←──────────→  Remote PCs
+                               │   │ DeepSeek │ │ Grok     │   │
+                               │   │ Ollama   │ │ Frank AI │   │     Tunnel
+                               │   └─────────┘ └──────────┘   │ ←──────────→  Cloudflare
+                               │                               │
+                               │   Supabase · Weaviate · RAG   │
+                               └──────────────────────────────┘
 ```
 
 ### Packages
@@ -17,11 +39,10 @@ Windsurf/IDE ←→ MCP Server (stdio) ←→ Bridge Server (Express+Socket.IO) 
 | Package | Description |
 |---|---|
 | `mcp-server/` | MCP server (stdio) — tools: `send_to_mobile`, `read_mobile_messages`, `ask_mobile`, `mobile_status` |
-| `bridge/` | Express + Socket.IO relay server with AI agents (Claude, Gemini, Ollama) |
-| `web/` | React + Vite + Tailwind PWA — mobile-first UI with 16+ views |
-| `bridge/src/computer-agent.ts` | Lightweight agent for remote computers |
-| `bridge/plugins/` | Plugin directory for extending AI capabilities |
+| `bridge/` | Express + Socket.IO relay server with 5 AI agents + cognitive systems |
+| `web/` | React 19 + Vite 6 + Tailwind PWA — mobile-first UI with 30+ views |
 | `frankenstein-ai/` | Bio-inspired meta-learning agent (HDC + Active Inference + Ebbinghaus) — Python |
+| `landing/` | Static marketing landing page |
 | `installer/` | One-line install scripts for Windows, macOS, Linux |
 
 ---
@@ -39,8 +60,22 @@ npm run install:all
 Create `bridge/.env`:
 
 ```env
+# Required (at least one)
 ANTHROPIC_API_KEY=sk-ant-...
 GEMINI_API_KEY=AIza...
+
+# Optional — more LLMs
+DEEPSEEK_API_KEY=sk-...
+GROK_API_KEY=xai-...
+
+# Optional — Auth & persistence
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+# Optional — Vector search
+WEAVIATE_HOST=localhost
+OLLAMA_URL=http://localhost:11434
 ```
 
 ### 3. Start everything
@@ -70,7 +105,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 
 ### 5. Open on your phone
 
-Open the Cloudflare Tunnel URL (printed in console) or `http://<local-ip>:3031` on your phone.
+Open the Cloudflare Tunnel URL (printed in console) or `http://<local-ip>:3031` on your phone. Install as PWA for native app feel.
 
 ### 6. Add remote computers (optional)
 
@@ -83,73 +118,160 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 
 ## Features
 
-### 💬 Chat & AI
+### 💬 Chat & Multi-LLM
 
-- **Claude Chat** — Full conversation with Claude (Anthropic) including streaming, tool use, markdown rendering
-- **Gemini Chat** — Separate Gemini (Google) chat tab with streaming
-- **AI Research Arena** — Claude ↔ Gemini multi-round research collaboration with shared memory
-- **Multi-LLM Orchestrator (Lab)** — Route tasks to best available LLM, consensus engine, bias detection
-- **Bot Network** — Autonomous AI bot network with workers, validators, coordinators, innovators — real Gemini-driven evolution
-- **Conversation History** — Per-tab conversation sidebar with save/load/delete, persisted to localStorage
+- **5 AI Agents** — Claude (Anthropic), Gemini (Google), DeepSeek, Grok (xAI), Ollama (local) — all with full tool support
+- **Frankenstein Chat** — Dedicated chat with bio-inspired cognitive AI (HDC + Active Inference)
+- **AI Research Arena** — Multi-AI collaboration with shared memory, sandbox code execution, configurable rounds
+- **Multi-LLM Orchestrator (Lab)** — Route tasks to best LLM, consensus engine, bias detection, audit logging
+- **Conversation History** — Per-tab sidebar with save/load/delete, persisted to localStorage or Supabase
 - **Voice Input/Output** — Speech-to-text (Web Speech API) and text-to-speech for hands-free use
 - **Slash Commands** — `/screenshot`, `/search`, `/files`, `/status`, `/clear`, `/memory`, `/rag`
+
+### 🧠 Cognitive AI Systems
+
+- **Hierarchical Agent Coordination** — Planner → Executor → Critic → Validator pipeline with state machine
+- **ABA-Mycelium Swarm** — Decentralized intelligence: Analyst, Creative, Critic nodes with weighted influence propagation
+- **AI Panel Debate** — Swedish political party agents debating topics using Frankenstein cognitive architecture
+- **Bot Network** — Autonomous evolving network with workers, validators, coordinators, innovators
+- **Agent Chains** — DAG-based node graphs with conditional branching, loops, retry, sub-chains
+- **Arena Sandbox** — Isolated code execution (JS/Python/Shell) during AI research sessions
+
+### 💻 Code Editor (Windsurf-level)
+
+- **Monaco Editor** — VS Code engine with syntax highlighting, IntelliSense, multi-tab, diff view
+- **Integrated Terminal** — xterm.js + PTY via WebSocket (full bash/PowerShell)
+- **AI Inline Edit (Ctrl+K)** — Select code → describe change → streaming AI result → Accept/Dismiss
+- **AI Autocomplete** — Gemini-powered ghost text with 800ms debounce
+- **Git Integration (Ctrl+G)** — Stage, commit, push, AI-generated commit messages from diff
+- **File Tree** — Create, rename, delete, search files and directories
+- **Streaming AI Chat** — Multi-file context, conversation history, Apply/Preview code blocks
 
 ### 🛠️ Tools & Automation
 
 - **40+ AI Tools** — Web search, screenshots, file system, process management, desktop control, code execution
 - **Scheduler** — Cron-based task scheduling (AI prompts, commands, HTTP requests, notifications)
-- **Workflows** — Chain multiple AI actions into reusable step-by-step automations
+- **Workflows** — Sequential step-by-step automations
+- **Agent Chains** — Advanced DAG workflows with branching, loops, and sub-chains
+- **Plugin Marketplace** — Community plugins with sandboxing, ratings, one-click install from URL
 - **Plugin System** — Extend AI with custom tools via `bridge/plugins/`
 
 ### 🖥️ Infrastructure
 
 - **Multi-Computer** — Register remote PCs, AI routes tasks to best machine based on capabilities
-- **Dashboard** — Real-time system metrics (CPU, RAM, uptime), AI stats, cost tracking, activity grid
-- **Cloudflare Tunnel** — Auto-started HTTPS tunnel for remote access (auto-restarts on crash)
-- **File Sharing** — Upload/download files between mobile and desktop with drag-and-drop
-- **Clipboard Sync** — Copy on mobile, paste on desktop (and vice versa)
+- **Dashboard** — Real-time system metrics (CPU, RAM, uptime), AI stats per model, cost tracking, activity grid
+- **Cloudflare Tunnel** — Auto-started HTTPS tunnel with auto-restart on crash
+- **File Sharing** — Upload/download between mobile and desktop with drag-and-drop
+- **Clipboard Sync** — Bidirectional clipboard between devices
 
 ### 🧠 Knowledge & Memory
 
-- **RAG Knowledge Base** — Index text/files, semantic search, chunk-based retrieval
-- **AI Memories** — Persistent memory system with tags and search
+- **Archon Knowledge Base** — Supabase pgvector RAG with Gemini embeddings (768D), semantic search
+- **Weaviate RAG** — Alternative vector search via Weaviate + Ollama embeddings (nomic-embed-text)
+- **BM25 RAG** — Built-in full-text search fallback (zero dependencies)
+- **AI Memories** — Persistent memory with tags, search, and confidence scoring
 - **Shared Memory** — Cross-AI memory for Arena research sessions
-- **Global Rules** — Editable system prompt rules
+- **Frankenstein Learning** — Persistent tracking of facts, preferences, skills, insights from conversations
+- **Global Rules** — Editable system prompt rules injected into all agents
 - **Projects** — Context switching with separate memories, RAG index, and settings per project
 
-### 🔬 Self-Improvement
+### 🔬 Self-Improvement & Research
 
 - **Reflexion Loop** — Agent critiques its own responses and retries (Shinn 2023)
 - **Skill Library** — Stores successful tool chains for reuse (Voyager pattern)
 - **Self-Evaluation** — Rates responses, learns from user feedback
-- **Worker Learning** — Cross-worker performance history per task type
+- **Research Lab** — Advanced multi-agent research view with experiments and analysis
+- **Battle Arena** — Live Frankenstein vs bare LLM competition with scoring
+- **A/B Testing** — Statistical proof of cognitive stack value over raw LLM
 
-### � Mobile & UX
+### � Conversation Analytics
 
-- **PWA** — Installable as app on iOS/Android
-- **Touch-optimized** — Swipe between tabs, touch-friendly buttons
+- **Token Usage Trends** — Hourly/daily/weekly per-model breakdowns with stacked bar charts
+- **Cost Forecasting** — Linear regression projections (daily avg, weekly, monthly) with trend %
+- **Activity Heatmap** — Hour × day-of-week grid (requests, tokens, cost)
+- **Session Statistics** — Avg duration, messages per session, peak hours
+- **Model Comparison** — 6 models side-by-side (latency, cost/1K tokens, quality score)
+- **CSV Export** — Download all analytics data
+
+### 🧪 Prompt Lab
+
+- **A/B Testing Framework** — Compare 2+ prompt variants across multiple LLMs simultaneously
+- **AI Judge** — Gemini auto-scores each response 0-100
+- **Manual Rating** — 1-5 star quality rating per response
+- **Auto Winner Selection** — AI score → quality → latency weighted ranking
+- **Variant Statistics** — Per-variant and per-model breakdowns
+- **Experiment Management** — Create, run, re-run, delete experiments
+
+### 👁️ Vision & Multimodal
+
+- **Image Analysis** — Gemini Vision + Claude Vision (base64-encoded)
+- **5 Analysis Modes** — Describe, OCR, Analyze, Compare, Custom question
+- **Drag & Drop** — File picker, clipboard paste (Ctrl+V), multi-image support
+- **Tag Extraction** — Auto-generated keywords from analysis
+- **OCR Text** — Extracted text from images with formatting preserved
+
+### 📸 Snapshot & Rollback
+
+- **Named Snapshots** — Save current AI state (memories, analytics, settings, RAG)
+- **One-Click Restore** — Rollback to any snapshot (auto-saves current state first)
+- **Diff Tool** — Compare two snapshots file-by-file (added/removed/modified)
+- **Auto-Prune** — Keep max 50 snapshots, auto-cleanup
+- **Tags & Stats** — Categorize snapshots, track total size
+
+### 🔗 Webhook & API Gateway
+
+- **Custom Endpoints** — Create webhook URLs mapped to any AI model
+- **API Key Auth** — Generated `gsk_` keys per webhook with regeneration
+- **Rate Limiting** — Configurable max calls per minute per webhook
+- **Templates** — Slack, Discord, GitHub, Custom format support
+- **Request Logging** — Full request/response history with latency and status
+- **Curl Examples** — Copy-paste ready commands in the UI
+
+### �� Mobile & UX
+
+- **PWA** — Installable as native app on iOS/Android
+- **Touch-optimized** — Swipe navigation, touch-friendly buttons
 - **Real-time streaming** — Throttled Socket.IO for smooth token streaming
 - **Notification center** — In-app notifications with history
 - **Dark theme** — Slate-based dark UI optimized for OLED
+- **Responsive** — Adapts from mobile to desktop seamlessly
 
-### 🔒 Security
+### 🔐 Security & Auth
 
+- **Supabase Auth** — Multi-user registration/login with JWT tokens
+- **Admin Panel** — User management, role-based access (admin/user)
+- **Per-user Data** — Conversations and memories isolated per user in Postgres
 - **Rate limiting** — Configurable requests per minute
 - **Token budget** — Max tokens per session with 80% warning
-- **Audit logging** — All AI interactions logged
-- **Security config** — Configurable allowed tools and permissions
+- **Audit logging** — All AI interactions logged with timestamps
+- **Path traversal protection** — Workspace sandboxing for file operations
+
+### 🐬 Hardware Integration
+
+- **Flipper Zero BLE** — Web Bluetooth connection to Flipper Zero devices
+  - Serial RPC communication, file manager, GPIO control
+  - Sub-GHz, RFID, NFC, IR signal capture/replay
+  - Battery monitoring, firmware info, device scanning
 
 ---
 
-## Web App Views
+## Web App Views (30+)
 
 | View | Description |
 |---|---|
-| **Claude Chat** | Main chat with Claude, markdown rendering, code highlighting, feedback |
-| **Gemini Chat** | Separate Gemini chat with streaming |
-| **Arena** | Claude ↔ Gemini research collaboration with shared memories |
+| **Claude Chat** | Full chat with streaming, tool use, markdown, code highlighting, feedback |
+| **Gemini Chat** | Separate Gemini chat with streaming and tools |
+| **Frankenstein Chat** | Bio-inspired cognitive AI with HDC/AIF-driven responses |
+| **Arena** | Multi-AI research collaboration with sandbox and shared memories |
+| **Research Lab** | Advanced multi-agent experiments, analysis, and visualization |
 | **Lab** | Multi-LLM orchestrator with workers, tasks, bias alerts, audit log |
-| **Dashboard** | System gauges, sparklines, AI stats, cost bar, activity grid |
+| **Dashboard** | System gauges, sparklines, AI stats per model, cost tracking, activity grid |
+| **Code Editor** | Full IDE with Monaco, terminal, AI autocomplete, git, file tree |
+| **Hierarchy** | Planner → Executor → Critic → Validator agent coordination |
+| **Swarm** | ABA-Mycelium decentralized intelligence visualization |
+| **Debate** | AI political panel debate simulation |
+| **Agent Chains** | Visual DAG workflow builder with branching and loops |
+| **Battle Arena** | Frankenstein vs raw LLM live competition |
 | **Tools** | Quick actions and full tool catalog |
 | **Computers** | Remote computer management and task execution |
 | **Scheduler** | Create/manage cron jobs and scheduled tasks |
@@ -157,11 +279,18 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | **Search** | Full-text search across all conversations |
 | **Projects** | Project management with context switching |
 | **Clipboard** | Clipboard sync history |
-| **Plugins** | Plugin management (enable/disable) |
-| **Workflows** | Automation builder with step chains |
+| **Plugins** | Plugin marketplace + installed plugin management |
+| **Workflows** | Sequential automation builder |
 | **Network** | Bot network visualization with evolution |
-| **Self-Improve** | Skills, evaluations, reflections |
-| **Settings** | Global rules, memories, RAG, security, audit |
+| **Self-Improve** | Skills, evaluations, reflections dashboard |
+| **Frankenstein** | Training dashboard, cognitive metrics, ablation results |
+| **Archon** | Knowledge base management, vector search, crawling |
+| **Git** | Repository status, commits, branches, diffs |
+| **Flipper Zero** | BLE device control and signal management |
+| **Settings** | Global rules, memories, RAG, security, audit, theme |
+| **Admin** | User management panel (Supabase auth required) |
+| **Login** | Authentication (register/login with Supabase) |
+| **Install** | Platform-specific installation instructions |
 
 ---
 
@@ -179,13 +308,26 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | `GET /api/tokens` | Token usage and budget |
 | `POST /api/tokens/budget` | Set token budget |
 
-### Gemini
+### Auth
+| Endpoint | Description |
+|---|---|
+| `GET /api/auth/enabled` | Check if auth is active |
+| `GET /api/auth/config` | Public Supabase config for frontend |
+| `POST /api/auth/register` | Create account |
+| `POST /api/auth/login` | Sign in |
+| `GET /api/auth/me` | Get current user (requires token) |
+
+### AI Agents
 | Endpoint | Description |
 |---|---|
 | `GET /api/gemini/status` | Gemini status and tokens |
 | `GET/DELETE /api/gemini/messages` | Gemini conversation |
+| `GET /api/deepseek/status` | DeepSeek status and tokens |
+| `GET /api/grok/status` | Grok status and tokens |
+| `GET /api/ollama/status` | Ollama status & models |
+| `POST /api/ollama/pull` | Pull a new Ollama model |
 
-### Arena (Research Lab)
+### Arena & Research
 | Endpoint | Description |
 |---|---|
 | `POST /api/arena/start` | Start research session (topic, rounds, mode) |
@@ -202,10 +344,49 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | `POST /api/orchestrator/task` | Submit task (type, prompt, consensus) |
 | `GET /api/orchestrator/tasks` | Task history |
 | `POST /api/orchestrator/workers/:id/toggle` | Enable/disable worker |
-| `POST /api/orchestrator/workers/:id/reset` | Reset errored worker |
 | `GET /api/orchestrator/learnings` | Cross-worker learning data |
 | `GET /api/orchestrator/bias-alerts` | Bias detection alerts |
-| `GET /api/orchestrator/audit` | Orchestrator audit log |
+
+### Hierarchy
+| Endpoint | Description |
+|---|---|
+| `POST /api/hierarchy/task` | Submit task for hierarchical processing |
+| `GET /api/hierarchy/state` | Current workflow state |
+| `GET /api/hierarchy/history` | Completed task history |
+
+### Swarm
+| Endpoint | Description |
+|---|---|
+| `POST /api/swarm/query` | Send query through swarm nodes |
+| `GET /api/swarm/nodes` | List swarm nodes and influence weights |
+| `GET /api/swarm/insights` | Cross-domain insight propagations |
+
+### Debate
+| Endpoint | Description |
+|---|---|
+| `POST /api/debate/start` | Start debate session with party agents |
+| `POST /api/debate/stop` | Stop debate |
+| `GET /api/debate/sessions` | Session history |
+
+### Agent Chains
+| Endpoint | Description |
+|---|---|
+| `GET/POST /api/chains` | List/create chain definitions |
+| `POST /api/chains/:id/run` | Execute a chain |
+| `GET /api/chains/:id/status` | Execution status |
+
+### Code Editor / Workspace
+| Endpoint | Description |
+|---|---|
+| `GET /api/workspace/tree` | File tree |
+| `GET /api/workspace/file` | Read file |
+| `PUT /api/workspace/file` | Write file |
+| `POST /api/workspace/ai/edit` | AI-powered file edit |
+| `POST /api/workspace/ai/complete` | AI autocomplete |
+| `POST /api/workspace/ai/chat/stream` | Streaming AI chat (SSE) |
+| `GET /api/workspace/git/status` | Git status |
+| `POST /api/workspace/git/commit` | Git commit |
+| `POST /api/workspace/git/ai-commit` | AI-generated commit message |
 
 ### Multi-Computer
 | Endpoint | Description |
@@ -221,22 +402,6 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | `GET/POST /api/schedules` | List/create schedules |
 | `PUT/DELETE /api/schedules/:id` | Update/delete schedule |
 | `POST /api/schedules/:id/run` | Run immediately |
-| `GET /api/schedule-results` | Execution results |
-
-### Files
-| Endpoint | Description |
-|---|---|
-| `GET /api/files` | List shared files |
-| `POST /api/files/upload` | Upload file (base64) |
-| `GET /api/files/:id/download` | Download file |
-| `GET /api/files/stats` | Storage statistics |
-
-### Search & Export
-| Endpoint | Description |
-|---|---|
-| `GET /api/search?q=...` | Full-text search with scoring |
-| `GET /api/search/stats` | Conversation statistics |
-| `GET /api/search/export` | Export as Markdown/JSON |
 
 ### Knowledge & Memory
 | Endpoint | Description |
@@ -246,30 +411,32 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | `GET/PUT /api/global-rules` | Global AI rules |
 | `GET /api/rag/sources` | RAG knowledge sources |
 | `POST /api/rag/index-text` | Index text into RAG |
-| `GET /api/rag/stats` | RAG statistics |
 
-### Projects
+### Archon (pgvector RAG)
 | Endpoint | Description |
 |---|---|
-| `GET/POST /api/projects` | List/create projects |
-| `PUT/DELETE /api/projects/:id` | Update/delete project |
-| `POST /api/projects/:id/activate` | Switch to project |
+| `GET /api/archon/sources` | Knowledge sources |
+| `POST /api/archon/ingest` | Chunk + embed text |
+| `POST /api/archon/crawl` | Crawl URL → chunk → embed |
+| `POST /api/archon/search` | Semantic vector search |
+| `POST /api/archon/search/code` | Code example search |
 
-### Clipboard
+### Plugin Marketplace
 | Endpoint | Description |
 |---|---|
+| `GET /api/marketplace` | Browse available plugins |
+| `POST /api/marketplace/install` | Install plugin from URL |
+| `DELETE /api/marketplace/:id` | Uninstall plugin |
+| `POST /api/marketplace/:id/rate` | Rate a plugin |
+
+### Files, Clipboard, Projects, Search
+| Endpoint | Description |
+|---|---|
+| `GET/POST /api/files` | File listing / upload |
 | `GET /api/clipboard` | Clipboard history |
-| `POST /api/clipboard` | Send to clipboard |
-| `GET /api/clipboard/desktop` | Read desktop clipboard |
-
-### Plugins & Workflows
-| Endpoint | Description |
-|---|---|
-| `GET /api/plugins` | List plugins |
-| `POST /api/plugins/:id/toggle` | Enable/disable plugin |
-| `GET /api/workflows` | List workflows |
-| `POST /api/workflows` | Create workflow |
-| `POST /api/workflows/:id/run` | Run workflow |
+| `GET/POST /api/projects` | List/create projects |
+| `GET /api/search?q=...` | Full-text search with scoring |
+| `GET /api/search/export` | Export as Markdown/JSON |
 
 ### Bot Network
 | Endpoint | Description |
@@ -277,8 +444,6 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | `GET /api/network` | Network state (bots, knowledge, events) |
 | `POST /api/network/start` | Start network |
 | `POST /api/network/stop` | Stop network |
-| `POST /api/network/step` | Single tick |
-| `POST /api/network/reset` | Reset network |
 | `POST /api/network/topic` | Set research topic |
 
 ### Self-Improvement
@@ -289,19 +454,6 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | `GET /api/self-improve/reflections` | Agent reflections |
 | `POST /api/self-improve/message-feedback` | User feedback on messages |
 
-### Ollama (Local LLM)
-| Endpoint | Description |
-|---|---|
-| `GET /api/ollama/status` | Ollama status & models |
-| `GET /api/ollama/models` | Refresh available models |
-| `POST /api/ollama/pull` | Pull a new model |
-
-### Security
-| Endpoint | Description |
-|---|---|
-| `GET /api/security` | Security configuration |
-| `GET /api/audit` | Audit log |
-
 ---
 
 ## Socket.IO Events
@@ -309,9 +461,15 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 ### Client → Server
 | Event | Description |
 |---|---|
-| `message` | Send chat message |
+| `message` | Send Claude chat message |
 | `gemini_message` | Send Gemini message |
+| `deepseek_message` | Send DeepSeek message |
+| `grok_message` | Send Grok message |
+| `frankenstein_message` | Send Frankenstein message |
 | `answer` | Answer a pending question |
+| `terminal:spawn` | Start PTY session (code editor) |
+| `terminal:input` | Send input to terminal |
+| `terminal:kill` | Kill terminal session |
 
 ### Server → Client
 | Event | Description |
@@ -319,17 +477,21 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | `message` / `history` | Claude messages |
 | `agent_stream` | Claude streaming tokens |
 | `agent_status` | Tool use status (thinking, tool_start, tool_done) |
-| `gemini_message` / `gemini_history` | Gemini messages |
-| `gemini_stream` | Gemini streaming tokens |
-| `arena_message` / `arena_history` | Arena messages |
-| `arena_status` | Arena round progress |
-| `orchestrator_task` | Lab task updates |
-| `orchestrator_worker` | Worker status changes |
+| `gemini_message` / `gemini_stream` | Gemini messages/streaming |
+| `deepseek_message` / `deepseek_stream` | DeepSeek messages/streaming |
+| `grok_message` / `grok_stream` | Grok messages/streaming |
+| `frankenstein_message` / `frankenstein_stream` | Frankenstein messages/streaming |
+| `arena_message` / `arena_status` | Arena messages/round progress |
+| `debate_message` / `debate_status` | Debate messages/status |
+| `hierarchy_update` | Hierarchical agent state changes |
+| `swarm_update` | Swarm node responses |
+| `chain_status` | Agent chain execution updates |
+| `orchestrator_task` / `orchestrator_worker` | Lab task/worker updates |
 | `token_usage` | Token counter updates |
 | `tunnel_url` | Cloudflare Tunnel URL |
 | `question` | Pending question for user |
 | `budget_warning` | Token budget 80% alert |
-| `shared_memories` | Arena shared memories |
+| `terminal:output` | Terminal PTY output |
 
 ---
 
@@ -337,12 +499,18 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 
 | Variable | Default | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | — | Claude API key (required for Claude chat) |
-| `GEMINI_API_KEY` | — | Gemini API key (required for Gemini/Arena/Network) |
-| `GRACESTACK_BRIDGE_URL` | `http://localhost:3031` | Bridge URL (for MCP server) |
-| `PORT` | `3031` | Bridge server port |
+| `ANTHROPIC_API_KEY` | — | Claude API key |
+| `GEMINI_API_KEY` | — | Gemini API key |
+| `DEEPSEEK_API_KEY` | — | DeepSeek API key |
+| `GROK_API_KEY` | — | Grok (xAI) API key |
 | `OLLAMA_URL` | `http://localhost:11434` | Ollama server URL |
 | `OLLAMA_MODEL` | `llama3` | Default Ollama model |
+| `SUPABASE_URL` | — | Supabase project URL (enables auth + per-user data) |
+| `SUPABASE_ANON_KEY` | — | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | — | Supabase service role key |
+| `WEAVIATE_HOST` | `localhost` | Weaviate vector DB host |
+| `GRACESTACK_BRIDGE_URL` | `http://localhost:3031` | Bridge URL (for MCP server) |
+| `PORT` | `3031` | Bridge server port |
 | `NO_TUNNEL` | `0` | Set to `1` to disable Cloudflare Tunnel |
 | `TOKEN_BUDGET` | `0` | Max tokens per session (0 = unlimited) |
 | `RATE_LIMIT_MAX` | `30` | Max requests per minute |
@@ -354,64 +522,123 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 
 ```
 gracestack-ai-lab/
-├── bridge/                    # Backend server
+├── bridge/                         # Backend server
 │   ├── src/
-│   │   ├── index.ts           # Main server (Express + Socket.IO + all routes)
-│   │   ├── agent.ts           # Claude AI agent with 40+ tools
-│   │   ├── agent-gemini.ts    # Gemini AI agent
-│   │   ├── agent-ollama.ts    # Ollama local LLM agent
-│   │   ├── llm-orchestrator.ts # Multi-LLM coordinator with consensus
-│   │   ├── bot-network.ts     # Autonomous AI bot network
-│   │   ├── shared-memory.ts   # Cross-AI shared memory
-│   │   ├── self-improve.ts    # Reflexion, skills, self-evaluation
-│   │   ├── workflows.ts       # Automation workflow engine
-│   │   ├── scheduler.ts       # Cron-based task scheduler
-│   │   ├── computer-registry.ts # Remote computer management
-│   │   ├── computer-agent.ts  # Remote agent (runs on each PC)
-│   │   ├── dashboard.ts       # Real-time metrics
-│   │   ├── rag.ts             # RAG knowledge base
-│   │   ├── memory.ts          # Persistent AI memories
-│   │   ├── search.ts          # Conversation search & export
-│   │   ├── security.ts        # Security config & audit
-│   │   ├── projects.ts        # Project management
-│   │   ├── file-sharing.ts    # File upload/download
-│   │   ├── clipboard.ts       # Clipboard sync
-│   │   ├── plugin-loader.ts   # Dynamic plugin system
-│   │   ├── tools-*.ts         # Tool implementations (web, desktop, filesystem, etc.)
-│   │   └── api-cascade.ts     # Cascade MCP API routes
-│   ├── plugins/               # Plugin directory
-│   └── data/                  # Persistent data (JSON files)
-├── web/                       # Frontend PWA
+│   │   ├── index.ts                # Main server (Express + Socket.IO, 160K+ lines)
+│   │   ├── agent.ts                # Claude AI agent with 40+ tools
+│   │   ├── agent-gemini.ts         # Gemini AI agent
+│   │   ├── agent-deepseek.ts       # DeepSeek AI agent (OpenAI-compatible)
+│   │   ├── agent-grok.ts           # Grok AI agent (xAI)
+│   │   ├── agent-ollama.ts         # Ollama local LLM agent
+│   │   ├── agent-frankenstein.ts   # Frankenstein cognitive AI agent
+│   │   ├── agent-chains.ts         # DAG-based workflow engine
+│   │   ├── hierarchy.ts            # Planner/Executor/Critic/Validator coordination
+│   │   ├── swarm.ts                # ABA-Mycelium swarm intelligence
+│   │   ├── debate-routes.ts        # AI political panel debate
+│   │   ├── llm-orchestrator.ts     # Multi-LLM coordinator with consensus
+│   │   ├── bot-network.ts          # Autonomous AI bot network
+│   │   ├── sandbox.ts              # Isolated code execution for Arena
+│   │   ├── workspace-routes.ts     # Code editor backend (file ops, AI, terminal)
+│   │   ├── archon-routes.ts        # Archon pgvector RAG
+│   │   ├── plugin-marketplace.ts   # Community plugin marketplace
+│   │   ├── auth-routes.ts          # Supabase auth endpoints
+│   │   ├── auth-middleware.ts      # JWT verification middleware
+│   │   ├── user-data.ts            # Per-user data isolation
+│   │   ├── supabase.ts             # Supabase client & auth helpers
+│   │   ├── frank-learning.ts       # Frankenstein persistent learning
+│   │   ├── system-context.ts       # Shared AI system prompt
+│   │   ├── shared-memory.ts        # Cross-AI shared memory
+│   │   ├── self-improve.ts         # Reflexion, skills, self-evaluation
+│   │   ├── rag.ts                  # BM25 RAG knowledge base
+│   │   ├── rag-weaviate.ts         # Weaviate vector RAG
+│   │   ├── memory.ts               # Persistent AI memories
+│   │   ├── workflows.ts            # Sequential automation engine
+│   │   ├── scheduler.ts            # Cron-based task scheduler
+│   │   ├── computer-registry.ts    # Remote computer management
+│   │   ├── computer-agent.ts       # Remote agent (runs on each PC)
+│   │   ├── dashboard.ts            # Real-time system metrics
+│   │   ├── search.ts               # Conversation search & export
+│   │   ├── security.ts             # Security config & audit
+│   │   ├── projects.ts             # Project management
+│   │   ├── file-sharing.ts         # File upload/download
+│   │   ├── clipboard.ts            # Clipboard sync
+│   │   ├── plugin-loader.ts        # Dynamic plugin system
+│   │   ├── git-routes.ts           # Git operations API
+│   │   ├── tools-*.ts              # Tool implementations (web, desktop, filesystem, etc.)
+│   │   └── api-cascade.ts          # Cascade MCP API routes
+│   ├── plugins/                    # Plugin directory
+│   └── data/                       # Persistent data (JSON files)
+├── web/                            # Frontend PWA
 │   └── src/
-│       ├── App.tsx            # Main app (2200+ lines, all tabs)
-│       ├── config.ts          # Shared BRIDGE_URL config
-│       └── components/        # 16 view components
-│           ├── DashboardView.tsx
-│           ├── ComputersView.tsx
-│           ├── SchedulerView.tsx
-│           ├── FilesView.tsx
-│           ├── SearchView.tsx
-│           ├── ProjectsView.tsx
-│           ├── ClipboardView.tsx
-│           ├── PluginsView.tsx
-│           ├── ToolsView.tsx
-│           ├── SettingsView.tsx
-│           ├── WorkflowsView.tsx
-│           ├── NetworkView.tsx
-│           ├── SelfImproveView.tsx
-│           ├── InstallView.tsx
-│           ├── ConversationSidebar.tsx
-│           └── VoiceButton.tsx
-├── mcp-server/                # MCP server for Windsurf
-│   └── src/index.ts
-└── installer/                 # One-line install scripts
+│       ├── App.tsx                 # Main app (126K+ lines)
+│       ├── config.ts               # Shared BRIDGE_URL config
+│       ├── contexts/AuthContext.tsx # Auth state management
+│       ├── hooks/useMobile.ts      # Mobile detection & gestures
+│       ├── lib/
+│       │   ├── api.ts              # API client helpers
+│       │   ├── supabase.ts         # Supabase client init
+│       │   ├── flipperBle.ts       # Flipper Zero BLE protocol
+│       │   └── bleScanner.ts       # BLE device scanner
+│       └── components/             # 30+ view components
+│           ├── CodeEditorView.tsx       # Full IDE (173K)
+│           ├── FrankensteinView.tsx     # Training dashboard (112K)
+│           ├── ResearchLabView.tsx      # Research experiments (90K)
+│           ├── FlipperZeroView.tsx      # Hardware control (51K)
+│           ├── DashboardView.tsx        # System metrics (48K)
+│           ├── ArchonDashboard.tsx      # Knowledge base UI (44K)
+│           ├── AgentChainsView.tsx      # DAG workflow builder (41K)
+│           ├── SettingsView.tsx         # Global settings (38K)
+│           ├── FrankensteinChatView.tsx # Cognitive AI chat (31K)
+│           ├── BattleArenaView.tsx      # AI competition (29K)
+│           ├── SwarmView.tsx            # Swarm intelligence (28K)
+│           ├── NetworkView.tsx          # Bot network (25K)
+│           ├── GitView.tsx             # Git integration (24K)
+│           ├── HierarchyView.tsx       # Agent hierarchy (21K)
+│           ├── DebateView.tsx          # Political debate (21K)
+│           ├── PluginsView.tsx         # Plugin marketplace (20K)
+│           ├── SchedulerView.tsx       # Task scheduler (19K)
+│           ├── SelfImproveView.tsx     # Self-improvement (17K)
+│           ├── ComputersView.tsx       # Remote PCs (15K)
+│           ├── WorkflowsView.tsx       # Automations (14K)
+│           ├── FilesView.tsx           # File sharing (13K)
+│           ├── ProjectsView.tsx        # Projects (12K)
+│           ├── SearchView.tsx          # Search (11K)
+│           ├── AdminPanel.tsx          # User admin (9K)
+│           ├── ClipboardView.tsx       # Clipboard (7K)
+│           ├── LoginView.tsx           # Auth (7K)
+│           ├── ConversationSidebar.tsx  # Chat history
+│           ├── VoiceButton.tsx         # Speech I/O
+│           ├── XTerminal.tsx           # Terminal component
+│           └── InstallView.tsx         # Install guide
+├── frankenstein-ai/                # Cognitive AI research
+│   ├── continuous_train.py         # Main training loop
+│   ├── code_agent.py               # Code generation agent
+│   ├── task_generator*.py          # Task generators v1-v4
+│   ├── cognition.py                # HDC 4096D processing
+│   ├── agency.py                   # Active Inference (pymdp)
+│   ├── memory.py                   # Ebbinghaus memory
+│   ├── perception.py               # Feature extraction
+│   ├── emotions.py                 # Emotional state engine
+│   ├── circadian.py                # Sleep/wake cycles
+│   ├── gut_feeling.py              # Somatic marker intuition
+│   ├── frankenstein_swarm.py       # Multi-agent swarm
+│   ├── battle_arena.py             # vs-LLM competition
+│   ├── ab_test.py                  # Statistical A/B testing
+│   ├── ablation_runner.py          # Component contribution analysis
+│   ├── spaced_repetition.py        # SM-2 review scheduler
+│   └── RESEARCH.md / ROADMAP.md    # Research documentation
+├── mcp-server/                     # MCP server for Windsurf
+├── landing/                        # Static marketing page
+├── installer/                      # Cross-platform install scripts
+├── deploy/                         # Deployment configs
+└── docs/                           # Architecture documentation
 ```
 
 ---
 
 ## 🧟 Frankenstein AI — Kognitiv Hybridarkitektur
 
-A bio-inspired meta-learning agent that combines three breakthrough technologies to learn *how to think about problems*, not just memorize answers.
+A bio-inspired meta-learning agent that combines breakthrough cognitive technologies to learn *how to think about problems*, not just memorize answers. **Achieved 100% on superhuman benchmark** (21/21) vs Gemini 2.0 Flash at 81%.
 
 ### Cognitive Pipeline
 
@@ -450,16 +677,19 @@ Task → Perception (Features) → Cognition (HDC) → Agency (AIF) → Strategy
 | A/B Testing | `ab_test.py` | Statistical proof that the stack improves over raw LLM |
 | Spaced Repetition | `spaced_repetition.py` | SM-2 scheduler — revisits weak categories with adaptive intervals |
 | Ablation Runner | `ablation_runner.py` | Systematic component contribution analysis |
+| Cross-Domain Bridge | `cross_domain_bridge.py` | Transfer learning across task domains |
+| Symbolic Regression | `symbolic_regression.py` | Mathematical pattern discovery |
+| Math Research | `math_research.py` | Automated mathematical exploration |
+| Multi-LLM Router | `multi_llm_router.py` | Intelligent routing between LLM providers |
 
-### Current Performance (Feb 2026)
+### Performance Highlights
 
-| Metric | Current | Target |
-|---|---|---|
-| Total tasks solved | 20,489 | > 1,000,000 |
-| Overall solve rate | 91.8% | 99.99% |
-| System 0 utilization | 83.6% | > 95% |
-| System 2 (LLM) utilization | 15.2% | < 2% |
-| Avg response time | 401 ms | < 100 ms |
+| Metric | Score |
+|---|---|
+| Superhuman Benchmark | **100%** (21/21) — vs Gemini 2.0 Flash 81% |
+| Overall solve rate | 91.8% |
+| System 0 (no-LLM) utilization | 83.6% |
+| Avg response time | 401 ms |
 
 ### Running Frankenstein AI
 
@@ -478,6 +708,9 @@ python battle_arena.py http://localhost:3031
 
 # Ablation study
 python ablation_runner.py --config all --tasks 200
+
+# Superhuman benchmark
+python superhuman_benchmark.py
 ```
 
 See `frankenstein-ai/RESEARCH.md` for research documentation and `frankenstein-ai/ROADMAP.md` for the research plan.
@@ -486,14 +719,60 @@ See `frankenstein-ai/RESEARCH.md` for research documentation and `frankenstein-a
 
 ## Performance Optimizations
 
-- **Socket.IO throttling** — Streaming events throttled to 50ms (agent_stream, gemini_stream)
+- **Socket.IO throttling** — Streaming events throttled to 50ms
 - **Message cap** — Max 200 messages per chat to prevent DOM bloat
-- **React.memo** — Memoized Sparkline, CircularGauge, and other heavy components
-- **Polling reduction** — Dashboard 15s, Computers 15s, Network 3s (reduced from 2-5s)
-- **Gzip compression** — All HTTP responses compressed via `compression` middleware
-- **Cache headers** — Hashed assets cached 1 year (immutable), HTML no-cache
-- **Lazy loading** — All sub-views loaded via `React.lazy` + `Suspense`
+- **React.memo** — Memoized Sparkline, CircularGauge, and heavy components
+- **Polling reduction** — Dashboard 15s, Computers 15s, Network 3s
+- **Gzip compression** — All HTTP responses compressed
+- **Cache headers** — Hashed assets cached 1 year (immutable)
+- **Lazy loading** — All 30+ views loaded via `React.lazy` + `Suspense`
 - **Memoized state** — Per-tab conversation lists, token formatting, cost calculations
+
+---
+
+## 🚀 Roadmap — Innovativa Funktioner
+
+### Near-term
+
+- **🎯 AI Agent Marketplace** — Publish and share custom AI agent personalities with the community
+- **📊 Conversation Analytics** — Token usage trends, cost forecasting, response quality heatmaps over time
+- **🔄 Live Collaboration** — Multiple users co-editing prompts and viewing AI responses simultaneously (Google Docs-style)
+- **🧪 Prompt Lab** — A/B test different prompts across all 5 LLMs with statistical comparison and auto-optimization
+- **📱 Widget System** — Customizable dashboard widgets (drag-and-drop) for personalized AI command centers
+- **🌐 Multi-language UI** — i18n support (Swedish, English, + community translations)
+
+### Mid-term
+
+- **🤖 Autonomous Agent Mode** — Let Frankenstein run tasks 24/7 with human-in-the-loop approval gates
+- **🔗 Webhook & API Gateway** — Expose AI capabilities as webhooks for external service integration (Zapier/n8n compatible)
+- **📸 Vision & Multimodal** — Image/PDF/video analysis in chat (leverage Claude/Gemini vision APIs)
+- **🎮 Gamified Learning** — XP system, achievements, and leaderboards for Frankenstein AI training progress
+- **🧬 Genetic Prompt Evolution** — Evolve optimal prompts using genetic algorithms across generations
+- **💾 Snapshot & Rollback** — Version control for AI memories, rules, and project state with diff and restore
+- **🌉 Cross-Device Continuity** — Start a conversation on phone, continue on desktop seamlessly with state sync
+- **🔊 Ambient AI** — Background listening mode that proactively suggests actions based on screen content
+
+### Moonshot
+
+- **🧠 Federated Frankenstein** — Multiple Frankenstein instances sharing learnings across users (privacy-preserving)
+- **🌍 Distributed Compute Mesh** — Use registered remote computers as a compute cluster for parallel AI tasks
+- **🎭 AI Persona Studio** — Create, train, and deploy custom AI personalities with unique knowledge and behavior
+- **📡 Real-time Data Streams** — Connect AI to live data feeds (stock prices, news, IoT sensors) for proactive analysis
+- **🏗️ No-Code App Builder** — Let AI build and deploy micro-apps from natural language descriptions
+- **🧪 AI Research Paper Generator** — Auto-generate LaTeX research papers from Arena/Lab session data
+
+---
+
+## Docker
+
+```bash
+# Build and run everything
+docker-compose up -d
+
+# Or just the bridge
+docker build -t gracestack-ai-lab .
+docker run -p 3031:3031 --env-file bridge/.env gracestack-ai-lab
+```
 
 ---
 
