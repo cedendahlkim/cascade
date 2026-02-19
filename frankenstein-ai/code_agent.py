@@ -37,6 +37,7 @@ from promotion_pipeline import PromotionPipeline
 from symbolic_regression import SymbolicRegressionEngine
 from cross_domain_bridge import CrossDomainBridge
 from reflection_loop import ReflectionEngine
+from archon_client import ArchonClient
 
 # Ladda API-nycklar från bridge/.env
 _env_path = Path(__file__).parent.parent / "bridge" / ".env"
@@ -254,6 +255,14 @@ class FrankensteinCodeAgent:
 
         # Reflektions-loop: Självkritik vid långsamma/misslyckade lösningar
         self.reflection = ReflectionEngine(threshold_ms=10_000)
+
+        # --- ARCHON KNOWLEDGE BASE ---
+        try:
+            self.archon = ArchonClient()
+            self._archon_available = True
+        except Exception:
+            self.archon = None  # type: ignore[assignment]
+            self._archon_available = False
 
         # --- AGENT STATE ---
         self.solved: dict[str, Attempt] = {}
@@ -541,6 +550,34 @@ class FrankensteinCodeAgent:
                     if len(attempt.code) < len(skill.example_code):
                         skill.example_code = attempt.code
 
+    # ===== ARCHON: Kunskapsbas-sökning =====
+
+    def _search_archon_kb(self, task: "Task") -> str:
+        """Sök i Archon Knowledge Base efter relevant dokumentation.
+        
+        Returnerar en kontextsträng att injicera i prompten, eller tom sträng.
+        """
+        if not self._archon_available or not self.archon:
+            return ""
+        try:
+            query = f"{task.title} {task.description[:200]} {' '.join(task.tags)}"
+            results = self.archon.search(query, top_k=2)
+            if not results:
+                return ""
+            snippets = []
+            for r in results:
+                sim = r.get("similarity", 0)
+                if sim < 0.45:
+                    continue
+                content = r.get("content", "")[:400]
+                url = r.get("url", "")
+                snippets.append(f"[{url}] {content}")
+            if not snippets:
+                return ""
+            return "KUNSKAPSBAS (relevant dokumentation):\n" + "\n---\n".join(snippets) + "\n\n"
+        except Exception:
+            return ""
+
     # ===== LLM: Kodgenerering =====
 
     def _call_llm(self, prompt: str, temperature: float = 0.3, max_retries: int = 2) -> str | None:
@@ -772,6 +809,11 @@ class FrankensteinCodeAgent:
         # ASI: Cross-Domain Bridge — regler från multipla domäner
         if hasattr(self, '_asi_cross_domain') and self._asi_cross_domain:
             prompt += self._asi_cross_domain + "\n"
+
+        # Archon Knowledge Base: Injicera relevant dokumentation
+        kb_context = self._search_archon_kb(task)
+        if kb_context:
+            prompt += kb_context
 
         # Visa ALLA testfall (inte bara första) för bättre precision
         if task.test_cases:

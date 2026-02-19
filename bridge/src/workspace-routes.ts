@@ -662,6 +662,51 @@ Exempel: [{"action":"edit","path":"src/app.ts","content":"import...\\n..."},{"ac
   }
 });
 
+/** Search Archon Knowledge Base for relevant context */
+async function searchArchonKB(query: string, topK = 3): Promise<string> {
+  try {
+    const SUPABASE_URL = process.env.SUPABASE_URL || "";
+    const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
+    if (!SUPABASE_URL || !SUPABASE_KEY || !GEMINI_KEY) return "";
+
+    // Generate embedding for query
+    const embedRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: { parts: [{ text: query }] }, outputDimensionality: 768 }),
+      }
+    );
+    if (!embedRes.ok) return "";
+    const embedData = (await embedRes.json()) as any;
+    const embedding = embedData.embedding?.values;
+    if (!embedding) return "";
+
+    // Search via Supabase RPC
+    const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/match_knowledge_chunks`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query_embedding: embedding, match_count: topK }),
+    });
+    if (!rpcRes.ok) return "";
+    const results = (await rpcRes.json()) as any[];
+    if (!results?.length) return "";
+
+    return results
+      .filter((r: any) => r.similarity > 0.4)
+      .map((r: any) => `[Källa: ${r.url || "KB"} | Relevans: ${(r.similarity * 100).toFixed(0)}%]\n${r.content?.slice(0, 600)}`)
+      .join("\n\n");
+  } catch {
+    return "";
+  }
+}
+
 /** POST /api/workspace/ai/chat/stream — Streaming AI chat via SSE */
 router.post("/ai/chat/stream", async (req: Request, res: Response) => {
   const { message, currentFile, currentContent, openFiles, history } = req.body;
@@ -688,6 +733,9 @@ router.post("/ai/chat/stream", async (req: Request, res: Response) => {
   const apiKey = process.env.GEMINI_API_KEY || "";
   if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
 
+  // Search Archon Knowledge Base for relevant context
+  const kbContext = await searchArchonKB(message, 3);
+
   // Build conversation history for multi-turn
   const contents: any[] = [];
   if (history?.length) {
@@ -704,19 +752,23 @@ router.post("/ai/chat/stream", async (req: Request, res: Response) => {
 - Förklara kod
 - Föreslå förbättringar
 - Köra kommandon
+- Söka i kunskapsbasen (Archon Knowledge Base) för dokumentation och kodexempel
 
 WORKSPACE: ${WORKSPACE_ROOT}
 ${currentFile ? `AKTUELL FIL: ${currentFile}` : ""}
 ${currentContent ? `FILINNEHÅLL:\n\`\`\`\n${currentContent.slice(0, 8000)}\n\`\`\`` : ""}
 ${fileContexts.length ? `\nANDRA ÖPPNA FILER:\n${fileContexts.join("\n\n")}` : ""}
+${kbContext ? `\nKUNSKAPSBAS (Archon RAG — relevant dokumentation):\n${kbContext}` : ""}
 
 REGLER:
 - Svara på svenska om användaren skriver svenska
 - Var koncis och handlingsorienterad
+- Om du har kunskapsbaskontext ovan, referera till den när det är relevant
 - Om du föreslår kodändringar, visa HELA den uppdaterade filen i ett kodblock med filsökvägen som kommentar
 - Markera filändringar med: \`\`\`EDIT:sökväg/till/fil\n...ny kod...\n\`\`\`
 - Markera nya filer med: \`\`\`CREATE:sökväg/till/fil\n...kod...\n\`\`\`
-- Markera kommandon med: \`\`\`RUN\nkommando\n\`\`\``;
+- Markera kommandon med: \`\`\`RUN\nkommando\n\`\`\`
+- Du har tillgång till Archon Knowledge Base — en vektorsökbar kunskapsbas med crawlad dokumentation. Användaren kan lägga till fler källor via Knowledge Base-panelen (Ctrl+Shift+P → "Knowledge Base").`;
 
   contents.push({
     role: "user",
