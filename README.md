@@ -17,6 +17,14 @@ Inspired by [Happy Coder](https://github.com/slopus/happy) and [MCP Bridge API](
 
 ---
 
+## Status (2026-02-19)
+
+- ✅ Aktiv monorepo med `bridge` (Express + Socket.IO), `web` (React/Vite), `mcp-server` (stdio MCP) och `frankenstein-ai` (Python)
+- ✅ Cloudflare Tunnel auto-start i bridge, URL via `GET /api/tunnel` + Socket.IO `tunnel_url`
+- ✅ Avancerad workspace/editor-stack (Monaco, terminal, AI inline edit, AI autocomplete, git-panel)
+- ✅ Archon Knowledge Base (Supabase pgvector + Gemini embeddings) integrerad direkt i bridge
+- ✅ Deploybar via Docker Compose med Weaviate, Ollama embed, Nginx och certbot
+
 ## Architecture
 
 ```
@@ -53,6 +61,12 @@ Inspired by [Happy Coder](https://github.com/slopus/happy) and [MCP Bridge API](
 
 ```bash
 npm run install:all
+```
+
+Alternativt på Windows:
+
+```bat
+setup.bat
 ```
 
 ### 2. Configure API keys
@@ -102,6 +116,8 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
   }
 }
 ```
+
+Tips: MCP-servern använder `CASCADE_REMOTE_BRIDGE_URL` (default `http://localhost:3031`) och `CASCADE_REMOTE_WORKSPACE` för workspace-root.
 
 ### 5. Open on your phone
 
@@ -184,7 +200,7 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 - **Battle Arena** — Live Frankenstein vs bare LLM competition with scoring
 - **A/B Testing** — Statistical proof of cognitive stack value over raw LLM
 
-### � Conversation Analytics
+### 📈 Conversation Analytics
 
 - **Token Usage Trends** — Hourly/daily/weekly per-model breakdowns with stacked bar charts
 - **Cost Forecasting** — Linear regression projections (daily avg, weekly, monthly) with trend %
@@ -227,7 +243,7 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 - **Request Logging** — Full request/response history with latency and status
 - **Curl Examples** — Copy-paste ready commands in the UI
 
-### �� Mobile & UX
+### 📱 Mobile & UX
 
 - **PWA** — Installable as native app on iOS/Android
 - **Touch-optimized** — Swipe navigation, touch-friendly buttons
@@ -300,6 +316,8 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | Endpoint | Description |
 |---|---|
 | `GET /api/status` | Connection status and client count |
+| `GET /healthz` | Liveness probe for runtime health |
+| `GET /readyz` | Readiness probe (workspace + runtime checks) |
 | `GET/POST/DELETE /api/messages` | Chat messages (CRUD) |
 | `POST /api/ask` | Ask mobile user a question (long-poll) |
 | `GET /api/qr` | QR code for pairing |
@@ -509,12 +527,19 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | `SUPABASE_ANON_KEY` | — | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | — | Supabase service role key |
 | `WEAVIATE_HOST` | `localhost` | Weaviate vector DB host |
-| `GRACESTACK_BRIDGE_URL` | `http://localhost:3031` | Bridge URL (for MCP server) |
+| `CASCADE_REMOTE_BRIDGE_URL` | `http://localhost:3031` | Bridge URL (for MCP server) |
+| `CASCADE_REMOTE_WORKSPACE` | repo root | Workspace root path used by MCP server/workspace routes |
 | `PORT` | `3031` | Bridge server port |
 | `NO_TUNNEL` | `0` | Set to `1` to disable Cloudflare Tunnel |
 | `TOKEN_BUDGET` | `0` | Max tokens per session (0 = unlimited) |
 | `RATE_LIMIT_MAX` | `30` | Max requests per minute |
 | `ALLOWED_ORIGINS` | `*` | CORS allowed origins |
+
+### Runtime quality
+
+- Bridge performs startup env validation (fails fast on invalid/incomplete runtime config).
+- HTTP requests get request IDs via `x-request-id` (incoming value is reused, otherwise generated).
+- Request logs include `req_id`, method, path, status and duration.
 
 ---
 
@@ -730,36 +755,28 @@ See `frankenstein-ai/RESEARCH.md` for research documentation and `frankenstein-a
 
 ---
 
-## 🚀 Roadmap — Innovativa Funktioner
+## 🚀 Roadmap — Nästa förbättringar
 
-### Near-term
+### Hög prioritet
 
-- **🎯 AI Agent Marketplace** — Publish and share custom AI agent personalities with the community
-- **📊 Conversation Analytics** — Token usage trends, cost forecasting, response quality heatmaps over time
-- **🔄 Live Collaboration** — Multiple users co-editing prompts and viewing AI responses simultaneously (Google Docs-style)
-- **🧪 Prompt Lab** — A/B test different prompts across all 5 LLMs with statistical comparison and auto-optimization
-- **📱 Widget System** — Customizable dashboard widgets (drag-and-drop) for personalized AI command centers
-- **🌐 Multi-language UI** — i18n support (Swedish, English, + community translations)
+- **Modularisera monoliter** — Dela upp `bridge/src/index.ts`, `web/src/App.tsx` och `CodeEditorView.tsx` i feature-moduler för snabbare iteration och mindre regressionsrisk.
+- **Testlager för kritiska flöden** — Lägg till integrationstester för auth, workspace-filoperationer, git-routes, snapshots och webhooks.
+- **Enhetlig config-hantering** — Inför gemensam validering av env-variabler (bridge/web/mcp-server) med tydlig startup-felrapportering.
+- **Observability** — Standardisera structured logs + request-id och felklassning för enklare drift/debugg.
 
-### Mid-term
+### Medium prioritet
 
-- **🤖 Autonomous Agent Mode** — Let Frankenstein run tasks 24/7 with human-in-the-loop approval gates
-- **🔗 Webhook & API Gateway** — Expose AI capabilities as webhooks for external service integration (Zapier/n8n compatible)
-- **📸 Vision & Multimodal** — Image/PDF/video analysis in chat (leverage Claude/Gemini vision APIs)
-- **🎮 Gamified Learning** — XP system, achievements, and leaderboards for Frankenstein AI training progress
-- **🧬 Genetic Prompt Evolution** — Evolve optimal prompts using genetic algorithms across generations
-- **💾 Snapshot & Rollback** — Version control for AI memories, rules, and project state with diff and restore
-- **🌉 Cross-Device Continuity** — Start a conversation on phone, continue on desktop seamlessly with state sync
-- **🔊 Ambient AI** — Background listening mode that proactively suggests actions based on screen content
+- **Multi-user collaboration** — Delade projekt, mentions och kommentarsflöde i konversationsvyer.
+- **Multimodal direkt i chat** — Vision-uppladdning i ordinarie chattvyer (inte bara separat Vision-view).
+- **Backup/migration tooling** — Export/import för memories, rules, projects och snapshots mellan miljöer.
+- **API hardening** — Konsekvent rate-limit och auth-policy per route-grupp, plus tydligare endpoint-versionering.
 
-### Moonshot
+### Längre sikt
 
-- **🧠 Federated Frankenstein** — Multiple Frankenstein instances sharing learnings across users (privacy-preserving)
-- **🌍 Distributed Compute Mesh** — Use registered remote computers as a compute cluster for parallel AI tasks
-- **🎭 AI Persona Studio** — Create, train, and deploy custom AI personalities with unique knowledge and behavior
-- **📡 Real-time Data Streams** — Connect AI to live data feeds (stock prices, news, IoT sensors) for proactive analysis
-- **🏗️ No-Code App Builder** — Let AI build and deploy micro-apps from natural language descriptions
-- **🧪 AI Research Paper Generator** — Auto-generate LaTeX research papers from Arena/Lab session data
+- **Event-driven intern arkitektur** — Minska tight koppling mellan moduler via intern event-bus.
+- **Job queue för tunga tasks** — Flytta långkörande AI- och indexeringsjobb till kö med status/spårning.
+- **Federerad lärandemodell** — Synka anonymiserade Frankenstein-insikter mellan instanser.
+- **Policy sandbox för plugins/workflows** — Finmaskiga rättigheter per plugin och workflow-step.
 
 ---
 

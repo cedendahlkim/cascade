@@ -1,10 +1,31 @@
 # Cascade Remote — Feature Roadmap & Status
 
-## Status: ✅ Full-stack implementerat & deployat (2026-02-16)
+## Status: ✅ Full-stack implementerat & i aktiv vidareutveckling (2026-02-19)
 
-> Backend + Frontend + Frankenstein AI + Deploy. 46 backend-moduler, 27 frontend-views, 80+ API-endpoints.
+> Backend + Frontend + Frankenstein AI + Deploy. 50+ backend-moduler, 35 frontend-vyer, 80+ API-endpoints.
 > Live på **https://app.gracestack.se/** — Docker + Nginx + SSL + Cloudflare Tunnel.
-> Landningssida på **https://www.gracestack.se/** — Investor-fokuserad.
+> Landningssida på **https://www.gracestack.se/** — investor-fokuserad.
+
+---
+
+## 🔎 Projektgenomgång 2026-02-19 (sammanfattning)
+
+### Arkitektur och moduler
+- [x] Monorepo med fyra tydliga kärnor: `bridge/`, `web/`, `mcp-server/`, `frankenstein-ai/`
+- [x] Deploy-spår klart: `Dockerfile`, `docker-compose.yml`, `deploy/nginx-ssl.conf`, certbot-loop
+- [x] Arkiv och automation: `.windsurf/workflows/*`, installer-script (`setup.bat`, `install.ps1`)
+
+### Verifierat i kodbasen
+- [x] Cloudflare Tunnel auto-start + auto-restart i bridge
+- [x] Archon pgvector-RAG monterat under `/api/archon`
+- [x] Code Editor stack (Monaco + terminal + AI inline + autocomplete + git-panel)
+- [x] Prompt Lab, Vision, Snapshots, Webhooks och Conversation Analytics aktiva i både backend + frontend
+
+### Tekniska observationer (för nästa iteration)
+- [ ] Monolitfiler (`bridge/src/index.ts`, `web/src/App.tsx`, `web/src/components/CodeEditorView.tsx`) bör delas upp feature-vis
+- [ ] Testtäckning för kritiska API-flöden saknas/är begränsad (auth, workspace, git, snapshots, webhooks)
+- [ ] Enhetlig validering av miljövariabler kan stärkas (bridge/web/mcp-server)
+- [ ] Strukturerad loggning/observability kan förbättras för drift och felsökning
 
 ---
 
@@ -197,159 +218,95 @@
 
 ---
 
-## 💡 Framtida funktioner — Idéer
+## 💡 Förbättringsidéer (uppdaterad prioritering)
 
-### 🔥 Hög prioritet
+### 🔥 Hög prioritet (nästa 1-2 sprintar)
 
-#### A. Bildanalys i chatten
-- [ ] Skicka bilder/screenshots till Claude Vision / Gemini Vision
-- [ ] Klistra in bilder från clipboard
-- [ ] Kamera-knapp i mobilen för att fota och fråga AI
+#### A. Modulär refaktor av största filer
+- [ ] Dela upp `bridge/src/index.ts` i route-moduler per domän (analytics, snapshots, webhooks, vision, core)
+- [ ] Dela upp `web/src/App.tsx` i router/nav/state-moduler
+- [ ] Bryt ut `CodeEditorView.tsx` i separata komponenter (editor, file-tree, AI-panel, git-panel, terminal)
 
-#### B. Multi-user stöd ✅
-- [x] Autentisering (Supabase JWT — se §23)
-- [x] Separata sessioner per användare (Supabase `conversations` + `messages` tabeller med RLS, `user-data.ts`)
-- [x] Roller: admin, user, viewer (`profiles.role` check constraint, `requireRole()` middleware, `AdminPanel.tsx`)
-- [x] Delad workspace med permissions (`workspace_shares` tabell, read/write/admin, share via email)
+#### B. Teststrategi för kritiska flöden
+- [ ] Integrationstester: auth + user-data routes + role guards
+- [ ] Integrationstester: workspace write/rename/delete + path traversal-skydd
+- [ ] API-tester: snapshots/webhooks/git-routes för regressionsskydd
+- [ ] Smoke-test i CI för `npm run build` (web) + `tsc` (bridge/mcp-server)
 
-#### C. Push-notifikationer
-- [ ] Web Push API (VAPID keys) — notiser även när appen är stängd
-- [ ] Konfigurerbart: vilka events triggar push
-- [ ] Webhook-registrering för externa integrationer
-
-#### D. Förbättrad Arena ✅
-- [x] Fler AI-deltagare — Ollama (lokal LLM) tillagd som 5:e deltagare med "Lokal Expert / Djävulens advokat"-roll
-- [x] Röstning/ranking av AI-svar — 👍/👎 per meddelande, ranking-API (`/api/arena/ranking`)
-- [x] Automatisk sammanfattning av forskningssessioner (fanns redan)
-- [x] Export av Arena-resultat till Markdown — `/api/arena/export` + Export-knapp i UI
-- [x] Steel Man + Red Team faser (se §24)
-- [x] Random Seed bank + Surprise Score
-- [x] 4 protokolllägen: Standard, Quick, Adversarial, Deepdive
+#### C. Konfigurations- och driftkvalitet
+- [ ] Central env-validering vid startup (saknade nycklar, fel format, tydliga felmeddelanden)
+- [ ] Standardisera loggformat (request-id, route, latency, error-code)
+- [ ] Lägg till `/healthz` + `/readyz` för enklare övervakning
 
 ### ⚡ Medium prioritet
 
-#### E. Skärmdelning / Live-view
-- [ ] MJPEG/WebRTC-stream av skärmen till mobilen
-- [ ] Klickbar overlay — styr datorn från mobilen
-- [ ] Annoterings-verktyg (rita på skärmen)
+#### D. Multi-user collaboration v2
+- [ ] Delad konversationshistorik per projekt
+- [ ] Kommentarer/@mentions på meddelanden och insights
+- [ ] Team-notifikationer för arbetsflöden och AI-resultat
 
-#### F. Git-integration ✅
-- [x] Visa git status, diff, log i frontend (`GitView.tsx` — 3 sub-tabs: Status, Historik, Branches)
-- [x] AI-genererade commit messages (Claude/Gemini via `POST /api/git/ai-commit-message`)
-- [x] Branch-hantering: checkout, push, pull, stash
-- [x] Stage/unstage/discard filer, inline diff-vy
-- [x] Backend: `git-routes.ts` — 14 endpoints (status, diff, log, branches, stage, unstage, commit, push, pull, checkout, discard, stash, ai-commit-message)
+#### E. Multimodal i huvudchatten
+- [ ] Bilduppladdning direkt i Claude/Gemini-chatten (återanvänd Vision-backend)
+- [ ] Clipboard-paste av bilder i chattinput
+- [ ] Mobil kamera-flöde: foto → fråga AI i ett steg
 
-#### G. Förbättrad RAG ✅
-- [x] PDF-indexering (`ragIndexPdf()` via pdf-parse, base64-upload från frontend, temp-fil-hantering)
-- [x] URL-indexering (`ragIndexUrl()` med HTML-stripping, JSON/text-stöd, 15s timeout)
-- [x] Vektor-embeddings (`ragSearchSemantic()` + `ragHybridSearch()` via Ollama, cosine similarity, BM25-fallback)
-- [x] Automatisk re-indexering vid filändringar (`ragStartAutoReindex()` med fs.watch, debounce 2s, stöd för PDF/text)
+#### F. Backup & migration tooling
+- [ ] Export/import av minnen, global rules, projekt och snapshots
+- [ ] Migrationsscript mellan lokalt läge och Supabase-läge
 
-#### H. AI Agent Chains ✅
-- [x] Visuell drag-and-drop workflow builder (`AgentChainsView.tsx` — canvas med noder, kopplingar, config panel)
-- [x] Villkorlig logik (if/else baserat på AI-svar — 9 villkorstyper: contains, equals, regex, greater_than, etc.)
-- [x] Loopar och retry-mekanismer (count/until-loopar, retry med exponentiell backoff)
-- [x] Schemalagda workflow-körningar (scheduler-integration via `scheduleId`, sub-chain-stöd)
+### 🔮 Längre sikt
 
-#### I. Förbättrad Dashboard ✅
-- [x] Historiska trender (`getDailyTrends()` + `getWeeklyTrends()`, persisterade till disk, stacked bar charts i frontend)
-- [x] Kostnadsbudget med alerts (`setBudget()` + `checkBudgetAlerts()`, dag/vecka/månad-gränser, konfigurerbar threshold)
-- [x] Jämförelse mellan AI-modeller (`getModelComparison()` — latens, $/request, $/1k tokens, snabbast/billigast-highlight)
-- [x] Exportera metrics till CSV (`/api/dashboard/export/csv` + `/api/dashboard/export/snapshots`, download-knappar i UI)
+#### G. Event-driven backend och job queue
+- [ ] Intern event-bus för att minska koppling mellan moduler
+- [ ] Köhantering för långkörande AI/RAG-jobb med status och återupptagning
 
-#### J2. Conversation Analytics ✅
-- [x] Token usage trends per modell (hourly/daily/weekly buckets, persisterade till disk)
-- [x] Kostnadsprognos med linjär regression (dagligt snitt, projicerat vecka/månad, trend %)
-- [x] Aktivitets-heatmap (timme × veckodag, anrop/tokens/kostnad)
-- [x] Sessionsstatistik (snitt längd, meddelanden per session, mest aktiv timme)
-- [x] Modelljämförelse (6 modeller: claude/gemini/deepseek/grok/ollama/frankenstein)
-- [x] CSV-export av all analytikdata
-- [x] 8 API-endpoints (`/api/analytics/*`)
-- [x] Frontend: `AnalyticsView.tsx` med KPI-kort, stapeldiagram, heatmap, tabeller
-- Implementation: `bridge/src/conversation-analytics.ts` (450+ rader), `web/src/components/AnalyticsView.tsx`
+#### H. Frankenstein federation
+- [ ] Synk av anonymiserade learnings mellan noder
+- [ ] Policylager för vad som får delas mellan instanser
 
-#### J3. Prompt Lab ✅
-- [x] A/B-testa prompt-varianter mot flera LLM:er samtidigt
-- [x] Skapa experiment med 2+ varianter, olika system prompts och temperatur
-- [x] Kör mot 1-5 modeller (gemini/claude/deepseek/grok/ollama)
-- [x] AI-domare (Gemini) poängsätter 0-100 varje svar
-- [x] Manuell 1-5 betygsättning per svar
-- [x] Automatisk vinnarval (AI score → kvalitet → latens)
-- [x] Statistikjämförelse per variant och modell
-- [x] 6 API-endpoints (`/api/prompt-lab/*`)
-- [x] Frontend: `PromptLabView.tsx` med experiment-lista, skapningsmodal, resultatjämförelse
-- Implementation: `bridge/src/prompt-lab.ts` (400+ rader), `web/src/components/PromptLabView.tsx`
+#### I. Plugin/workflow policy sandbox
+- [ ] Finmaskiga rättigheter per plugin/step (fs, nätverk, process, webhooks)
+- [ ] Signering/version policy för marketplace-plugins
 
-#### J4. Vision & Multimodal ✅
-- [x] Bildanalys via Gemini Vision och Claude Vision (base64-encoded)
-- [x] 5 analyslägen: Beskriv, OCR, Analysera, Jämför, Custom fråga
-- [x] Drag-and-drop, filväljare, clipboard paste (Ctrl+V)
-- [x] Multi-bild jämförelse
-- [x] Tagg-extraktion och OCR-textutdrag
-- [x] 2 API-endpoints (`/api/vision/*`)
-- [x] Frontend: `VisionView.tsx` med dropzone, bildförhandsgranskning, resultatvy
-- Implementation: `bridge/src/vision.ts` (250+ rader), `web/src/components/VisionView.tsx`
+### 🗓️ Sprint 1-plan (1 vecka, fokus på A+B+C)
 
-#### J5. Snapshot & Rollback ✅
-- [x] Skapa namngivna snapshots av AI-tillstånd (minnen, konversationer, settings)
-- [x] Återställ till valfri snapshot (auto-sparar nuvarande tillstånd först)
-- [x] Diff mellan snapshots (filjämförelse: added/removed/modified/unchanged)
-- [x] Auto-prune (behåll max 50 snapshots)
-- [x] Tagg-system för att kategorisera snapshots
-- [x] Stats: total storlek, antal, äldsta/nyaste
-- [x] 8 API-endpoints (`/api/snapshots/*`)
-- [x] Frontend: `SnapshotsView.tsx` med snapshot-lista, skapa-form, diff-verktyg, stats
-- Implementation: `bridge/src/snapshots.ts` (250+ rader), `web/src/components/SnapshotsView.tsx`
+**Mål:** minska regressionsrisk, öka testbarhet och förbättra driftkvalitet utan att stoppa feature-utveckling.
 
-#### J6. Webhook & API Gateway ✅
-- [x] Skapa webhook-endpoints med egna URL-paths
-- [x] Mappa webhooks till valfri AI-modell (claude/gemini/deepseek/grok/ollama)
-- [x] API-nyckelautentisering per webhook (`gsk_` prefix)
-- [x] Rate limiting per webhook (konfigurerbart max/min)
-- [x] Request/response-loggning med historik
-- [x] 4 mallar: Custom, Slack, Discord, GitHub
-- [x] 3 svarsformat: JSON, text, markdown
-- [x] Curl-exempel direkt i UI
-- [x] 7+ API-endpoints (`/api/webhooks/*`)
-- [x] Frontend: `WebhooksView.tsx` med webhook-lista, skapningsform, loggar, API-nyckelhantering
-- Implementation: `bridge/src/webhooks.ts` (300+ rader), `web/src/components/WebhooksView.tsx`
+#### Scope och estimering
 
-### 🔮 Lägre prioritet / Experimentellt
+- [x] **S1-1: Bryt ut `bridge/src/index.ts` i route-moduler** (1.5-2 dagar)
+  - Leverabler: `bridge/src/routes/*.ts` (analytics, snapshots, webhooks, vision, core)
+  - DoD: Oförändrat API-beteende, app startar utan regressionsfel ✅ (bridge/web/mcp build gröna)
 
-#### J. Lokal modell-finetuning
-- [ ] Exportera konversationer som training data (JSONL)
-- [ ] Ollama-baserad finetuning pipeline
-- [ ] A/B-test mellan finetunad och bas-modell
+- [x] **S1-2: Dela upp `web/src/App.tsx` i app-shell + view-router** (1-1.5 dagar)
+  - Leverabler: modul för navigation, modul för vyregistrering, modul för global state wiring
+  - DoD: Samma vyer fungerar, inga brutna imports, build grön ✅ (`npm run build` i `web`)
 
-#### K. Plugin Marketplace ✅
-- [x] Sökbar katalog av community-plugins (8 built-in plugins med kategorier, betyg, tags)
-- [x] One-click install från URL (GitHub raw / valfri URL)
-- [x] Plugin-sandboxing för säkerhet (blockerar fs, child_process, eval, process.exit)
+- [x] **S1-3: Extrahera `CodeEditorView.tsx` i delkomponenter** (1.5-2 dagar)
+  - Leverabler: `EditorPane`, `FileTreePane`, `AiPanel`, `GitPanel`, `TerminalPane`
+  - DoD: Ctrl+K/Ctrl+G/streaming/terminal fungerar som tidigare ✅ (kodvägar bevarade + `npm run build` i `web`)
 
-#### L. Mobil-specifika features ✅
-- [x] Haptic feedback vid AI-svar (`useMobile.ts` hook, konfigurerbar per event: message/thinking/done/error/question, 3 intensitetsnivåer, Settings → Mobil)
-- [x] Widgets (iOS/Android) för snabb-frågor (PWA shortcuts i `manifest.json`: Ny fråga, Screenshot, Sök, Dashboard + URL-param-hantering i App.tsx)
-- [x] Siri/Google Assistant integration (Web Share Target API i manifest — ta emot delat innehåll från andra appar, VoiceButton med Web Speech API)
-- [x] Offline-läge med cached konversationer (Service Worker v2 med API-caching, offline-banner, message queue med auto-flush vid reconnect, conversation caching i localStorage)
+- [x] **S1-4: Testgrund för kritiska flöden** (1 dag)
+  - Leverabler: första integrationstester för auth/roles + workspace path traversal + snapshots/webhooks smoke
+  - DoD: Tester körs lokalt och i CI utan flaky beteende ✅ (`npm run test` + `npm run build` i `bridge`)
 
-#### M. Team Collaboration
-- [ ] Delad konversationshistorik
-- [ ] @mentions och notifikationer
-- [ ] Kommentarer på AI-svar
-- [ ] Gemensamma projekt med rollbaserad access
+- [x] **S1-5: Driftkvalitet (env + health + loggformat)** (0.5-1 dag)
+  - Leverabler: central env-validering, `/healthz` + `/readyz`, request-id i loggar
+  - DoD: Tydliga startup-fel vid saknad config och monitoreringsvänliga endpoints ✅ (runtime-config validering + request-id middleware + health/readiness routes + smoke-test)
 
-#### N. Code Playground
-- [ ] Inline code-editor med syntax highlighting
-- [ ] Kör JavaScript/Python direkt i browsern (WebAssembly)
-- [ ] AI-assisterad kodgranskning
-- [ ] Diff-vy för AI-genererade kodändringar
+#### Risker och mitigering
 
-#### O. Monitoring & Alerting
-- [ ] Healthcheck-endpoint för uptime-monitoring
-- [ ] Slack/Discord/Telegram-integration för alerts
-- [ ] Automatisk eskalering vid fel
-- [ ] SLA-tracking per AI-modell
+- [ ] **Risk:** Stor refaktor ger merge-konflikter
+  - Mitigering: små PR:er per delmodul + feature-flag för större flyttar
+- [ ] **Risk:** Dolda beroenden i monolitfiler
+  - Mitigering: extrahera stegvis och verifiera med smoke-test efter varje del
+
+#### Sprint-exit kriterier
+
+- [x] `npm run build` grönt för web ✅
+- [x] `npm run build` (bridge) och `npm run build` (mcp-server) grönt ✅
+- [x] Minst 3 nya kritiska integrations-/smoke-tester i pipeline ✅ (`bridge/src/tests/s1-smoke.test.ts`: 4 tester)
+- [x] Dokumentation uppdaterad i `README.md` och `task.md` ✅ (health/readiness + request-id + sprintstatus)
 
 ---
 

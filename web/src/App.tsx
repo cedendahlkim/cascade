@@ -47,6 +47,9 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import VoiceButton from "./components/VoiceButton";
 import ConversationSidebar, { type Conversation } from "./components/ConversationSidebar";
+import AppShell, { type AppTabDefinition } from "./components/app/AppShell";
+import MoreViewRouter from "./components/app/MoreViewRouter";
+import { type MoreTabId, isMoreTabId } from "./components/app/more-view-registry";
 import { BRIDGE_URL } from "./config";
 import {
   hapticForEvent, useOfflineStatus, usePwaInstall,
@@ -55,35 +58,7 @@ import {
 } from "./hooks/useMobile";
 
 const ToolsView = lazy(() => import("./components/ToolsView"));
-const SettingsView = lazy(() => import("./components/SettingsView"));
-const ComputersView = lazy(() => import("./components/ComputersView"));
-const SchedulerView = lazy(() => import("./components/SchedulerView"));
-const FilesView = lazy(() => import("./components/FilesView"));
-const SearchView = lazy(() => import("./components/SearchView"));
-const ProjectsView = lazy(() => import("./components/ProjectsView"));
-const ClipboardView = lazy(() => import("./components/ClipboardView"));
-const PluginsView = lazy(() => import("./components/PluginsView"));
-const DashboardView = lazy(() => import("./components/DashboardView"));
-const WorkflowsView = lazy(() => import("./components/WorkflowsView"));
-const AgentChainsView = lazy(() => import("./components/AgentChainsView"));
-const ResearchLabView = lazy(() => import("./components/ResearchLabView"));
-const InstallView = lazy(() => import("./components/InstallView"));
-const NetworkView = lazy(() => import("./components/NetworkView"));
-const SwarmView = lazy(() => import("./components/SwarmView"));
-const FrankensteinView = lazy(() => import("./components/FrankensteinView"));
-// BattleArenaView + SelfImproveView merged into ResearchLabView
-const HierarchyView = lazy(() => import("./components/HierarchyView"));
 const FrankensteinChatView = lazy(() => import("./components/FrankensteinChatView"));
-const FlipperZeroView = lazy(() => import("./components/FlipperZeroView"));
-const GitView = lazy(() => import("./components/GitView"));
-const DebateView = lazy(() => import("./components/DebateView"));
-const CodeEditorView = lazy(() => import("./components/CodeEditorView"));
-const ArchonDashboard = lazy(() => import("./components/ArchonDashboard"));
-const AnalyticsView = lazy(() => import("./components/AnalyticsView"));
-const PromptLabView = lazy(() => import("./components/PromptLabView"));
-const VisionView = lazy(() => import("./components/VisionView"));
-const SnapshotsView = lazy(() => import("./components/SnapshotsView"));
-const WebhooksView = lazy(() => import("./components/WebhooksView"));
 
 const LazyFallback = () => <div className="flex-1 flex items-center justify-center"><div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -866,7 +841,7 @@ export default function App() {
     const sharedTitle = params.get("title");
 
     if (tab) {
-      const validTabs: Tab[] = ["chat", "gemini", "arena", "lab", "tools", "settings", "more"];
+      const validTabs: Tab[] = ["chat", "gemini", "frank", "arena", "lab", "tools", "more"];
       if (validTabs.includes(tab as Tab)) setActiveTab(tab as Tab);
     }
 
@@ -1145,7 +1120,7 @@ export default function App() {
     setLabWorkers(prev => prev.map(w => w.id === id ? { ...w, status: "online", health: { ...w.health, lastError: null, failedRequests: 0 } } : w));
   };
 
-  const [moreTab, setMoreTab] = useState<string>("dashboard");
+  const [moreTab, setMoreTab] = useState<MoreTabId>("dashboard");
   const [editorMounted, setEditorMounted] = useState(false);
 
   // Once editor tab is visited, keep it mounted forever
@@ -1153,7 +1128,7 @@ export default function App() {
     if (activeTab === "more" && moreTab === "editor") setEditorMounted(true);
   }, [activeTab, moreTab]);
 
-  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+  const tabs: AppTabDefinition<Tab>[] = [
     { id: "chat", label: "Claude", icon: Brain },
     { id: "gemini", label: "Gemini", icon: Zap },
     { id: "frank", label: "Frank", icon: Sparkles },
@@ -1164,63 +1139,70 @@ export default function App() {
   ];
 
   return (
-    <div className="flex flex-col bg-slate-950" style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top)' }} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-2.5 glass border-b border-slate-800/50 shrink-0 header-glow" style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}>
-        <div className="flex items-center gap-2">
-          <div className="text-lg font-bold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-            Gracestack
-          </div>
-          {tunnelUrl && (
-            <button
-              onClick={() => setShowTunnel(!showTunnel)}
-              className="p-1 rounded-full bg-green-950/60 border border-green-800/50 text-green-400 active:bg-green-900/60"
-              title="Tunnel URL"
-            >
-              <Globe className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Cost estimate */}
-          {estimatedCost > 0 && (
-            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/50">
-              <DollarSign className="w-3 h-3 text-green-400" />
-              <span className="text-[10px] font-mono text-green-300">{estimatedCost < 0.01 ? "<0.01" : estimatedCost.toFixed(2)}</span>
+    <AppShell
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      headerContent={(
+        <>
+          <div className="flex items-center gap-2">
+            <div className="text-lg font-bold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
+              Gracestack
             </div>
-          )}
-          {/* Token counter */}
-          {tokenUsage.totalTokens > 0 && (
-            <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/50 ${tokenPulse ? 'token-update' : ''}`}>
-              <Sparkles className="w-3 h-3 text-amber-400" />
-              <span className="text-[10px] font-mono text-amber-300">{formattedTokens}</span>
-            </div>
-          )}
-          {/* Notification bell */}
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-1 rounded-full bg-slate-800/60 border border-slate-700/50 text-slate-400 active:bg-slate-700/60"
-            title="Notifikationer"
-          >
-            <Bell className="w-3.5 h-3.5" />
-            {notifications.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">
-                {notifications.length > 9 ? "9+" : notifications.length}
-              </span>
+            {tunnelUrl && (
+              <button
+                onClick={() => setShowTunnel(!showTunnel)}
+                className="p-1 rounded-full bg-green-950/60 border border-green-800/50 text-green-400 active:bg-green-900/60"
+                title="Tunnel URL"
+              >
+                <Globe className="w-3.5 h-3.5" />
+              </button>
             )}
-          </button>
-          {/* Connection status */}
-          {connected && isOnline ? (
-            <div className="flex items-center gap-1 text-emerald-400 text-xs">
-              <Wifi className="w-3.5 h-3.5" />
-            </div>
-          ) : (
-            <div className="flex items-center gap-1 text-red-400 text-xs">
-              <WifiOff className="w-3.5 h-3.5" />
-            </div>
-          )}
-        </div>
-      </header>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Cost estimate */}
+            {estimatedCost > 0 && (
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/50">
+                <DollarSign className="w-3 h-3 text-green-400" />
+                <span className="text-[10px] font-mono text-green-300">{estimatedCost < 0.01 ? "<0.01" : estimatedCost.toFixed(2)}</span>
+              </div>
+            )}
+            {/* Token counter */}
+            {tokenUsage.totalTokens > 0 && (
+              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/50 ${tokenPulse ? 'token-update' : ''}`}>
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                <span className="text-[10px] font-mono text-amber-300">{formattedTokens}</span>
+              </div>
+            )}
+            {/* Notification bell */}
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-1 rounded-full bg-slate-800/60 border border-slate-700/50 text-slate-400 active:bg-slate-700/60"
+              title="Notifikationer"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">
+                  {notifications.length > 9 ? "9+" : notifications.length}
+                </span>
+              )}
+            </button>
+            {/* Connection status */}
+            {connected && isOnline ? (
+              <div className="flex items-center gap-1 text-emerald-400 text-xs">
+                <Wifi className="w-3.5 h-3.5" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 text-red-400 text-xs">
+                <WifiOff className="w-3.5 h-3.5" />
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    >
 
       {/* L: Offline banner */}
       {!isOnline && (
@@ -2475,110 +2457,16 @@ export default function App() {
         </Suspense>
       )}
 
-      {activeTab === "more" && (
-        <>
-          {/* Sub-navigation for More tab */}
-          <div className="shrink-0 flex gap-1 px-3 pt-2 pb-1 glass-subtle overflow-x-auto">
-            {[
-              { id: "dashboard", label: "📊 Dashboard" },
-              { id: "computers", label: "🖥️ Datorer" },
-              { id: "scheduler", label: "⏰ Schema" },
-              { id: "workflows", label: "🔄 Workflows" },
-              { id: "chains", label: "⛓️ Chains" },
-              { id: "files", label: "📁 Filer" },
-              { id: "search", label: "🔍 Sök" },
-              { id: "projects", label: "📂 Projekt" },
-              { id: "clipboard", label: "📋 Urklipp" },
-              { id: "plugins", label: "🧩 Plugins" },
-              { id: "network", label: "🧬 Nätverk" },
-              { id: "swarm", label: "🍄 Swarm" },
-              { id: "frankenstein", label: "🧟 Frankenstein" },
-              { id: "researchlab", label: "🔬 Research Lab" },
-              { id: "hierarchy", label: "🏗️ Hierarki" },
-              { id: "debate", label: "🏛️ Debatt" },
-              { id: "archon", label: "🧠 Archon" },
-              { id: "analytics", label: "📊 Analytik" },
-              { id: "promptlab", label: "🧪 Prompt Lab" },
-              { id: "vision", label: "👁️ Vision" },
-              { id: "snapshots", label: "📸 Snapshots" },
-              { id: "webhooks", label: "🔗 Webhooks" },
-              { id: "editor", label: "💻 Editor" },
-              { id: "git", label: "🔀 Git" },
-              { id: "install", label: "📦 Installera" },
-              { id: "settings", label: "⚙️ Inställningar" },
-              { id: "flipper", label: "📡 Flipper Zero" },
-            ].map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setMoreTab(t.id)}
-                className={`shrink-0 text-[11px] px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                  moreTab === t.id ? "bg-slate-700 text-white" : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <Suspense fallback={<LazyFallback />}>
-            {moreTab === "flipper" && <FlipperZeroView />}
-            {moreTab === "dashboard" && <DashboardView />}
-            {moreTab === "computers" && <ComputersView />}
-            {moreTab === "scheduler" && <SchedulerView />}
-            {moreTab === "workflows" && <WorkflowsView />}
-            {moreTab === "chains" && <Suspense fallback={<LazyFallback />}><AgentChainsView /></Suspense>}
-            {moreTab === "files" && <FilesView />}
-            {moreTab === "search" && <SearchView />}
-            {moreTab === "projects" && <ProjectsView />}
-            {moreTab === "clipboard" && <ClipboardView />}
-            {moreTab === "plugins" && <PluginsView />}
-            {moreTab === "network" && <NetworkView />}
-            {moreTab === "swarm" && <SwarmView />}
-            {moreTab === "frankenstein" && <FrankensteinView />}
-            {moreTab === "researchlab" && <ResearchLabView />}
-            {moreTab === "hierarchy" && <HierarchyView />}
-            {moreTab === "debate" && <DebateView />}
-            {moreTab === "archon" && <ArchonDashboard />}
-            {moreTab === "analytics" && <AnalyticsView />}
-            {moreTab === "promptlab" && <PromptLabView />}
-            {moreTab === "vision" && <VisionView />}
-            {moreTab === "snapshots" && <SnapshotsView />}
-            {moreTab === "webhooks" && <WebhooksView />}
-            {/* Editor rendered persistently outside More section */}
-            {moreTab === "git" && <GitView />}
-            {moreTab === "install" && <InstallView />}
-            {moreTab === "settings" && <SettingsView />}
-          </Suspense>
-        </>
-      )}
-
-      {/* Persistent Editor — stays mounted once first visited */}
-      {editorMounted && (
-        <div className={activeTab === "more" && moreTab === "editor" ? "flex-1 flex flex-col overflow-hidden" : "hidden"}>
-          <Suspense fallback={<LazyFallback />}>
-            <CodeEditorView />
-          </Suspense>
-        </div>
-      )}
-
-      {/* Bottom Tab Bar */}
-      <nav className="shrink-0 flex border-t border-slate-800/50 glass" style={{ paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}>
-        {tabs.map((t) => {
-          const Icon = t.icon;
-          const isActive = activeTab === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              className={`flex-1 flex flex-col items-center gap-0.5 py-2 touch-manipulation tab-item ${
-                isActive ? "tab-item-active" : "text-slate-500"
-              }`}
-            >
-              <Icon className={`w-5 h-5 ${isActive ? "tab-icon-active" : ""}`} />
-              <span className="text-[10px] font-medium">{t.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-    </div>
+      <MoreViewRouter
+        activeTab={activeTab}
+        moreTab={moreTab}
+        onMoreTabChange={(tab) => {
+          if (isMoreTabId(tab)) {
+            setMoreTab(tab);
+          }
+        }}
+        editorMounted={editorMounted}
+      />
+    </AppShell>
   );
 }

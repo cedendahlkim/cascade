@@ -13,7 +13,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { BRIDGE_URL } from "../config";
-import XTerminal from "./XTerminal";
+import EditorPane from "./editor/EditorPane";
+import FileTreePane from "./editor/FileTreePane";
+import TerminalPane from "./editor/TerminalPane";
+import GitPanel from "./editor/GitPanel";
+import AiPanel from "./editor/AiPanel";
 
 // ── Helpers ──
 
@@ -2764,32 +2768,31 @@ export default function CodeEditorView() {
       {/* Main area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        {showSidebar && !isFullscreen && (
-          <div className="shrink-0 bg-[#0d1117] border-r border-slate-700/50 overflow-hidden relative" style={{ width: sidebarWidth }}>
-            <FileTree
-              nodes={tree}
-              onSelect={openFile}
-              selectedPath={activeTab}
-              onRefresh={loadTree}
-              onNewFile={handleNewFile}
-              onNewDir={handleNewDir}
-              onDelete={handleDelete}
-              fileFilter={fileFilter}
-              setFileFilter={setFileFilter}
-              onContextMenu={(e, node) => {
-                e.preventDefault();
-                setContextMenu({ x: e.clientX, y: e.clientY, node });
-              }}
-            />
-            <div
-              className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors z-10"
-              onMouseDown={(e) => startResize("sidebar", e)}
-            />
-          </div>
-        )}
+        <FileTreePane
+          visible={showSidebar}
+          isFullscreen={isFullscreen}
+          width={sidebarWidth}
+          onResizeStart={(e) => startResize("sidebar", e)}
+        >
+          <FileTree
+            nodes={tree}
+            onSelect={openFile}
+            selectedPath={activeTab}
+            onRefresh={loadTree}
+            onNewFile={handleNewFile}
+            onNewDir={handleNewDir}
+            onDelete={handleDelete}
+            fileFilter={fileFilter}
+            setFileFilter={setFileFilter}
+            onContextMenu={(e, node) => {
+              e.preventDefault();
+              setContextMenu({ x: e.clientX, y: e.clientY, node });
+            }}
+          />
+        </FileTreePane>
 
         {/* Editor area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <EditorPane>
           {/* Tabs */}
           {tabs.length > 0 && (
             <div className="flex bg-[#161b22] border-b border-slate-700/50 overflow-x-auto">
@@ -3134,415 +3137,102 @@ export default function CodeEditorView() {
             )}
           </div>
 
-          {/* Terminal (xterm.js) */}
-          {showTerminal && (
-            <div className="border-t border-slate-700/50 bg-[#0d1117] flex flex-col relative" style={{ height: terminalHeight }}>
-              <div
-                className="absolute top-0 left-0 right-0 h-1 cursor-row-resize hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors z-10"
-                onMouseDown={(e) => startResize("terminal", e)}
-              />
-              <div className="flex items-center justify-between px-3 py-1 bg-[#161b22] border-b border-slate-700/50">
-                <div className="flex items-center gap-2">
-                  <Terminal className="w-3.5 h-3.5 text-green-400" />
-                  <span className="text-xs font-semibold text-slate-400">Terminal</span>
-                  <span className="text-[10px] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded-full">xterm</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setShowTerminal(false)} title="Stäng terminal">
-                    <X className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300" />
-                  </button>
-                </div>
-              </div>
-              {/* Error diagnosis banner */}
-              {lastTermError && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border-b border-red-500/20">
-                  <Bug className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                  <span className="text-[11px] text-red-300 truncate flex-1">Fel: {lastTermError.error.slice(0, 100)}</span>
-                  <button
-                    onClick={runDiagnosis}
-                    disabled={diagnosing}
-                    className="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-violet-500/20 text-violet-400 rounded hover:bg-violet-500/30 disabled:opacity-50 shrink-0"
-                    title="Låt Frankenstein AI analysera felet"
-                  >
-                    {diagnosing ? <Loader2 className="w-3 h-3 animate-spin" /> : <BrainCircuit className="w-3 h-3" />}
-                    Diagnostisera
-                  </button>
-                  <button onClick={() => { setLastTermError(null); setDiagnosis(""); }} className="p-0.5 hover:bg-slate-700 rounded" title="Stäng">
-                    <X className="w-3 h-3 text-slate-500" />
-                  </button>
-                </div>
-              )}
-              {diagnosis && (
-                <div className="max-h-32 overflow-y-auto px-3 py-2 bg-violet-500/5 border-b border-violet-500/20">
-                  <div className="flex items-center gap-1 mb-1 text-[10px] text-violet-400 font-semibold">
-                    <BrainCircuit className="w-3 h-3" /> Frankenstein Diagnos
-                  </div>
-                  <AiMarkdown content={diagnosis} onApplyCode={async (path, code, isNew) => {
-                    try {
-                      if (isNew) await api("/file", { method: "POST", body: JSON.stringify({ path, content: code }) });
-                      else await api("/file", { method: "PUT", body: JSON.stringify({ path, content: code }) });
-                      addToast("success", `${isNew ? "Skapade" : "Uppdaterade"} ${path}`);
-                      await loadTree();
-                    } catch (err) { addToast("error", `Kunde inte spara: ${err}`); }
-                  }} />
-                </div>
-              )}
-              <div className="flex-1 min-h-0">
-                <XTerminal visible={showTerminal} onError={handleTerminalError} />
-              </div>
-            </div>
-          )}
-        </div>
+          <TerminalPane
+            visible={showTerminal}
+            height={terminalHeight}
+            onResizeStart={(e) => startResize("terminal", e)}
+            onClose={() => setShowTerminal(false)}
+            lastError={lastTermError}
+            diagnosing={diagnosing}
+            onDiagnose={runDiagnosis}
+            onClearError={() => { setLastTermError(null); setDiagnosis(""); }}
+            diagnosis={diagnosis}
+            diagnosisContent={(
+              <AiMarkdown content={diagnosis} onApplyCode={async (path, code, isNew) => {
+                try {
+                  if (isNew) await api("/file", { method: "POST", body: JSON.stringify({ path, content: code }) });
+                  else await api("/file", { method: "PUT", body: JSON.stringify({ path, content: code }) });
+                  addToast("success", `${isNew ? "Skapade" : "Uppdaterade"} ${path}`);
+                  await loadTree();
+                } catch (err) { addToast("error", `Kunde inte spara: ${err}`); }
+              }} />
+            )}
+            onTerminalError={handleTerminalError}
+          />
+        </EditorPane>
 
         {/* Git Panel */}
-        {showGitPanel && (
-          <div className="shrink-0 bg-[#0d1117] border-l border-slate-700/50 flex flex-col min-h-0" style={{ width: 280 }}>
-            <div className="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-slate-700/50">
-              <div className="flex items-center gap-2">
-                <GitBranch className="w-4 h-4 text-orange-400" />
-                <span className="text-xs font-semibold text-slate-300">Git</span>
-                {gitStatus?.branch && (
-                  <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded-full">{gitStatus.branch}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <button onClick={loadGitStatus} className="p-0.5 hover:bg-slate-700 rounded" title="Uppdatera">
-                  <RefreshCw className={`w-3 h-3 text-slate-500 ${gitLoading ? "animate-spin" : ""}`} />
-                </button>
-                <button onClick={() => setShowGitPanel(false)} title="Stäng">
-                  <X className="w-3.5 h-3.5 text-slate-500" />
-                </button>
-              </div>
-            </div>
-
-            {/* Commit input */}
-            <div className="px-3 py-2 border-b border-slate-700/30 space-y-2">
-              <div className="flex items-center gap-1">
-                <input
-                  type="text"
-                  value={commitMsg}
-                  onChange={(e) => setCommitMsg(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && commitChanges()}
-                  placeholder="Commit-meddelande..."
-                  className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded px-2 py-1.5 text-xs outline-none text-slate-200 placeholder:text-slate-500 focus:border-orange-500/50"
-                />
-                <button onClick={aiCommitMsg} className="p-1.5 bg-violet-500/20 text-violet-400 rounded hover:bg-violet-500/30" title="AI generera meddelande">
-                  <Wand2 className="w-3 h-3" />
-                </button>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={commitChanges}
-                  disabled={!commitMsg.trim()}
-                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[11px] bg-orange-500/20 text-orange-400 rounded hover:bg-orange-500/30 disabled:opacity-40 transition-colors"
-                >
-                  <Check className="w-3 h-3" /> Commit
-                </button>
-                <button
-                  onClick={() => stageFiles()}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors"
-                >
-                  <Plus className="w-3 h-3" /> Stage All
-                </button>
-                <button
-                  onClick={pushChanges}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors"
-                >
-                  <ArrowUp className="w-3 h-3" /> Push
-                </button>
-              </div>
-            </div>
-
-            {/* Changed files */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {gitLoading && !gitStatus && (
-                <div className="flex items-center justify-center py-8 text-xs text-slate-500">
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Laddar...
-                </div>
-              )}
-              {gitStatus?.clean && (
-                <div className="text-center py-8 text-xs text-slate-500">
-                  <CheckCircle className="w-6 h-6 mx-auto mb-2 text-green-500/50" />
-                  Inga ändringar
-                </div>
-              )}
-              {gitStatus && !gitStatus.clean && (
-                <div className="py-1">
-                  {/* Staged files */}
-                  {gitStatus.files.filter((f: any) => f.staged).length > 0 && (
-                    <div>
-                      <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-green-400 font-semibold">Stagade</div>
-                      {gitStatus.files.filter((f: any) => f.staged).map((f: any) => (
-                        <div key={`s-${f.path}`} className="flex items-center gap-2 px-3 py-1 hover:bg-slate-800/50 group text-xs">
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            f.status === "added" ? "bg-green-400" :
-                            f.status === "deleted" ? "bg-red-400" :
-                            "bg-amber-400"
-                          }`} />
-                          <span className="flex-1 truncate text-slate-300">{f.path}</span>
-                          <button
-                            onClick={() => unstageFiles([f.path])}
-                            className="opacity-0 group-hover:opacity-100 text-[10px] text-red-400 hover:text-red-300"
-                            title="Unstage"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* Unstaged files */}
-                  {gitStatus.files.filter((f: any) => !f.staged).length > 0 && (
-                    <div>
-                      <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Ändrade</div>
-                      {gitStatus.files.filter((f: any) => !f.staged).map((f: any) => (
-                        <div key={`u-${f.path}`} className="flex items-center gap-2 px-3 py-1 hover:bg-slate-800/50 group text-xs">
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            f.status === "untracked" ? "bg-green-400" :
-                            f.status === "deleted" ? "bg-red-400" :
-                            "bg-amber-400"
-                          }`} />
-                          <span className="flex-1 truncate text-slate-400">{f.path}</span>
-                          <span className="text-[9px] text-slate-600">{f.status === "untracked" ? "U" : f.status === "deleted" ? "D" : "M"}</span>
-                          <button
-                            onClick={() => stageFiles([f.path])}
-                            className="opacity-0 group-hover:opacity-100 text-[10px] text-green-400 hover:text-green-300"
-                            title="Stage"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Recent commits */}
-              {(gitStatus?.commits?.length ?? 0) > 0 && (
-                <div className="border-t border-slate-700/30 mt-1">
-                  <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Senaste commits</div>
-                  {gitStatus!.commits.slice(0, 8).map((c: any, i: number) => (
-                    <div key={i} className="px-3 py-1 text-xs hover:bg-slate-800/30">
-                      <div className="flex items-center gap-2">
-                        <span className="text-orange-400/70 font-mono text-[10px] shrink-0">{c.hash}</span>
-                        <span className="truncate text-slate-400">{c.message}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-600 mt-0.5">{c.author} · {c.time}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <GitPanel
+          visible={showGitPanel}
+          width={280}
+          status={gitStatus}
+          loading={gitLoading}
+          commitMessage={commitMsg}
+          onCommitMessageChange={setCommitMsg}
+          onRefresh={loadGitStatus}
+          onClose={() => setShowGitPanel(false)}
+          onAiCommitMessage={aiCommitMsg}
+          onCommit={commitChanges}
+          onStageAll={() => stageFiles()}
+          onPush={pushChanges}
+          onStageFile={(paths) => stageFiles(paths)}
+          onUnstageFile={(paths) => unstageFiles(paths)}
+        />
 
         {/* AI Panel */}
-        {showAiPanel && (
-          <div className="shrink-0 bg-[#0d1117] border-l border-slate-700/50 flex flex-col relative min-h-0" style={{ width: aiPanelWidth }}>
-            <div
-              className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-violet-500/50 active:bg-violet-500/70 transition-colors z-10"
-              onMouseDown={(e) => startResize("ai", e)}
-            />
-            <div className="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-slate-700/50">
-              <div className="flex items-center gap-2">
-                <Bot className="w-4 h-4 text-violet-400" />
-                <span className="text-xs font-semibold text-slate-300">Frankenstein AI</span>
-                {aiMessages.length > 0 && (
-                  <span className="text-[9px] bg-violet-500/20 text-violet-400 px-1.5 py-0.5 rounded-full">{aiMessages.length}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                {aiMessages.length > 0 && (
-                  <button
-                    onClick={() => setAiMessages([])}
-                    className="p-0.5 hover:bg-slate-700 rounded"
-                    title="Rensa chat"
-                  >
-                    <Eraser className="w-3 h-3 text-slate-500" />
-                  </button>
-                )}
-                <button onClick={() => setShowAiPanel(false)} title="Stäng AI-panel">
-                  <X className="w-3.5 h-3.5 text-slate-500" />
-                </button>
-              </div>
-            </div>
-
-            {/* Context chips — show what AI sees */}
-            <div className="shrink-0 px-3 py-1.5 border-b border-slate-700/30 flex items-center gap-1 flex-wrap">
-              <span className="text-[9px] text-slate-600 mr-1">Kontext:</span>
-              {currentTab ? (
-                <span className="text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                  <CircleDot className="w-2.5 h-2.5" /> {currentTab.name}
-                </span>
-              ) : (
-                <span className="text-[9px] text-slate-600">Ingen fil öppen</span>
-              )}
-              {tabs.filter((t) => t.path !== activeTab).slice(0, 4).map((t) => (
-                <span key={t.path} className="text-[9px] bg-slate-700/40 text-slate-500 px-1.5 py-0.5 rounded-full">{t.name}</span>
-              ))}
-              {tabs.length > 5 && <span className="text-[9px] text-slate-600">+{tabs.length - 5}</span>}
-            </div>
-
-            {/* Messages */}
-            <div ref={aiRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-              {aiMessages.length === 0 && (
-                <div className="text-center text-slate-500 text-xs mt-8">
-                  <Sparkles className="w-8 h-8 mx-auto mb-2 text-violet-500/50" />
-                  <p>Frankenstein AI är redo.</p>
-                  <p className="mt-1">Fråga om koden, be om ändringar, eller kör kommandon.</p>
-                </div>
-              )}
-              {aiMessages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`text-xs leading-relaxed ${
-                    msg.role === "user"
-                      ? "bg-blue-500/10 border border-blue-500/20 rounded-lg p-2 text-blue-200"
-                      : "bg-slate-800/50 border border-slate-700/30 rounded-lg p-2 text-slate-300"
-                  }`}
-                >
-                  <div className="font-semibold text-[10px] mb-1 text-slate-500">
-                    {msg.role === "user" ? "Du" : "🧟 Frankenstein"}
-                  </div>
-                  {msg.role === "user" ? (
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
-                  ) : (
-                    <AiMarkdown
-                      content={msg.content}
-                      onApplyCode={async (path, code, isNew) => {
-                        try {
-                          if (isNew) {
-                            await api("/file", { method: "POST", body: JSON.stringify({ path, content: code }) });
-                          } else {
-                            await api("/file", { method: "PUT", body: JSON.stringify({ path, content: code }) });
-                          }
-                          const existingTab = tabs.find((t) => t.path === path);
-                          if (existingTab) {
-                            setTabs((prev) => prev.map((t) => t.path === path ? { ...t, content: code, originalContent: code, modified: false } : t));
-                          } else {
-                            const name = path.split("/").pop() || path;
-                            setTabs((prev) => [...prev, { path, name, language: "plaintext", content: code, originalContent: code, modified: false }]);
-                            setActiveTab(path);
-                          }
-                          await loadTree();
-                          addToast("success", `${isNew ? "Skapade" : "Uppdaterade"} ${path}`);
-                        } catch (err) {
-                          addToast("error", `Kunde inte spara ${path}: ${err}`);
-                        }
-                      }}
-                      onOpenFile={(path) => openFile({ name: path.split("/").pop() || path, path, type: "file" })}
-                    />
-                  )}
-                </div>
-              ))}
-              {aiLoading && !aiStreaming && (
-                <div className="flex items-center gap-2 text-xs text-violet-400">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Frankenstein tänker...</span>
-                </div>
-              )}
-            </div>
-
-            {/* AI input */}
-            <div
-              className="shrink-0 border-t border-slate-700/50 p-2"
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (e.dataTransfer.files.length > 0) handleFileAttach(e.dataTransfer.files);
+        <AiPanel
+          visible={showAiPanel}
+          width={aiPanelWidth}
+          aiMessages={aiMessages}
+          currentTab={currentTab ? { path: currentTab.path, name: currentTab.name } : null}
+          tabs={tabs}
+          activeTab={activeTab}
+          aiRef={aiRef}
+          aiInput={aiInput}
+          aiLoading={aiLoading}
+          aiStreaming={aiStreaming}
+          chatAttachments={chatAttachments}
+          fileInputRef={fileInputRef}
+          onResizeStart={(e) => startResize("ai", e)}
+          onClose={() => setShowAiPanel(false)}
+          onClearMessages={() => setAiMessages([])}
+          onAiInputChange={(value, target) => {
+            setAiInput(value);
+            target.style.height = "auto";
+            target.style.height = Math.min(target.scrollHeight, 120) + "px";
+          }}
+          onSend={sendAiMessage}
+          onStop={stopAiStream}
+          onFileAttach={handleFileAttach}
+          onRemoveAttachment={(index) => setChatAttachments((prev) => prev.filter((_, i) => i !== index))}
+          renderAssistantMessage={(msg) => (
+            <AiMarkdown
+              content={msg.content}
+              onApplyCode={async (path, code, isNew) => {
+                try {
+                  if (isNew) {
+                    await api("/file", { method: "POST", body: JSON.stringify({ path, content: code }) });
+                  } else {
+                    await api("/file", { method: "PUT", body: JSON.stringify({ path, content: code }) });
+                  }
+                  const existingTab = tabs.find((t) => t.path === path);
+                  if (existingTab) {
+                    setTabs((prev) => prev.map((t) => t.path === path ? { ...t, content: code, originalContent: code, modified: false } : t));
+                  } else {
+                    const name = path.split("/").pop() || path;
+                    setTabs((prev) => [...prev, { path, name, language: "plaintext", content: code, originalContent: code, modified: false }]);
+                    setActiveTab(path);
+                  }
+                  await loadTree();
+                  addToast("success", `${isNew ? "Skapade" : "Uppdaterade"} ${path}`);
+                } catch (err) {
+                  addToast("error", `Kunde inte spara ${path}: ${err}`);
+                }
               }}
-            >
-              {/* Attachment chips */}
-              {chatAttachments.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-1.5">
-                  {chatAttachments.map((att, i) => (
-                    <div key={i} className="flex items-center gap-1 px-1.5 py-0.5 bg-violet-500/10 border border-violet-500/20 rounded text-[10px] text-violet-300">
-                      <Paperclip className="w-2.5 h-2.5" />
-                      <span className="max-w-[100px] truncate">{att.name}</span>
-                      <button onClick={() => setChatAttachments((prev) => prev.filter((_, j) => j !== i))} className="hover:text-red-400" title="Ta bort">
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="flex items-end gap-2">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2 hover:bg-slate-700/50 rounded-lg text-slate-500 hover:text-slate-300 shrink-0"
-                  title="Bifoga filer (drag&drop eller klistra in)"
-                >
-                  <Paperclip className="w-3.5 h-3.5" />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  title="Välj filer att bifoga"
-                  onChange={(e) => { if (e.target.files) handleFileAttach(e.target.files); e.target.value = ""; }}
-                />
-                <textarea
-                  value={aiInput}
-                  onChange={(e) => {
-                    setAiInput(e.target.value);
-                    e.target.style.height = "auto";
-                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendAiMessage();
-                    }
-                  }}
-                  onPaste={(e) => {
-                    const items = e.clipboardData?.items;
-                    if (!items) return;
-                    const files: File[] = [];
-                    for (const item of Array.from(items)) {
-                      if (item.kind === "file") {
-                        const file = item.getAsFile();
-                        if (file) files.push(file);
-                      }
-                    }
-                    if (files.length > 0) {
-                      e.preventDefault();
-                      handleFileAttach(files);
-                    }
-                  }}
-                  placeholder={chatAttachments.length > 0 ? "Fråga om bifogade filer..." : "Beskriv vad du vill koda... (Shift+Enter för ny rad)"}
-                  className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-2 text-xs outline-none text-slate-200 placeholder:text-slate-500 focus:border-violet-500/50 resize-none overflow-hidden"
-                  disabled={aiLoading}
-                  rows={1}
-                />
-                {aiStreaming ? (
-                  <button
-                    onClick={stopAiStream}
-                    className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30"
-                    title="Stoppa streaming"
-                  >
-                    <StopCircle className="w-3.5 h-3.5" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={sendAiMessage}
-                    disabled={aiLoading || (!aiInput.trim() && chatAttachments.length === 0)}
-                    className="p-2 bg-violet-500/20 text-violet-400 rounded-lg hover:bg-violet-500/30 disabled:opacity-50"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-2 mt-1.5 text-[10px] text-slate-600">
-                <kbd className="px-1 py-0.5 bg-slate-800 rounded">Ctrl+K</kbd> Inline AI
-                <span className="text-slate-700">|</span>
-                <kbd className="px-1 py-0.5 bg-slate-800 rounded">Ctrl+I</kbd> Panel
-              </div>
-            </div>
-          </div>
-        )}
+              onOpenFile={(path) => openFile({ name: path.split("/").pop() || path, path, type: "file" })}
+            />
+          )}
+        />
       </div>
 
       {/* Status Bar */}

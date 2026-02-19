@@ -13,7 +13,6 @@ import { createServer } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
-import QRCode from "qrcode";
 import { writeFileSync, readFileSync, mkdirSync, existsSync, readdirSync, statSync, unlinkSync } from "fs";
 import { join, dirname } from "path";
 import { spawn } from "child_process";
@@ -122,29 +121,43 @@ import debateRoutes, { initDebateSocket } from "./debate-routes.js";
 import workspaceRoutes, { initWorkspaceSocket } from "./workspace-routes.js";
 import archonRoutes from "./archon-routes.js";
 import {
-  recordTokenEvent, recordQualityFeedback, getAnalyticsOverview,
-  getModelAnalytics, getActivityHeatmap, getCostForecast,
-  getSessionStats, getDailyCosts, getHourlyTrend, exportAnalyticsCsv,
+  recordTokenEvent, recordQualityFeedback,
 } from "./conversation-analytics.js";
 import {
   listExperiments, getExperiment, createExperiment, deleteExperiment,
   runExperiment, rateResult, getVariantStats, registerLLMRunner,
   type LabModel,
 } from "./prompt-lab.js";
-import { analyzeImage, getAvailableVisionModels, type VisionRequest } from "./vision.js";
+import { registerWebhookAIHandler } from "./webhooks.js";
+import analyticsRoutes from "./routes/analytics-routes.js";
+import snapshotsRoutes from "./routes/snapshots-routes.js";
+import visionRoutes from "./routes/vision-routes.js";
+import webhooksRoutes from "./routes/webhooks-routes.js";
+import { createCoreRoutes } from "./routes/core-routes.js";
 import {
-  createSnapshot, listSnapshots, getSnapshot, deleteSnapshot,
-  restoreSnapshot, diffSnapshots, getSnapshotStats, pruneSnapshots,
-} from "./snapshots.js";
-import { createWebhookRouter, registerWebhookAIHandler } from "./webhooks.js";
+  registerOperationalRoutes,
+  requestIdLoggingMiddleware,
+  resolveRuntimeConfig,
+} from "./runtime-quality.js";
 
-const PORT = parseInt(process.env.PORT || "3031", 10);
-const WORKSPACE_ROOT = process.env.CASCADE_REMOTE_WORKSPACE || join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")), "..", "..");
+const DEFAULT_WORKSPACE_ROOT = join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")), "..", "..");
+
+function loadRuntimeConfig() {
+  try {
+    return resolveRuntimeConfig(process.env, DEFAULT_WORKSPACE_ROOT);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[startup] Invalid runtime configuration: ${message}`);
+    process.exit(1);
+  }
+  throw new Error("Unreachable startup configuration state");
+}
+
+const runtimeConfig = loadRuntimeConfig();
+const PORT = runtimeConfig.port;
+const WORKSPACE_ROOT = runtimeConfig.workspaceRoot;
 const INBOX_FILE = join(WORKSPACE_ROOT, ".mobile-inbox");
-
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",")
-  : "*"; // Allow all origins for LAN/mobile access
+const ALLOWED_ORIGINS = runtimeConfig.allowedOrigins;
 
 // In-memory state
 interface Message {
@@ -380,7 +393,7 @@ initHierarchy(
 // Rate limiting
 const rateLimits = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW = 60_000; // 1 minute
-const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || "30", 10);
+const RATE_LIMIT_MAX = runtimeConfig.rateLimitMax;
 
 function checkRateLimit(key: string): boolean {
   const now = Date.now();
@@ -392,7 +405,7 @@ function checkRateLimit(key: string): boolean {
 }
 
 // Token budget from env
-const TOKEN_BUDGET = parseInt(process.env.TOKEN_BUDGET || "0", 10);
+const TOKEN_BUDGET = runtimeConfig.tokenBudget;
 if (TOKEN_BUDGET > 0) {
   agent.setTokenBudget(TOKEN_BUDGET);
   console.log(`[bridge] Token budget set: ${TOKEN_BUDGET.toLocaleString()} tokens`);
@@ -465,6 +478,8 @@ const app = express();
 app.use(compression());
 app.use(cors({ origin: ALLOWED_ORIGINS === "*" ? true : ALLOWED_ORIGINS }));
 app.use(express.json({ limit: "50mb" }));
+app.use(requestIdLoggingMiddleware);
+registerOperationalRoutes(app, WORKSPACE_ROOT);
 
 // Public stats endpoint for landing page (no auth required)
 app.get("/api/public/stats", (_req, res) => {
@@ -521,39 +536,7 @@ app.use(gitRoutes);
 app.use("/api/debate", debateRoutes);
 app.use("/api/workspace", workspaceRoutes);
 app.use("/api/archon", archonRoutes);
-
-// --- Conversation Analytics API ---
-app.get("/api/analytics/overview", (_req, res) => {
-  const days = parseInt(String(_req.query.days) || "30", 10);
-  res.json(getAnalyticsOverview(days));
-});
-app.get("/api/analytics/models", (_req, res) => {
-  const days = parseInt(String(_req.query.days) || "30", 10);
-  res.json(getModelAnalytics(days));
-});
-app.get("/api/analytics/heatmap", (_req, res) => {
-  const days = parseInt(String(_req.query.days) || "30", 10);
-  res.json(getActivityHeatmap(days));
-});
-app.get("/api/analytics/forecast", (_req, res) => {
-  res.json(getCostForecast());
-});
-app.get("/api/analytics/sessions", (_req, res) => {
-  res.json(getSessionStats());
-});
-app.get("/api/analytics/costs", (_req, res) => {
-  const days = parseInt(String(_req.query.days) || "30", 10);
-  res.json(getDailyCosts(days));
-});
-app.get("/api/analytics/hourly", (_req, res) => {
-  const hours = parseInt(String(_req.query.hours) || "48", 10);
-  res.json(getHourlyTrend(hours));
-});
-app.get("/api/analytics/export/csv", (_req, res) => {
-  res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", "attachment; filename=analytics.csv");
-  res.send(exportAnalyticsCsv());
-});
+app.use("/api/analytics", analyticsRoutes);
 
 // --- Prompt Lab API ---
 app.get("/api/prompt-lab/experiments", (_req, res) => {
@@ -591,65 +574,9 @@ app.post("/api/prompt-lab/experiments/:id/rate", (req, res) => {
   res.json({ ok });
 });
 
-// --- Snapshot & Rollback API ---
-app.get("/api/snapshots", (_req, res) => res.json(listSnapshots()));
-app.get("/api/snapshots/stats", (_req, res) => res.json(getSnapshotStats()));
-app.get("/api/snapshots/:id", (req, res) => {
-  const snap = getSnapshot(req.params.id);
-  if (!snap) return res.status(404).json({ error: "Not found" });
-  res.json(snap);
-});
-app.post("/api/snapshots", (req, res) => {
-  try {
-    const { name, description, tags } = req.body;
-    const snap = createSnapshot(name || `Snapshot ${new Date().toISOString()}`, description, false, tags);
-    res.json(snap);
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
-  }
-});
-app.post("/api/snapshots/:id/restore", (req, res) => {
-  try {
-    const result = restoreSnapshot(req.params.id);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
-  }
-});
-app.post("/api/snapshots/diff", (req, res) => {
-  try {
-    const { idA, idB } = req.body;
-    res.json(diffSnapshots(idA, idB));
-  } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : "Failed" });
-  }
-});
-app.delete("/api/snapshots/:id", (req, res) => {
-  const ok = deleteSnapshot(req.params.id);
-  res.json({ ok });
-});
-app.post("/api/snapshots/prune", (req, res) => {
-  const keep = parseInt(String(req.body.keep) || "20", 10);
-  const removed = pruneSnapshots(keep);
-  res.json({ removed });
-});
-
-// --- Webhook & API Gateway ---
-app.use("/api/webhooks", createWebhookRouter());
-
-// --- Vision & Multimodal API ---
-app.get("/api/vision/models", (_req, res) => {
-  res.json(getAvailableVisionModels());
-});
-app.post("/api/vision/analyze", async (req, res) => {
-  try {
-    const request: VisionRequest = req.body;
-    const result = await analyzeImage(request);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "Vision analysis failed" });
-  }
-});
+app.use("/api/snapshots", snapshotsRoutes);
+app.use("/api/webhooks", webhooksRoutes);
+app.use("/api/vision", visionRoutes);
 
 // Mount Cascade API
 app.use("/cascade", cascadeApi);
@@ -667,103 +594,17 @@ const io = new SocketIOServer(httpServer, {
 // Give computer tools access to Socket.IO for task routing
 setComputerToolsIO(io);
 
-// --- REST API (used by MCP server) ---
-
-// Get connection status
-app.get("/api/status", (_req, res) => {
-  res.json({
-    connected: connectedClients > 0,
-    clientCount: connectedClients,
-    messageCount: messages.length,
-    sessionToken,
-  });
-});
-
-// Send message from Cascade to mobile
-app.post("/api/messages", (req, res) => {
-  const { role, content, type } = req.body;
-  const msg: Message = {
-    id: uuidv4(),
-    role: role || "cascade",
-    content,
-    type: type || "message",
-    timestamp: new Date().toISOString(),
-  };
-  messages.push(msg);
-
-  // Keep max 500 messages
-  if (messages.length > 500) {
-    messages.splice(0, messages.length - 500);
-  }
-
-  // Broadcast to all connected web/mobile clients
-  io.emit("message", msg);
-  res.json({ ok: true, id: msg.id });
-});
-
-// Get recent messages
-app.get("/api/messages", (req, res) => {
-  const limit = parseInt(req.query.limit as string, 10) || 50;
-  const recent = messages.slice(-limit);
-  res.json(recent);
-});
-
-// Ask mobile user a question (long-poll)
-app.post("/api/ask", (req, res) => {
-  const { question, timeout } = req.body;
-  const timeoutMs = (timeout || 120) * 1000;
-  const questionId = uuidv4();
-
-  const msg: Message = {
-    id: questionId,
-    role: "cascade",
-    content: question,
-    type: "approval_request",
-    timestamp: new Date().toISOString(),
-  };
-  messages.push(msg);
-  io.emit("message", msg);
-  io.emit("question", { id: questionId, question });
-
-  const timer = setTimeout(() => {
-    pendingQuestions.delete(questionId);
-    res.json({ timeout: true, response: null });
-  }, timeoutMs);
-
-  pendingQuestions.set(questionId, {
-    id: questionId,
-    question,
-    resolve: (response: string) => {
-      clearTimeout(timer);
-      pendingQuestions.delete(questionId);
-
-      const responseMsg: Message = {
-        id: uuidv4(),
-        role: "user",
-        content: response,
-        type: "approval_response",
-        timestamp: new Date().toISOString(),
-      };
-      messages.push(responseMsg);
-      io.emit("message", responseMsg);
-
-      res.json({ timeout: false, response });
-    },
-    timer,
-  });
-});
-
-// QR code endpoint for pairing
-app.get("/api/qr", async (_req, res) => {
-  try {
-    // Generate QR with the bridge URL + session token
-    const pairUrl = `http://localhost:${PORT}?token=${sessionToken}`;
-    const qrDataUrl = await QRCode.toDataURL(pairUrl, { width: 300 });
-    res.json({ qr: qrDataUrl, url: pairUrl, token: sessionToken });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to generate QR code" });
-  }
-});
+// Core REST API used by MCP server (/api/status, /api/messages, /api/ask, /api/qr)
+app.use("/api", createCoreRoutes({
+  io,
+  port: PORT,
+  connectedClients: () => connectedClients,
+  messages,
+  pendingQuestions,
+  sessionToken,
+  saveMessages,
+  clearAgentHistory: () => agent.clearHistory(),
+}));
 
 // --- Global Rules API ---
 const GLOBAL_RULES_FILE = join(WORKSPACE_ROOT, "bridge", "data", "global-rules.md");
@@ -840,15 +681,6 @@ app.post("/api/tokens/budget", (req, res) => {
   const budget = parseInt(req.body.budget, 10) || 0;
   agent.setTokenBudget(budget);
   res.json({ ok: true, budget });
-});
-
-// --- Clear conversation ---
-app.delete("/api/messages", (_req, res) => {
-  messages.length = 0;
-  agent.clearHistory();
-  saveMessages(messages);
-  io.emit("history", []);
-  res.json({ ok: true });
 });
 
 // --- AI Research Lab (Claude ↔ Gemini collaboration) ---
@@ -4051,7 +3883,7 @@ if (existsSync(WEB_DIST)) {
 }
 
 function startTunnel() {
-  if (process.env.NO_TUNNEL === "1") return;
+  if (runtimeConfig.noTunnel) return;
 
   console.log("[tunnel] Starting Cloudflare Tunnel...");
   const cf = spawn("cloudflared", ["tunnel", "--url", `http://localhost:${PORT}`], {

@@ -19,8 +19,10 @@ import {
   readdirSync,
 } from "fs";
 import { join, relative, extname, basename, dirname, sep } from "path";
-import { spawn, ChildProcess } from "child_process";
+import { spawn, ChildProcess, exec } from "child_process";
 import type { Server as SocketServer, Socket } from "socket.io";
+import { Agent } from "./agent.js";
+import { GeminiAgent } from "./agent-gemini.js";
 
 // ── Constants ──
 
@@ -226,6 +228,104 @@ router.get("/tree", (_req: Request, res: Response) => {
   try {
     const tree = buildTree(WORKSPACE_ROOT);
     res.json({ root: WORKSPACE_ROOT, tree });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
+ * POST /api/workspace/ai/doctor
+ *
+ * Kör en uppsättning kommandon (t.ex. "npm run build") i ett givet cwd under WORKSPACE_ROOT
+ * och låter en AI-agent generera en markdown-rapport över resultatet.
+ *
+ * Body:
+ * {
+ *   commands: string[];
+ *   cwd?: string; // relativ till WORKSPACE_ROOT, t.ex. "web" eller "bridge"
+ * }
+ */
+router.post("/ai/doctor", async (req: Request, res: Response) => {
+  const { commands, cwd } = req.body as { commands?: string[]; cwd?: string };
+
+  if (!Array.isArray(commands) || commands.length === 0) {
+    return res.status(400).json({ error: "commands must be a non-empty array" });
+  }
+
+  let execCwd = WORKSPACE_ROOT;
+  if (cwd && typeof cwd === "string") {
+    const safe = safePath(cwd.replace(/^\/+/, ""));
+    if (!safe) return res.status(400).json({ error: "cwd outside workspace" });
+    execCwd = safe;
+  }
+
+  const MAX_OUTPUT = 20_000; // bytes per stream
+
+  const runCommand = (cmd: string) => new Promise<{ command: string; exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
+    const child = exec(cmd, { cwd: execCwd, maxBuffer: MAX_OUTPUT * 2 }, (error, stdout, stderr) => {
+      const exitCode = error && typeof (error as any).code === "number" ? (error as any).code : 0;
+      resolve({
+        command: cmd,
+        exitCode,
+        stdout: String(stdout || "").slice(0, MAX_OUTPUT),
+        stderr: String(stderr || "").slice(0, MAX_OUTPUT),
+      });
+    });
+
+    // Failsafe timeout 2 min per kommando
+    setTimeout(() => {
+      try { child.kill(); } catch { /* ignore */ }
+    }, 120_000).unref();
+  });
+
+  try {
+    const results: { command: string; exitCode: number | null; stdout: string; stderr: string }[] = [];
+    for (const cmd of commands) {
+      // Kör sekventiellt för att inte överbelasta systemet
+      // eslint-disable-next-line no-await-in-loop
+      const r = await runCommand(cmd);
+      results.push(r);
+    }
+
+    // Bygg en sammanfattad logg till AI:n
+    const summaryText = results.map(r => {
+      return [
+        `$ ${r.command}`,
+        `exitCode: ${r.exitCode}`,
+        r.stdout ? `stdout (truncated):\n${r.stdout}` : "stdout: <empty>",
+        r.stderr ? `stderr (truncated):\n${r.stderr}` : "stderr: <empty>",
+      ].join("\n");
+    }).join("\n\n---\n\n");
+
+    const systemPrompt = [
+      "Du är en senior utvecklare som analyserar build/test/log-output.",
+      "Du ska:",
+      "1) Kort sammanfatta det övergripande hälsotillståndet (OK / har fel)",
+      "2) Lista de allvarligaste felen först",
+      "3) Föreslå konkreta nästa steg i punktform (kommandon, filer att titta på osv)",
+      "Svara i Markdown med rubriker: ## Status, ## Allvarliga problem, ## Rekommenderade åtgärder.",
+    ].join("\n");
+
+    // Välj AI-agent: använd GeminiAgent om konfigurerad, annars main Agent
+    const agent = new GeminiAgent({ name: "Doctor", role: "kod-doktor" });
+    const hasGemini = agent.isEnabled();
+    const fallbackAgent = new Agent();
+
+    const prompt = [
+      systemPrompt,
+      "\n\n### Loggar från Code Doctor\n",
+      summaryText,
+    ].join("\n");
+
+    const analysis = hasGemini
+      ? await agent.respond(prompt)
+      : await fallbackAgent.respond(prompt);
+
+    res.json({
+      cwd: execCwd,
+      results,
+      analysis,
+    });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
