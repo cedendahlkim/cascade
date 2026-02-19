@@ -187,7 +187,7 @@ router.post("/ingest", async (req: Request, res: Response) => {
         });
         created++;
         // Rate limit: Gemini free tier
-        if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 200));
+        if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 500));
       } catch (err) {
         errors.push(`chunk ${i}: ${err}`);
       }
@@ -275,8 +275,10 @@ router.post("/crawl", async (req: Request, res: Response) => {
           word_count: chunks[i].split(/\s+/).length,
         });
         created++;
-        if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 200));
-      } catch { /* skip failed chunks */ }
+        if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 500));
+      } catch (err) {
+        console.log(`[archon] Crawl chunk ${i} failed:`, String(err).slice(0, 120));
+      }
     }
 
     // Ingest code examples
@@ -291,8 +293,10 @@ router.post("/crawl", async (req: Request, res: Response) => {
           embedding,
         });
         codeCreated++;
-        await new Promise((r) => setTimeout(r, 200));
-      } catch { /* skip */ }
+        await new Promise((r) => setTimeout(r, 500));
+      } catch (err) {
+        console.log(`[archon] Code example failed:`, String(err).slice(0, 120));
+      }
     }
 
     await supaPatch("knowledge_sources", `id=eq.${source.id}`, {
