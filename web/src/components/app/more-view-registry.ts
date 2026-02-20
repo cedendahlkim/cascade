@@ -1,5 +1,6 @@
 export const MORE_TAB_ITEMS = [
   { id: "dashboard", label: "📊 Dashboard" },
+  { id: "autopilot", label: "🚀 Autopilot" },
   { id: "computers", label: "🖥️ Datorer" },
   { id: "scheduler", label: "⏰ Schema" },
   { id: "workflows", label: "🔄 Workflows" },
@@ -23,7 +24,6 @@ export const MORE_TAB_ITEMS = [
   { id: "webhooks", label: "🔗 Webhooks" },
   { id: "waf", label: "🛡️ WAF" },
   { id: "pentest", label: "🧨 Pentest" },
-  { id: "autopilot", label: "🚀 Autopilot" },
   { id: "editor", label: "💻 Editor" },
   { id: "git", label: "🔀 Git" },
   { id: "install", label: "📦 Installera" },
