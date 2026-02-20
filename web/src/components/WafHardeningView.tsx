@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BRIDGE_URL } from "../config";
-import { Shield, Play, Square, RefreshCw, Activity, AlertTriangle, Brain, Trash2 } from "lucide-react";
+import { Shield, Play, Square, RefreshCw, Activity, AlertTriangle, Brain, Trash2, FileText, Copy, Download } from "lucide-react";
 
 interface WafProfile {
   name: string;
@@ -63,6 +63,11 @@ interface WafAiChatResponse {
   response?: string;
   usage?: Record<string, unknown>;
   error?: string;
+}
+
+interface PentestWafReportResponse {
+  run_id: string;
+  report_markdown: string;
 }
 
 type ToastLevel = "success" | "error" | "info";
@@ -151,6 +156,10 @@ export default function WafHardeningView() {
   const [busyAi, setBusyAi] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [nowMs, setNowMs] = useState(() => Date.now());
+
+  const [busyReport, setBusyReport] = useState(false);
+  const [reportMarkdown, setReportMarkdown] = useState("");
+  const [reportRunId, setReportRunId] = useState<string | null>(null);
 
   const selectedRun = useMemo(
     () => recentRuns.find((run) => run.run_id === selectedRunId) || null,
@@ -326,6 +335,58 @@ export default function WafHardeningView() {
     } finally {
       setBusyStart(false);
     }
+  };
+
+  const generatePentestReport = async () => {
+    if (!selectedRunId) return;
+
+    setBusyReport(true);
+    setError(null);
+
+    try {
+      const data = await bridgeRequest<PentestWafReportResponse>("/api/pentest/waf/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          run_id: selectedRunId,
+          base_url: targetBaseUrl.trim() || "http://localhost:18080",
+          profile: selectedProfile,
+          tags: tags.trim(),
+        }),
+      });
+
+      setReportMarkdown((data.report_markdown || "").trim());
+      setReportRunId(data.run_id || selectedRunId);
+      pushToast("success", "Pentest-rapport genererad.");
+    } catch (err) {
+      reportError(err);
+    } finally {
+      setBusyReport(false);
+    }
+  };
+
+  const copyReport = async () => {
+    if (!reportMarkdown) return;
+    try {
+      await navigator.clipboard.writeText(reportMarkdown);
+      pushToast("success", "Rapport kopierad till urklipp.");
+    } catch {
+      pushToast("error", "Kunde inte kopiera (clipboard permission?).");
+    }
+  };
+
+  const downloadReport = () => {
+    if (!reportMarkdown) return;
+    const blob = new Blob([reportMarkdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const runPart = reportRunId ? reportRunId : "report";
+    a.href = url;
+    a.download = `pentest-${runPart}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
   const stopWaf = async () => {
@@ -797,6 +858,62 @@ export default function WafHardeningView() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+            <FileText className="w-4 h-4 text-cyan-300" />
+            Pentest-rapport (Frankenstein)
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={generatePentestReport}
+              disabled={disableMutatingControls || !selectedRunId || busyReport}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-xs text-white disabled:opacity-50"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              {busyReport ? "Genererar..." : "Generera"}
+            </button>
+            <button
+              onClick={() => { void copyReport(); }}
+              disabled={!reportMarkdown}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs text-slate-200 disabled:opacity-50"
+              title="Kopiera rapport"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              Kopiera
+            </button>
+            <button
+              onClick={downloadReport}
+              disabled={!reportMarkdown}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs text-slate-200 disabled:opacity-50"
+              title="Ladda ner .md"
+            >
+              <Download className="w-3.5 h-3.5" />
+              .md
+            </button>
+          </div>
+        </div>
+
+        <div className="text-[11px] text-slate-400">
+          Bygger en rapport från WAF-corpus-körningen (inte en full nätverks-pentest). Välj en run och tryck Generera.
+        </div>
+
+        {!selectedRunId ? (
+          <div className="text-xs text-slate-500">Ingen körning vald.</div>
+        ) : busyReport ? (
+          <div className="flex items-center gap-2 text-xs text-cyan-200">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            Frankenstein skriver rapport...
+          </div>
+        ) : reportMarkdown ? (
+          <pre className="text-[11px] text-slate-200 bg-slate-900/70 border border-slate-700 rounded-lg p-2 whitespace-pre-wrap max-h-96 overflow-y-auto">
+            {reportMarkdown}
+          </pre>
+        ) : (
+          <div className="text-xs text-slate-500">Ingen rapport ännu.</div>
+        )}
       </div>
     </div>
   );

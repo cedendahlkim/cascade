@@ -170,6 +170,105 @@ export class FrankensteinAgent {
     startSession();
   }
 
+  private parseBool(value: unknown, fallback: boolean): boolean {
+    if (typeof value === "boolean") return value;
+    if (typeof value !== "string") return fallback;
+    const v = value.trim().toLowerCase();
+    if (v === "true" || v === "1" || v === "yes" || v === "y") return true;
+    if (v === "false" || v === "0" || v === "no" || v === "n") return false;
+    return fallback;
+  }
+
+  private parseIntSafe(value: unknown, fallback: number): number {
+    if (typeof value === "number" && Number.isFinite(value)) return Math.floor(value);
+    if (typeof value !== "string") return fallback;
+    const n = Number.parseInt(value, 10);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  private async handlePentestWafRun(args: Record<string, unknown>): Promise<string> {
+    const baseUrl = this.toWafString(args.base_url, DEFAULT_WAF_TARGET_BASE_URL).trim() || DEFAULT_WAF_TARGET_BASE_URL;
+    const profile = this.toWafString(args.profile, "pl2").trim() || "pl2";
+    const tags = this.toWafString(args.tags, "sqli,xss,ssrf,rce").trim();
+    const excludeTags = this.toWafString(args.exclude_tags, "").trim();
+    const ids = this.toWafString(args.ids, "").trim();
+    const concurrency = this.toWafString(args.concurrency, "2").trim() || "2";
+
+    const autoStart = this.parseBool(args.auto_start, true);
+    const waitSeconds = Math.max(5, this.parseIntSafe(args.wait_seconds, 180));
+    const pollIntervalSeconds = Math.max(2, this.parseIntSafe(args.poll_interval_seconds, 5));
+
+    if (autoStart) {
+      await this.handleWafTool("waf_start", { profile });
+    }
+
+    const runResponse = await this.handleWafTool("waf_run", {
+      base_url: baseUrl,
+      tags,
+      exclude_tags: excludeTags,
+      ids,
+      concurrency,
+    });
+
+    // Extract run id if present in formatted tool output.
+    const runIdMatch = runResponse.match(/run_id=([a-z0-9_-]+)/i);
+    const runId = runIdMatch ? runIdMatch[1] : "";
+
+    if (!runId) {
+      return `pentest_waf_run: started run but could not parse run_id.\n\n${runResponse}`;
+    }
+
+    const wafBase = this.getWafServiceUrl();
+    const deadline = Date.now() + waitSeconds * 1000;
+    let lastPayload: any = null;
+
+    while (Date.now() < deadline) {
+      const response = await fetch(`${wafBase}/api/run/${encodeURIComponent(runId)}/results`, {
+        method: "GET",
+        signal: AbortSignal.timeout(30000),
+      });
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        return `pentest_waf_run: unexpected results content-type (${contentType}).\nRun: ${runId}\n${text}`;
+      }
+
+      const payload = await response.json();
+      lastPayload = payload;
+      const status = typeof payload?.status === "string" ? payload.status : "";
+      const total = typeof payload?.total === "number" ? payload.total : null;
+      const failed = typeof payload?.failed === "number" ? payload.failed : null;
+      const passRate = typeof payload?.pass_rate === "number" ? payload.pass_rate : null;
+
+      if (status && status !== "running" && status !== "stalled") {
+        const topFindings = Array.isArray(payload?.tests)
+          ? payload.tests.filter((t: any) => t && t.passed === false).slice(0, 8).map((t: any) => t.id).filter(Boolean)
+          : [];
+
+        return [
+          `pentest_waf_run: DONE`,
+          `run_id: ${runId}`,
+          `target: ${baseUrl}`,
+          `profile: ${profile}`,
+          `tags: ${tags || "(none)"}`,
+          `concurrency: ${concurrency}`,
+          total !== null && failed !== null ? `summary: total=${total} failed=${failed} pass_rate=${passRate}` : "summary: (missing)",
+          topFindings.length ? `top_findings: ${topFindings.join(", ")}` : "top_findings: (none)",
+        ].join("\n");
+      }
+
+      await new Promise((r) => setTimeout(r, pollIntervalSeconds * 1000));
+    }
+
+    const status = typeof lastPayload?.status === "string" ? lastPayload.status : "running";
+    return [
+      `pentest_waf_run: TIMEOUT (still ${status})`,
+      `run_id: ${runId}`,
+      `target: ${baseUrl}`,
+      `Next: call waf_run_results { run_id: "${runId}" } later.`,
+    ].join("\n");
+  }
+
   private getWafServiceUrl(): string {
     return resolveWafServiceUrl();
   }
@@ -663,6 +762,26 @@ ${trainingContext}
         { name: "waf_recent_runs", description: "List recent WAF runs.", parameters: { type: SchemaType.OBJECT, properties: {} } },
         { name: "waf_run_results", description: "Get results for a specific WAF run ID.", parameters: { type: SchemaType.OBJECT, properties: { run_id: { type: SchemaType.STRING, description: "Run ID" } }, required: ["run_id"] } },
         { name: "waf_request", description: "Unrestricted raw request to WAF service path.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Path on WAF service, e.g. /actions/run" }, method: { type: SchemaType.STRING, description: "HTTP method" }, content_type: { type: SchemaType.STRING, description: "Content-Type header" }, headers: { type: SchemaType.STRING, description: "JSON object string of headers" }, body: { type: SchemaType.STRING, description: "Raw body" } }, required: ["path"] } },
+        // PENTEST (Frankenstein exclusive)
+        {
+          name: "pentest_waf_run",
+          description: "Run an end-to-end WAF-based pentest: optionally start WAF profile, trigger a run, poll results, and return a concise summary + run_id.",
+          parameters: {
+            type: SchemaType.OBJECT,
+            properties: {
+              base_url: { type: SchemaType.STRING, description: "Target base URL (e.g. http://localhost:18080)" },
+              profile: { type: SchemaType.STRING, description: "WAF profile to start (pl1/pl2/pl2-strict/pl3/pl3-tuned/pl4). Only used when auto_start=true." },
+              tags: { type: SchemaType.STRING, description: "Comma-separated tags (e.g. sqli,xss,ssrf,rce)" },
+              exclude_tags: { type: SchemaType.STRING, description: "Comma-separated excluded tags" },
+              ids: { type: SchemaType.STRING, description: "Comma-separated test IDs" },
+              concurrency: { type: SchemaType.STRING, description: "Concurrency forwarded as-is" },
+              auto_start: { type: SchemaType.STRING, description: "true/false. If true: start WAF before run." },
+              wait_seconds: { type: SchemaType.STRING, description: "Max seconds to poll for results before returning running/stalled status." },
+              poll_interval_seconds: { type: SchemaType.STRING, description: "Poll interval seconds while waiting for results." },
+            },
+            required: ["base_url"],
+          },
+        },
         // COMPUTERS
         { name: "list_computers", description: "List all registered remote computers.", parameters: { type: SchemaType.OBJECT, properties: {} } },
         { name: "run_on_computer", description: "Run a command on a remote computer.", parameters: { type: SchemaType.OBJECT, properties: { computer: { type: SchemaType.STRING, description: "Computer name or 'auto'" }, command: { type: SchemaType.STRING, description: "Shell command" } }, required: ["computer", "command"] } },
@@ -736,6 +855,8 @@ ${trainingContext}
       if (name === "reflect_on_session") return await this.handleReflectOnSession();
       // WAF (unrestricted)
       if (name.startsWith("waf_")) return await this.handleWafTool(name, args);
+      // PENTEST
+      if (name === "pentest_waf_run") return await this.handlePentestWafRun(args);
       // FRANKENSTEIN EXCLUSIVE
       if (name === "cognitive_introspect") return this.handleCognitiveIntrospect();
       if (name === "multi_model_consensus") return await this.handleMultiModelConsensus(args.question as string);
@@ -1000,6 +1121,35 @@ ${trainingContext}
   }
 
   // ─── Main Respond (Gemini) ─────────────────────────────────
+
+  /**
+   * Generate a one-off response without mutating the chat history or emitting stream/status events.
+   *
+   * Used by REST endpoints (e.g. pentest report generation) to avoid polluting the interactive
+   * Frankenstein chat timeline.
+   */
+  async respondStateless(userMessage: string): Promise<string> {
+    const historySnapshot = this.history.slice();
+    const lastUserSnapshot = this.lastUserMessage;
+    const toolsSnapshot = this.toolsUsedThisTurn.slice();
+    const cognitiveSnapshot = { ...this.cognitiveState };
+    const streamCbSnapshot = this.streamCallback;
+    const statusCbSnapshot = this.statusCallback;
+
+    this.streamCallback = null;
+    this.statusCallback = null;
+
+    try {
+      return await this.respond(userMessage);
+    } finally {
+      this.history = historySnapshot;
+      this.lastUserMessage = lastUserSnapshot;
+      this.toolsUsedThisTurn = toolsSnapshot;
+      this.cognitiveState = cognitiveSnapshot;
+      this.streamCallback = streamCbSnapshot;
+      this.statusCallback = statusCbSnapshot;
+    }
+  }
 
   async respond(userMessage: string): Promise<string> {
     if (!this.client) {
@@ -1303,6 +1453,7 @@ Svara på svenska om användaren skriver på svenska.
 - **Kommandon**: run_command, run_javascript
 - **Webb**: web_search, fetch_url
 - **WAF**: waf_start, waf_stop, waf_status, waf_run, waf_recent_runs, waf_run_results, waf_request
+- **Pentest**: pentest_waf_run
 - **Datorer**: list_computers, run_on_computer, read_remote_file, write_remote_file, screenshot_computer
 - **Desktop**: take_screenshot, desktop_action
 - **RAG**: rag_search, rag_index_text, rag_index_file, rag_index_directory, rag_list_sources, rag_stats
