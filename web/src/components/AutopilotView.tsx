@@ -62,6 +62,8 @@ export default function AutopilotView() {
   const [goal, setGoal] = useState<string>(
     "",
   );
+  const [missionCwd, setMissionCwd] = useState<string>(".");
+  const [verifyCwd, setVerifyCwd] = useState<string>(".");
   const [maxIterations, setMaxIterations] = useState<number>(DEFAULT_MAX_ITERS);
   const [runner, setRunner] = useState<ShellRunner>("host");
   const [verifyRunner, setVerifyRunner] = useState<ShellRunner>("host");
@@ -99,13 +101,16 @@ export default function AutopilotView() {
 
     try {
       const preset = presets[verifyPreset];
-      const verifyPayload = preset.verify ? { ...preset.verify, runner: verifyRunner } : undefined;
+      const safeMissionCwd = missionCwd.trim() || ".";
+      const safeVerifyCwd = verifyCwd.trim() || safeMissionCwd;
+      const verifyPayload = preset.verify ? { ...preset.verify, cwd: safeVerifyCwd, runner: verifyRunner } : undefined;
       const response = await authFetch(`${BRIDGE_URL}/api/workspace/ai/mission`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           goal: goal.trim(),
           maxIterations,
+          cwd: safeMissionCwd,
           runner,
           verify: verifyPayload,
         }),
@@ -165,6 +170,26 @@ export default function AutopilotView() {
           </div>
 
           <div className="flex flex-col gap-2">
+            <label htmlFor="autopilot-mission-cwd" className="text-[11px] text-slate-400">Mission cwd</label>
+            <input
+              id="autopilot-mission-cwd"
+              aria-label="Mission cwd"
+              value={missionCwd}
+              onChange={(e) => setMissionCwd(e.target.value)}
+              placeholder=".  (ex: ctf/workspace)"
+              className="w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-600"
+            />
+
+            <label htmlFor="autopilot-verify-cwd" className="text-[11px] text-slate-400">Verify cwd</label>
+            <input
+              id="autopilot-verify-cwd"
+              aria-label="Verify cwd"
+              value={verifyCwd}
+              onChange={(e) => setVerifyCwd(e.target.value)}
+              placeholder=".  (ex: bridge eller web)"
+              className="w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-600"
+            />
+
             <label htmlFor="autopilot-runner" className="text-[11px] text-slate-400">Runner</label>
             <select
               id="autopilot-runner"
@@ -248,6 +273,7 @@ export default function AutopilotView() {
                   <div className="text-[11px] text-slate-400">runner: {result.runner || runner}</div>
                   <div className="text-[11px] text-slate-400">verify runner: {result.verify_runner || verifyRunner}</div>
                   <div className="text-[11px] text-slate-400">cwd: {result.cwd}</div>
+                  <div className="text-[11px] text-slate-400">verify cwd: {result.verify_cwd}</div>
                 </div>
               </div>
 
