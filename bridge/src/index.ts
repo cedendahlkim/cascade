@@ -3855,7 +3855,16 @@ app.get("/api/tunnel", (_req, res) => {
 });
 
 // --- Serve web client (built PWA) ---
-const WEB_DIST = join(WORKSPACE_ROOT, "web", "dist");
+// In Docker deployments we keep /workspace as a persistent volume (for AI edits). That means
+// /workspace/web/dist can become stale across deploys. Prefer serving the *image-built* dist
+// (/app/web/dist) so the UI always matches the running backend version.
+const WORKSPACE_WEB_DIST = join(WORKSPACE_ROOT, "web", "dist");
+const IMAGE_WEB_DIST = join(__dirname, "..", "..", "web", "dist");
+const WEB_DIST_SOURCE = process.env.WEB_DIST_SOURCE || "image";
+const WEB_DIST = WEB_DIST_SOURCE === "workspace"
+  ? (existsSync(WORKSPACE_WEB_DIST) ? WORKSPACE_WEB_DIST : IMAGE_WEB_DIST)
+  : (existsSync(IMAGE_WEB_DIST) ? IMAGE_WEB_DIST : WORKSPACE_WEB_DIST);
+
 if (existsSync(WEB_DIST)) {
   // Hashed assets get long cache (1 year), HTML gets no-cache
   app.use("/assets", express.static(join(WEB_DIST, "assets"), {
