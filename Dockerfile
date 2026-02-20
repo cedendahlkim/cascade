@@ -1,10 +1,15 @@
+FROM docker:27-cli AS dockercli
+
 FROM node:22-slim
 
 WORKDIR /app
 
-# Install Python 3 for Frankenstein AI training + docker CLI for Kali toolbox exec
-RUN apt-get update -qq && apt-get install -y -qq python3 python3-pip python3-venv git docker.io && \
+# Install Python 3 for Frankenstein AI training
+RUN apt-get update -qq && apt-get install -y -qq python3 python3-pip python3-venv git && \
     rm -rf /var/lib/apt/lists/*
+
+# Docker CLI (for Kali toolbox exec). Debian's docker.io can be too old vs the host daemon.
+COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 
 # Install ALL dependencies (including devDeps for build)
 COPY bridge/package*.json ./bridge/
