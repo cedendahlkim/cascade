@@ -10,13 +10,50 @@ import { join, dirname, extname, basename } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FILES_DIR = join(__dirname, "..", "data", "shared-files");
-const META_FILE = join(__dirname, "..", "data", "shared-files-meta.json");
+
+// Persist under the workspace root so uploads survive container recreation.
+// Server docker-compose sets CASCADE_REMOTE_WORKSPACE=/workspace and mounts bridge-data at /workspace/bridge/data.
+const WORKSPACE_ROOT = process.env.CASCADE_REMOTE_WORKSPACE || join(__dirname, "..", "..");
+const DATA_DIR = join(WORKSPACE_ROOT, "bridge", "data");
+const FILES_DIR = join(DATA_DIR, "shared-files");
+const META_FILE = join(DATA_DIR, "shared-files-meta.json");
+
+// Legacy (pre-workspace volume): stored next to the bridge package (/app/bridge/data).
+const LEGACY_DATA_DIR = join(__dirname, "..", "data");
+const LEGACY_FILES_DIR = join(LEGACY_DATA_DIR, "shared-files");
+const LEGACY_META_FILE = join(LEGACY_DATA_DIR, "shared-files-meta.json");
+
+function migrateLegacyStorageIfNeeded(): void {
+  try {
+    if (existsSync(META_FILE) || !existsSync(LEGACY_META_FILE)) return;
+    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+    if (!existsSync(FILES_DIR)) mkdirSync(FILES_DIR, { recursive: true });
+
+    // Copy metadata first.
+    writeFileSync(META_FILE, readFileSync(LEGACY_META_FILE));
+
+    // Copy files.
+    if (existsSync(LEGACY_FILES_DIR)) {
+      for (const name of readdirSync(LEGACY_FILES_DIR)) {
+        const from = join(LEGACY_FILES_DIR, name);
+        const to = join(FILES_DIR, name);
+        if (existsSync(to)) continue;
+        writeFileSync(to, readFileSync(from));
+      }
+    }
+
+    console.log(`[files] Migrated legacy shared-files from ${LEGACY_DATA_DIR} → ${DATA_DIR}`);
+  } catch (err) {
+    console.warn("[files] Legacy migration failed (continuing):", err);
+  }
+}
 
 // Ensure directory exists
 if (!existsSync(FILES_DIR)) {
   mkdirSync(FILES_DIR, { recursive: true });
 }
+
+migrateLegacyStorageIfNeeded();
 
 export interface SharedFile {
   id: string;
