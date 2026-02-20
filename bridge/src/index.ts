@@ -3859,7 +3859,7 @@ app.get("/api/tunnel", (_req, res) => {
 // /workspace/web/dist can become stale across deploys. Prefer serving the *image-built* dist
 // (/app/web/dist) so the UI always matches the running backend version.
 const WORKSPACE_WEB_DIST = join(WORKSPACE_ROOT, "web", "dist");
-const IMAGE_WEB_DIST = join(__dirname, "..", "..", "web", "dist");
+const IMAGE_WEB_DIST = join(DEFAULT_WORKSPACE_ROOT, "web", "dist");
 const WEB_DIST_SOURCE = process.env.WEB_DIST_SOURCE || "image";
 const WEB_DIST = WEB_DIST_SOURCE === "workspace"
   ? (existsSync(WORKSPACE_WEB_DIST) ? WORKSPACE_WEB_DIST : IMAGE_WEB_DIST)
