@@ -23,6 +23,8 @@ services:
       OLLAMA_EMBED_URL_INTERNAL: "http://ollama-embed:11434"
       CASCADE_REMOTE_WORKSPACE: /workspace
       KALI_CONTAINER_NAME: gracestack-kali
+      KALI_SANDBOX_CONTAINER_NAME: gracestack-kali-sandbox
+      KALI_SANDBOX_WORKDIR: /workspace/ctf/workspace
     ports:
       - "3031:3031"
     command:
@@ -36,6 +38,7 @@ services:
         node /app/bridge/dist/index.js
     volumes:
       - workspace:/workspace
+      - ctf-workspace:/workspace/ctf/workspace
       - bridge-data:/workspace/bridge/data
       - frank-training:/workspace/frankenstein-ai/training_data
       # Allow Bridge to "docker exec" into the Kali toolbox container.
@@ -62,8 +65,29 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - workspace:/workspace
+      - ctf-workspace:/workspace/ctf/workspace
       - bridge-data:/workspace/bridge/data
       - frank-training:/workspace/frankenstein-ai/training_data
+
+  # Locked-down Kali sandbox for CTF tasks.
+  # No internet (network_mode: none), limited resources.
+  kali_sandbox:
+    build:
+      context: ./deploy/kali
+      args:
+        KALI_METAPACKAGE: ${KALI_METAPACKAGE:-kali-linux-large}
+    container_name: gracestack-kali-sandbox
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    network_mode: none
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1.0
+    working_dir: /workspace/ctf/workspace
+    volumes:
+      - ctf-workspace:/workspace/ctf/workspace
 
   weaviate:
     image: cr.weaviate.io/semitechnologies/weaviate:1.28.4
@@ -122,6 +146,7 @@ services:
 
 volumes:
   workspace:
+  ctf-workspace:
   bridge-data:
   frank-training:
   weaviate-data:

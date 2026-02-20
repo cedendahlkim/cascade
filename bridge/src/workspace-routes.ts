@@ -64,10 +64,12 @@ function safePath(relPath: string): string | null {
   return resolved;
 }
 
-type ShellRunner = "host" | "kali";
+type ShellRunner = "host" | "kali" | "kali_sandbox";
 
 const KALI_CONTAINER_NAME = process.env.KALI_CONTAINER_NAME || "gracestack-kali";
 const KALI_WORKSPACE_ROOT = process.env.KALI_WORKSPACE_ROOT || WORKSPACE_ROOT;
+const KALI_SANDBOX_CONTAINER_NAME = process.env.KALI_SANDBOX_CONTAINER_NAME || "gracestack-kali-sandbox";
+const KALI_SANDBOX_WORKDIR = process.env.KALI_SANDBOX_WORKDIR || join(WORKSPACE_ROOT, "ctf", "workspace");
 
 function bashSingleQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
@@ -95,17 +97,24 @@ async function runShellCommand(
     let stdout = "";
     let stderr = "";
 
-    if (runner === "kali") {
+    if (runner === "kali" || runner === "kali_sandbox") {
       if (process.platform === "win32") {
         resolve({ stdout: "", stderr: "Kali runner is only supported on Linux Docker deployments.", exitCode: 1 });
         return;
       }
 
-      const kaliCwd = mapWorkspaceCwdToKali(execCwd);
+      const container = runner === "kali_sandbox" ? KALI_SANDBOX_CONTAINER_NAME : KALI_CONTAINER_NAME;
+      const kaliCwd = runner === "kali_sandbox" ? KALI_SANDBOX_WORKDIR : mapWorkspaceCwdToKali(execCwd);
+
+      if (runner === "kali_sandbox" && !execCwd.startsWith(KALI_SANDBOX_WORKDIR)) {
+        resolve({ stdout: "", stderr: `runner='kali_sandbox' requires cwd under: ${KALI_SANDBOX_WORKDIR}`, exitCode: 1 });
+        return;
+      }
+
       const cmd = `cd ${bashSingleQuote(kaliCwd)} && ${command}`;
       const proc = spawn(
         "docker",
-        ["exec", "-i", KALI_CONTAINER_NAME, "bash", "-lc", cmd],
+        ["exec", "-i", container, "bash", "-lc", cmd],
         { timeout: timeoutMs, env: { ...process.env, PYTHONIOENCODING: "utf-8" } },
       );
 
@@ -347,8 +356,13 @@ router.post("/ai/mission", async (req: Request, res: Response) => {
     return safe || missionCwd;
   })();
 
-  const missionRunner: ShellRunner = runner === "kali" ? "kali" : "host";
-  const verifyRunner: ShellRunner = verify?.runner === "kali" ? "kali" : missionRunner;
+  const missionRunner: ShellRunner = runner === "kali" ? "kali" : runner === "kali_sandbox" ? "kali_sandbox" : "host";
+  const verifyRunner: ShellRunner = verify?.runner === "kali" ? "kali" : verify?.runner === "kali_sandbox" ? "kali_sandbox" : missionRunner;
+
+  // If running in the locked-down sandbox, force execution cwd to the sandbox workdir.
+  // This keeps file mutations contained and prevents accidental execution elsewhere.
+  const effectiveMissionCwd = missionRunner === "kali_sandbox" ? KALI_SANDBOX_WORKDIR : missionCwd;
+  const effectiveVerifyCwd = verifyRunner === "kali_sandbox" ? KALI_SANDBOX_WORKDIR : verifyCwd;
 
   const clamp = (value: unknown, max = 10_000) => String(value ?? "").slice(0, max);
 
@@ -386,7 +400,7 @@ Svara med EXAKT EN JSON-array med actions.
 Tillgängliga actions:
 - {"action":"edit","path":"relativ/sökväg","content":"HELA det nya filinnehållet"}
 - {"action":"create","path":"relativ/sökväg","content":"filinnehåll"}
-- {"action":"run","command":"shell-kommando","runner":"host|kali"}
+- {"action":"run","command":"shell-kommando","runner":"host|kali|kali_sandbox"}
 - {"action":"done","text":"kort sammanfattning"}
 
 REGLER:
@@ -445,8 +459,8 @@ REGLER:
                 results.push({ action: "run", success: false, error: "command empty" });
                 break;
               }
-              const actRunner: ShellRunner = act.runner === "kali" ? "kali" : missionRunner;
-              const r = await runShellCommand(cmd, missionCwd, 120_000, actRunner);
+              const actRunner: ShellRunner = act.runner === "kali" ? "kali" : act.runner === "kali_sandbox" ? "kali_sandbox" : missionRunner;
+              const r = await runShellCommand(cmd, effectiveMissionCwd, 120_000, actRunner);
               results.push({ action: "run", command: cmd, runner: actRunner, success: r.exitCode === 0, ...r });
               break;
             }
@@ -465,7 +479,7 @@ REGLER:
       if (verifyCommands.length > 0) {
         for (const cmd of verifyCommands) {
           // eslint-disable-next-line no-await-in-loop
-          const r = await runShellCommand(cmd, verifyCwd, 240_000, verifyRunner);
+          const r = await runShellCommand(cmd, effectiveVerifyCwd, 240_000, verifyRunner);
           verifyResults.push({ command: cmd, runner: verifyRunner, success: r.exitCode === 0, ...r });
         }
       }
@@ -486,9 +500,9 @@ REGLER:
       goal,
       ok,
       runner: missionRunner,
-      cwd: missionCwd,
+      cwd: effectiveMissionCwd,
       verify_runner: verifyRunner,
-      verify_cwd: verifyCwd,
+      verify_cwd: effectiveVerifyCwd,
       iterations,
     });
   } catch (err) {
@@ -1549,10 +1563,12 @@ router.post("/ai/terminal", async (req: Request, res: Response) => {
   const { command, cwd, runner } = req.body;
   if (!command) return res.status(400).json({ error: "command required" });
 
-  const workDir = cwd ? safePath(cwd) : WORKSPACE_ROOT;
-  if (!workDir) return res.status(403).json({ error: "Path outside workspace" });
+  const shellRunner: ShellRunner = runner === "kali" ? "kali" : runner === "kali_sandbox" ? "kali_sandbox" : "host";
 
-  const shellRunner: ShellRunner = runner === "kali" ? "kali" : "host";
+  const workDir = shellRunner === "kali_sandbox"
+    ? KALI_SANDBOX_WORKDIR
+    : (cwd ? safePath(cwd) : WORKSPACE_ROOT);
+  if (!workDir) return res.status(403).json({ error: "Path outside workspace" });
 
   try {
     const result = await runShellCommand(String(command), workDir, 30_000, shellRunner);
