@@ -4,11 +4,24 @@
  * These tools proxy to the external WAF Hardening service (configured by WAF_HARDENING_URL).
  */
 
+import { existsSync } from "fs";
+
 const DEFAULT_WAF_SERVICE_URL = "http://127.0.0.1:8000";
+const DEFAULT_WAF_SERVICE_URL_DOCKER = "http://host.docker.internal:8000";
 const DEFAULT_WAF_TARGET_BASE_URL = "http://localhost:18080";
 
+function isRunningInDocker(): boolean {
+  // Standard marker file in many container runtimes.
+  // On Windows this resolves to the drive root and should be false.
+  return existsSync("/.dockerenv") || existsSync("/run/.containerenv") || process.env.DOCKER === "1";
+}
+
+function getDefaultWafServiceUrl(): string {
+  return isRunningInDocker() ? DEFAULT_WAF_SERVICE_URL_DOCKER : DEFAULT_WAF_SERVICE_URL;
+}
+
 export function getWafServiceUrl(): string {
-  return (process.env.WAF_HARDENING_URL || DEFAULT_WAF_SERVICE_URL).replace(/\/+$/, "");
+  return (process.env.WAF_HARDENING_URL || getDefaultWafServiceUrl()).replace(/\/+$/, "");
 }
 
 export function getDefaultWafTargetBaseUrl(): string {

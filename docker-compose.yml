@@ -11,6 +11,10 @@ services:
     container_name: gracestack-bridge
     restart: unless-stopped
     env_file: ./bridge/.env
+    extra_hosts:
+      # Allow containers (Linux) to reach services bound to the Docker host.
+      # Used for WAF_HARDENING_URL default (host.docker.internal:8000).
+      - "host.docker.internal:host-gateway"
     environment:
       WEAVIATE_HOST: weaviate
       WEAVIATE_PORT: "8080"

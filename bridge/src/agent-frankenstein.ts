@@ -40,11 +40,11 @@ import {
   getCurrentSession, endSession,
   type LearningStats, type Learning,
 } from "./frank-learning.js";
+import { getWafServiceUrl as resolveWafServiceUrl, getDefaultWafTargetBaseUrl } from "./tools-waf.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = process.env.CASCADE_REMOTE_WORKSPACE || join(__dirname, "..", "..");
-const DEFAULT_WAF_SERVICE_URL = "http://127.0.0.1:8000";
-const DEFAULT_WAF_TARGET_BASE_URL = "http://localhost:18080";
+const DEFAULT_WAF_TARGET_BASE_URL = getDefaultWafTargetBaseUrl();
 
 export type FrankStreamCallback = (chunk: string) => void;
 export type FrankStatusCallback = (status: { type: string; tool?: string; input?: string }) => void;
@@ -171,7 +171,7 @@ export class FrankensteinAgent {
   }
 
   private getWafServiceUrl(): string {
-    return (process.env.WAF_HARDENING_URL || DEFAULT_WAF_SERVICE_URL).replace(/\/+$/, "");
+    return resolveWafServiceUrl();
   }
 
   private toWafString(value: unknown, fallback = ""): string {
@@ -1313,7 +1313,7 @@ Svara på svenska om användaren skriver på svenska.
 
 ### WAF Hardening (så styr du WAF här)
 - Detta system har en separat **WAF Hardening service** som bridge proxy:ar till.
-- Service URL: **${wafServiceUrl}** (styrt av env "WAF_HARDENING_URL", default ${DEFAULT_WAF_SERVICE_URL}).
+- Service URL: **${wafServiceUrl}** (styrt av env "WAF_HARDENING_URL"; om den inte är satt används docker-aware default).
 - Default test-target ("base_url"): **${DEFAULT_WAF_TARGET_BASE_URL}**.
 - Du ska INTE be användaren om “integration” — den finns redan. Använd WAF-verktygen direkt.
 - Viktigaste upstream endpoints som verktygen använder (för "waf_request"):
