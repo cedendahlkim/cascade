@@ -205,6 +205,17 @@
 - [x] SVG favicon, SEO meta-tags, Open Graph
 - [x] Nginx multi-domain: `gracestack.se` → `www.gracestack.se` → landing, `app.gracestack.se` → app
 
+### 29. WAF Hardening + Pentest (Frankenstein) ✅
+
+- [x] Bridge: WAF proxy routes under `/api/waf/*` (start/stop/status/run/recent-runs/run/:id/results)
+- [x] Bridge: Pentest routes under `/api/pentest/*`
+  - [x] `POST /api/pentest/waf/report` — genererar Markdown-rapport från WAF-run results via Frankenstein
+  - [x] `GET /api/pentest/config` — visar resolved WAF service url + default target
+- [x] Frankenstein tool: `pentest_waf_run` (start → run → poll results → summary + run_id)
+- [x] Web UI:
+  - [x] WAF-vy: "Pentest-rapport (Frankenstein)" panel
+  - [x] Ny More-tab: **🧨 Pentest** (`PentestView`) för end-to-end flöde
+
 ### 21. Prestanda-optimeringar ✅
 - [x] Socket.IO throttling (agent_stream 50ms, gemini_stream 50ms, orchestrator_worker 200ms)
 - [x] Meddelandebegränsning (max 200 per chatt)
@@ -438,6 +449,7 @@
 | `bridge/src/tools-computers.ts` | Multi-dator verktyg |
 | `bridge/src/tools-desktop.ts` | Desktop-verktyg (screenshot, klick, tangentbord) |
 | `bridge/src/tools-filesystem.ts` | Filsystem-verktyg |
+| `bridge/src/tools-waf.ts` | WAF Hardening tool wrapper (Docker-aware URL + tool dispatch) |
 | `bridge/src/tools-process.ts` | Process-verktyg |
 | `bridge/src/workflows.ts` | Automation workflow engine |
 | `bridge/src/user-data.ts` | Per-user konversationer, meddelanden, workspace-delning (15 endpoints) |
@@ -448,6 +460,8 @@
 | `bridge/src/vision.ts` | Vision & Multimodal — bildanalys via Gemini/Claude Vision |
 | `bridge/src/snapshots.ts` | Snapshot & Rollback — version control för AI-tillstånd |
 | `bridge/src/webhooks.ts` | Webhook & API Gateway — exponera AI som webhook-endpoints |
+| `bridge/src/routes/waf-routes.ts` | WAF Hardening API routes under `/api/waf` |
+| `bridge/src/routes/pentest-routes.ts` | Pentest API routes under `/api/pentest` |
 | `bridge/plugins/` | 20 community-plugins (math, crypto, network, etc.) |
 
 ### Web (Frontend — 32 views + lib)
@@ -491,6 +505,8 @@
 | `web/src/components/SnapshotsView.tsx` | Snapshot & Rollback — skapa, återställ, diff |
 | `web/src/components/WebhooksView.tsx` | Webhooks & API Gateway — CRUD, loggar, curl-exempel |
 | `web/src/contexts/AuthContext.tsx` | React auth context (Supabase) med role/isAdmin/isViewer |
+| `web/src/components/PentestView.tsx` | Pentest UI (WAF run + report generation via Frankenstein) |
+| `web/src/components/WafHardeningView.tsx` | WAF UI + AI control + report panel |
 | `web/src/hooks/useMobile.ts` | Haptic feedback + mobil-detection |
 | `web/src/lib/api.ts` | API-klient |
 | `web/src/lib/supabase.ts` | Supabase-klient |
