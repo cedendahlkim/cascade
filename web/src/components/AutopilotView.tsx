@@ -36,15 +36,15 @@ interface MissionIteration {
 interface MissionResponse {
   goal: string;
   ok: boolean;
-  runner?: "host" | "kali" | "kali_sandbox";
+  runner?: "host" | "kali";
   cwd: string;
-  verify_runner?: "host" | "kali" | "kali_sandbox";
+  verify_runner?: "host" | "kali";
   verify_cwd: string;
   iterations: MissionIteration[];
 }
 
 type VerifyPresetId = "none" | "web_build" | "bridge_test" | "all";
-type ShellRunner = "host" | "kali" | "kali_sandbox";
+type ShellRunner = "host" | "kali";
 
 const DEFAULT_MAX_ITERS = 3;
 
@@ -175,7 +175,6 @@ export default function AutopilotView() {
             >
               <option value="host">host</option>
               <option value="kali">kali</option>
-              <option value="kali_sandbox">kali_sandbox</option>
             </select>
 
             <label htmlFor="autopilot-verify-runner" className="text-[11px] text-slate-400">Verify runner</label>
@@ -188,7 +187,6 @@ export default function AutopilotView() {
             >
               <option value="host">host</option>
               <option value="kali">kali</option>
-              <option value="kali_sandbox">kali_sandbox</option>
             </select>
 
             <label htmlFor="autopilot-verify" className="text-[11px] text-slate-400">Verifiering</label>
