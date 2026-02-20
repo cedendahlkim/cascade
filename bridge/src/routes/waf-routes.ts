@@ -1,12 +1,12 @@
 import { type Response as ExpressResponse, Router } from "express";
+import { getWafServiceUrl as resolveWafServiceUrl, getDefaultWafTargetBaseUrl } from "../tools-waf.js";
 
 const router = Router();
-const DEFAULT_TARGET_BASE_URL = "http://localhost:18080";
-const DEFAULT_WAF_SERVICE_URL = "http://127.0.0.1:8000";
+const DEFAULT_TARGET_BASE_URL = getDefaultWafTargetBaseUrl();
 const RUN_STUCK_THRESHOLD_SECONDS = 15 * 60;
 
 function getWafServiceUrl(): string {
-  return (process.env.WAF_HARDENING_URL || DEFAULT_WAF_SERVICE_URL).replace(/\/+$/, "");
+  return resolveWafServiceUrl();
 }
 
 interface WafProxyResult {
