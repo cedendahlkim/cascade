@@ -406,7 +406,7 @@
 
 ## Alla filer i projektet
 
-### Bridge (Backend — 51 filer)
+### Bridge (Backend — 50+ filer)
 
 | Fil | Beskrivning |
 |---|---|
@@ -464,7 +464,7 @@
 | `bridge/src/routes/pentest-routes.ts` | Pentest API routes under `/api/pentest` |
 | `bridge/plugins/` | 20 community-plugins (math, crypto, network, etc.) |
 
-### Web (Frontend — 32 views + lib)
+### Web (Frontend — 30+ views + lib)
 
 | Fil | Beskrivning |
 |---|---|
