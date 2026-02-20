@@ -749,7 +749,7 @@ ${trainingContext}
         { name: "write_file", description: "Write content to a local file.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "File path" }, content: { type: SchemaType.STRING, description: "Content" } }, required: ["path", "content"] } },
         { name: "list_directory", description: "List files in a directory.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Directory path" } }, required: ["path"] } },
         // COMMANDS
-        { name: "run_command", description: "Run a shell command on the bridge server.", parameters: { type: SchemaType.OBJECT, properties: { command: { type: SchemaType.STRING, description: "Command to run" }, cwd: { type: SchemaType.STRING, description: "Working directory" } }, required: ["command"] } },
+        { name: "run_command", description: "Run a shell command on the bridge server.", parameters: { type: SchemaType.OBJECT, properties: { command: { type: SchemaType.STRING, description: "Command to run" }, cwd: { type: SchemaType.STRING, description: "Working directory" }, runner: { type: SchemaType.STRING, description: "Runner: host (default) or kali" } }, required: ["command"] } },
         { name: "run_javascript", description: "Execute JavaScript code.", parameters: { type: SchemaType.OBJECT, properties: { code: { type: SchemaType.STRING, description: "JavaScript code" } }, required: ["code"] } },
         // WEB
         { name: "web_search", description: "Search the web.", parameters: { type: SchemaType.OBJECT, properties: { query: { type: SchemaType.STRING, description: "Search query" } }, required: ["query"] } },
@@ -825,7 +825,7 @@ ${trainingContext}
         { name: "workspace_search", description: "Search for text across all files in the workspace. Returns matching file paths, line numbers, and content.", parameters: { type: SchemaType.OBJECT, properties: { query: { type: SchemaType.STRING, description: "Text to search for (min 2 chars)" } }, required: ["query"] } },
         { name: "workspace_ai_edit", description: "Use AI (Gemini) to edit a file based on a natural language instruction. Returns original and modified content for diff review.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Relative file path to edit" }, instruction: { type: SchemaType.STRING, description: "What to change in the file" } }, required: ["path", "instruction"] } },
         { name: "workspace_ai_generate", description: "Use AI to generate a new file based on instruction.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Target file path" }, instruction: { type: SchemaType.STRING, description: "What to generate" } }, required: ["path", "instruction"] } },
-        { name: "workspace_terminal", description: "Execute a shell command in the workspace. Returns stdout, stderr, and exit code.", parameters: { type: SchemaType.OBJECT, properties: { command: { type: SchemaType.STRING, description: "Shell command to run" }, cwd: { type: SchemaType.STRING, description: "Working directory (relative to workspace root)" } }, required: ["command"] } },
+        { name: "workspace_terminal", description: "Execute a shell command in the workspace. Returns stdout, stderr, and exit code.", parameters: { type: SchemaType.OBJECT, properties: { command: { type: SchemaType.STRING, description: "Shell command to run" }, cwd: { type: SchemaType.STRING, description: "Working directory (relative to workspace root)" }, runner: { type: SchemaType.STRING, description: "Runner: host (default) or kali" } }, required: ["command"] } },
         // Plugin tools
         ...getPluginToolDefinitions().map((d) => {
           const props: Record<string, unknown> = {};
@@ -957,7 +957,7 @@ ${trainingContext}
           break;
         case "workspace_terminal":
           url = `${BRIDGE_BASE}/api/workspace/ai/terminal`;
-          opts = { ...opts, method: "POST", body: JSON.stringify({ command: args.command, cwd: args.cwd }) };
+          opts = { ...opts, method: "POST", body: JSON.stringify({ command: args.command, cwd: args.cwd, runner: args.runner }) };
           break;
         default:
           return `Unknown workspace tool: ${name}`;

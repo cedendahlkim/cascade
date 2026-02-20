@@ -64,6 +64,73 @@ function safePath(relPath: string): string | null {
   return resolved;
 }
 
+type ShellRunner = "host" | "kali";
+
+const KALI_CONTAINER_NAME = process.env.KALI_CONTAINER_NAME || "gracestack-kali";
+const KALI_WORKSPACE_ROOT = process.env.KALI_WORKSPACE_ROOT || WORKSPACE_ROOT;
+
+function bashSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function mapWorkspaceCwdToKali(hostAbsCwd: string): string {
+  try {
+    const rel = relative(WORKSPACE_ROOT, hostAbsCwd);
+    if (rel.startsWith("..")) return KALI_WORKSPACE_ROOT;
+    return join(KALI_WORKSPACE_ROOT, rel);
+  } catch {
+    return KALI_WORKSPACE_ROOT;
+  }
+}
+
+async function runShellCommand(
+  command: string,
+  execCwd: string,
+  timeoutMs: number,
+  runner: ShellRunner,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const clamp = (value: unknown, max = 20_000) => String(value ?? "").slice(0, max);
+
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+
+    if (runner === "kali") {
+      if (process.platform === "win32") {
+        resolve({ stdout: "", stderr: "Kali runner is only supported on Linux Docker deployments.", exitCode: 1 });
+        return;
+      }
+
+      const kaliCwd = mapWorkspaceCwdToKali(execCwd);
+      const cmd = `cd ${bashSingleQuote(kaliCwd)} && ${command}`;
+      const proc = spawn(
+        "docker",
+        ["exec", "-i", KALI_CONTAINER_NAME, "bash", "-lc", cmd],
+        { timeout: timeoutMs, env: { ...process.env, PYTHONIOENCODING: "utf-8" } },
+      );
+
+      proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString("utf-8"); });
+      proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf-8"); });
+      proc.on("close", (code) => resolve({ stdout: clamp(stdout), stderr: clamp(stderr), exitCode: code ?? 1 }));
+      proc.on("error", (err) => resolve({ stdout: clamp(stdout), stderr: clamp(String(err)), exitCode: 1 }));
+      return;
+    }
+
+    const isWin = process.platform === "win32";
+    const sh = isWin ? "cmd.exe" : "/bin/bash";
+    const args = isWin ? ["/c", command] : ["-c", command];
+    const proc = spawn(sh, args, {
+      cwd: execCwd,
+      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+      timeout: timeoutMs,
+    });
+    proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString("utf-8"); });
+    proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf-8"); });
+    proc.on("close", (code) => resolve({ stdout: clamp(stdout), stderr: clamp(stderr), exitCode: code ?? 1 }));
+    proc.on("error", (err) => resolve({ stdout: clamp(stdout), stderr: clamp(String(err)), exitCode: 1 }));
+  });
+}
+
 /** Language ID from file extension (for Monaco). */
 function langFromExt(ext: string): string {
   const map: Record<string, string> = {
@@ -246,6 +313,7 @@ router.post("/ai/mission", async (req: Request, res: Response) => {
     currentContent,
     openFiles,
     cwd,
+    runner,
     verify,
     maxIterations,
   } = (req.body || {}) as {
@@ -254,7 +322,8 @@ router.post("/ai/mission", async (req: Request, res: Response) => {
     currentContent?: string | null;
     openFiles?: string[];
     cwd?: string;
-    verify?: { commands?: string[]; cwd?: string };
+    runner?: ShellRunner;
+    verify?: { commands?: string[]; cwd?: string; runner?: ShellRunner };
     maxIterations?: number;
   };
 
@@ -278,33 +347,10 @@ router.post("/ai/mission", async (req: Request, res: Response) => {
     return safe || missionCwd;
   })();
 
+  const missionRunner: ShellRunner = runner === "kali" ? "kali" : "host";
+  const verifyRunner: ShellRunner = verify?.runner === "kali" ? "kali" : missionRunner;
+
   const clamp = (value: unknown, max = 10_000) => String(value ?? "").slice(0, max);
-
-  const runShell = async (
-    command: string,
-    execCwd: string,
-    timeoutMs: number,
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }> => new Promise((resolve) => {
-    let stdout = "";
-    let stderr = "";
-    const isWin = process.platform === "win32";
-    const sh = isWin ? "cmd.exe" : "/bin/bash";
-    const args = isWin ? ["/c", command] : ["-c", command];
-
-    const proc = spawn(sh, args, {
-      cwd: execCwd,
-      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-      timeout: timeoutMs,
-    });
-    proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString("utf-8"); });
-    proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf-8"); });
-    proc.on("close", (code) => resolve({
-      stdout: clamp(stdout, 20_000),
-      stderr: clamp(stderr, 20_000),
-      exitCode: code ?? 1,
-    }));
-    proc.on("error", (err) => resolve({ stdout: clamp(stdout, 20_000), stderr: String(err), exitCode: 1 }));
-  });
 
   const verifyCommands: string[] = Array.isArray(verify?.commands)
     ? (verify?.commands as unknown[]).map(String).filter((c) => c.trim().length > 0)
@@ -340,11 +386,12 @@ Svara med EXAKT EN JSON-array med actions.
 Tillgängliga actions:
 - {"action":"edit","path":"relativ/sökväg","content":"HELA det nya filinnehållet"}
 - {"action":"create","path":"relativ/sökväg","content":"filinnehåll"}
-- {"action":"run","command":"shell-kommando"}
+- {"action":"run","command":"shell-kommando","runner":"host|kali"}
 - {"action":"done","text":"kort sammanfattning"}
 
 REGLER:
 - Vid edit/create: content måste vara HELA filen
+- runner är valfri. Om runner saknas: använd mission runner (${missionRunner}).
 - Returnera BARA JSON-arrayen (ingen markdown, inga code fences).`;
 
       const planRes = await fetch(
@@ -398,8 +445,9 @@ REGLER:
                 results.push({ action: "run", success: false, error: "command empty" });
                 break;
               }
-              const r = await runShell(cmd, missionCwd, 120_000);
-              results.push({ action: "run", command: cmd, success: r.exitCode === 0, ...r });
+              const actRunner: ShellRunner = act.runner === "kali" ? "kali" : missionRunner;
+              const r = await runShellCommand(cmd, missionCwd, 120_000, actRunner);
+              results.push({ action: "run", command: cmd, runner: actRunner, success: r.exitCode === 0, ...r });
               break;
             }
             case "done":
@@ -417,8 +465,8 @@ REGLER:
       if (verifyCommands.length > 0) {
         for (const cmd of verifyCommands) {
           // eslint-disable-next-line no-await-in-loop
-          const r = await runShell(cmd, verifyCwd, 240_000);
-          verifyResults.push({ command: cmd, success: r.exitCode === 0, ...r });
+          const r = await runShellCommand(cmd, verifyCwd, 240_000, verifyRunner);
+          verifyResults.push({ command: cmd, runner: verifyRunner, success: r.exitCode === 0, ...r });
         }
       }
 
@@ -434,7 +482,15 @@ REGLER:
       if (ok && hasDone) break;
     }
 
-    res.json({ goal, ok, cwd: missionCwd, verify_cwd: verifyCwd, iterations });
+    res.json({
+      goal,
+      ok,
+      runner: missionRunner,
+      cwd: missionCwd,
+      verify_runner: verifyRunner,
+      verify_cwd: verifyCwd,
+      iterations,
+    });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -1165,18 +1221,7 @@ REGLER:
     while ((match = runRegex.exec(fullText)) !== null) {
       const command = match[1].trim();
       try {
-        const cmdResult = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve) => {
-          let stdout = "";
-          let stderr = "";
-          const isWin = process.platform === "win32";
-          const sh = isWin ? "cmd.exe" : "/bin/bash";
-          const args = isWin ? ["/c", command] : ["-c", command];
-          const proc = spawn(sh, args, { cwd: WORKSPACE_ROOT, timeout: 30000 });
-          proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString("utf-8"); });
-          proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf-8"); });
-          proc.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 1 }));
-          proc.on("error", (err) => resolve({ stdout, stderr: String(err), exitCode: 1 }));
-        });
+        const cmdResult = await runShellCommand(command, WORKSPACE_ROOT, 30_000, "host");
         fileActions.push({ action: "run", command, success: cmdResult.exitCode === 0, ...cmdResult });
       } catch (err) {
         fileActions.push({ action: "run", command, success: false, error: String(err) });
@@ -1501,33 +1546,17 @@ Returnera max 8 resultat, sorterade efter relevans. Svara ENBART med JSON-arraye
 
 /** POST /api/workspace/ai/terminal — AI runs a terminal command */
 router.post("/ai/terminal", async (req: Request, res: Response) => {
-  const { command, cwd } = req.body;
+  const { command, cwd, runner } = req.body;
   if (!command) return res.status(400).json({ error: "command required" });
 
   const workDir = cwd ? safePath(cwd) : WORKSPACE_ROOT;
   if (!workDir) return res.status(403).json({ error: "Path outside workspace" });
 
+  const shellRunner: ShellRunner = runner === "kali" ? "kali" : "host";
+
   try {
-    const isWindows = process.platform === "win32";
-    const shell = isWindows ? "cmd.exe" : "/bin/bash";
-    const shellArgs = isWindows ? ["/c", command] : ["-c", command];
-
-    const result = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve) => {
-      let stdout = "";
-      let stderr = "";
-      const proc = spawn(shell, shellArgs, {
-        cwd: workDir,
-        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-        timeout: 30000,
-      });
-
-      proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString("utf-8"); });
-      proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf-8"); });
-      proc.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 1 }));
-      proc.on("error", (err) => resolve({ stdout, stderr: String(err), exitCode: 1 }));
-    });
-
-    res.json({ command, ...result });
+    const result = await runShellCommand(String(command), workDir, 30_000, shellRunner);
+    res.json({ command, runner: shellRunner, ...result });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

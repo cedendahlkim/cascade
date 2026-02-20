@@ -24,11 +24,36 @@ services:
     ports:
       - "3031:3031"
     volumes:
+      # Persist the full /app workspace so the AI can change code even if the server restarts.
+      - app-workspace:/app
       - bridge-data:/app/bridge/data
       - frank-training:/app/frankenstein-ai/training_data
+      # Allow Bridge to "docker exec" into the Kali toolbox container.
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - weaviate
       - ollama-embed
+
+  # Kali toolbox: used for running security tooling (nmap/sqlmap/etc) via CLI.
+  # Bridge can execute inside this container using runner="kali".
+  kali:
+    build:
+      context: ./deploy/kali
+      args:
+        KALI_METAPACKAGE: ${KALI_METAPACKAGE:-kali-linux-large}
+    container_name: gracestack-kali
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - app-workspace:/app
+      - bridge-data:/app/bridge/data
+      - frank-training:/app/frankenstein-ai/training_data
 
   weaviate:
     image: cr.weaviate.io/semitechnologies/weaviate:1.28.4
@@ -86,6 +111,7 @@ services:
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
 volumes:
+  app-workspace:
   bridge-data:
   frank-training:
   weaviate-data:

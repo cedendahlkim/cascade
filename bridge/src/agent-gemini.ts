@@ -102,7 +102,7 @@ export class GeminiAgent {
         { name: "write_file", description: "Write content to a local file.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "File path" }, content: { type: SchemaType.STRING, description: "Content" } }, required: ["path", "content"] } },
         { name: "list_directory", description: "List files in a directory.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Directory path" } }, required: ["path"] } },
         // Command tools
-        { name: "run_command", description: "Run a shell command on the bridge server.", parameters: { type: SchemaType.OBJECT, properties: { command: { type: SchemaType.STRING, description: "Command to run" }, cwd: { type: SchemaType.STRING, description: "Working directory" } }, required: ["command"] } },
+        { name: "run_command", description: "Run a shell command on the bridge server.", parameters: { type: SchemaType.OBJECT, properties: { command: { type: SchemaType.STRING, description: "Command to run" }, cwd: { type: SchemaType.STRING, description: "Working directory" }, runner: { type: SchemaType.STRING, description: "Runner: host (default) or kali" } }, required: ["command"] } },
         // Web tools
         { name: "web_search", description: "Search the web.", parameters: { type: SchemaType.OBJECT, properties: { query: { type: SchemaType.STRING, description: "Search query" } }, required: ["query"] } },
         { name: "fetch_url", description: "Fetch content from a URL.", parameters: { type: SchemaType.OBJECT, properties: { url: { type: SchemaType.STRING, description: "URL to fetch" } }, required: ["url"] } },

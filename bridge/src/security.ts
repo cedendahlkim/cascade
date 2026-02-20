@@ -58,6 +58,7 @@ const DEFAULT_CONFIG: SecurityConfig = {
     "dir", "ls", "cat", "type", "echo", "pwd", "cd",
     "node", "npm", "npx", "git", "tsc", "tsx",
     "python", "pip",
+    "docker",
     "powershell", "pwsh",
     "tasklist", "systeminfo", "hostname", "whoami",
     "netstat", "ipconfig", "ping", "curl",
