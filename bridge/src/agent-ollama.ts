@@ -10,6 +10,7 @@ import { handleFilesystemTool } from "./tools-filesystem.js";
 import { handleCommandTool } from "./tools-commands.js";
 import { handleProcessTool } from "./tools-process.js";
 import { handleWebTool } from "./tools-web.js";
+import { handleWafTool } from "./tools-waf.js";
 import { createMemory, searchMemories, listMemories } from "./memory.js";
 import { ragSearch, ragListSources } from "./rag.js";
 import { getPluginToolDefinitions, handlePluginTool } from "./plugin-loader.js";
@@ -136,6 +137,13 @@ export class OllamaAgent {
       { name: "write_file", description: "Write content to a local file.", parameters: { type: "object" as const, properties: { path: { type: "string", description: "File path" }, content: { type: "string", description: "Content" } }, required: ["path", "content"] } },
       { name: "list_directory", description: "List files in a directory.", parameters: { type: "object" as const, properties: { path: { type: "string", description: "Directory path" } }, required: ["path"] } },
       { name: "run_command", description: "Run a shell command on the bridge server.", parameters: { type: "object" as const, properties: { command: { type: "string", description: "Command to run" }, cwd: { type: "string", description: "Working directory" } }, required: ["command"] } },
+      { name: "waf_start", description: "Start WAF with a profile (pl1/pl2/pl3/pl4).", parameters: { type: "object" as const, properties: { profile: { type: "string", description: "WAF profile" } } } },
+      { name: "waf_stop", description: "Stop WAF immediately.", parameters: { type: "object" as const, properties: {} } },
+      { name: "waf_status", description: "Get WAF status for a target base URL.", parameters: { type: "object" as const, properties: { base_url: { type: "string", description: "Target base URL" } } } },
+      { name: "waf_run", description: "Run WAF test suite with raw parameters (no bridge-side clamping).", parameters: { type: "object" as const, properties: { base_url: { type: "string", description: "Target base URL" }, tags: { type: "string", description: "Comma-separated tags" }, exclude_tags: { type: "string", description: "Comma-separated excluded tags" }, ids: { type: "string", description: "Comma-separated test IDs" }, concurrency: { type: "string", description: "Concurrency value forwarded as-is" } } } },
+      { name: "waf_recent_runs", description: "List recent WAF runs.", parameters: { type: "object" as const, properties: {} } },
+      { name: "waf_run_results", description: "Get results for a specific WAF run ID.", parameters: { type: "object" as const, properties: { run_id: { type: "string", description: "Run ID" } }, required: ["run_id"] } },
+      { name: "waf_request", description: "Unrestricted raw request to WAF service path.", parameters: { type: "object" as const, properties: { path: { type: "string", description: "Path on WAF service" }, method: { type: "string", description: "HTTP method" }, content_type: { type: "string", description: "Content-Type header" }, headers: { type: "string", description: "JSON object string of headers" }, body: { type: "string", description: "Raw body" } }, required: ["path"] } },
       { name: "list_computers", description: "List all registered computers.", parameters: { type: "object" as const, properties: {} } },
       { name: "run_on_computer", description: "Run a command on a remote computer.", parameters: { type: "object" as const, properties: { computer: { type: "string", description: "Computer name or 'auto'" }, command: { type: "string", description: "Shell command" } }, required: ["computer", "command"] } },
       { name: "rag_search", description: "Search the knowledge base.", parameters: { type: "object" as const, properties: { query: { type: "string", description: "Search query" } }, required: ["query"] } },
@@ -155,6 +163,9 @@ export class OllamaAgent {
 
   private async handleToolCall(name: string, args: Record<string, unknown>): Promise<string> {
     try {
+      // WAF tools
+      if (name.startsWith("waf_")) return await handleWafTool(name, args);
+
       // Memory tools
       if (name === "save_memory") { const m = createMemory(args.content as string, []); return `Memory saved: [${m.id}] "${m.content.slice(0, 80)}"`; }
       if (name === "search_memory") { const r = searchMemories(args.query as string); return r.length ? r.map(m => `[${m.id}] ${m.content}`).join("\n") : "No memories found."; }

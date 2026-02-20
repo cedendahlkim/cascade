@@ -133,6 +133,7 @@ import analyticsRoutes from "./routes/analytics-routes.js";
 import snapshotsRoutes from "./routes/snapshots-routes.js";
 import visionRoutes from "./routes/vision-routes.js";
 import webhooksRoutes from "./routes/webhooks-routes.js";
+import wafRoutes from "./routes/waf-routes.js";
 import { createCoreRoutes } from "./routes/core-routes.js";
 import {
   registerOperationalRoutes,
@@ -577,6 +578,7 @@ app.post("/api/prompt-lab/experiments/:id/rate", (req, res) => {
 app.use("/api/snapshots", snapshotsRoutes);
 app.use("/api/webhooks", webhooksRoutes);
 app.use("/api/vision", visionRoutes);
+app.use("/api/waf", wafRoutes);
 
 // Mount Cascade API
 app.use("/cascade", cascadeApi);

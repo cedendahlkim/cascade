@@ -301,6 +301,7 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | **Self-Improve** | Skills, evaluations, reflections dashboard |
 | **Frankenstein** | Training dashboard, cognitive metrics, ablation results |
 | **Archon** | Knowledge base management, vector search, crawling |
+| **WAF Hardening** | Start/stop WAF profiles, run corpus tests, inspect security regressions |
 | **Git** | Repository status, commits, branches, diffs |
 | **Flipper Zero** | BLE device control and signal management |
 | **Settings** | Global rules, memories, RAG, security, audit, theme |
@@ -455,6 +456,18 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | `GET/POST /api/projects` | List/create projects |
 | `GET /api/search?q=...` | Full-text search with scoring |
 | `GET /api/search/export` | Export as Markdown/JSON |
+
+### WAF Hardening
+| Endpoint | Description |
+|---|---|
+| `GET /api/waf/config` | Active WAF hardening bridge config |
+| `GET /api/waf/profiles` | List available WAF profiles |
+| `GET /api/waf/status` | Check WAF runtime/health status |
+| `POST /api/waf/start` | Start WAF environment with selected profile |
+| `POST /api/waf/stop` | Stop WAF environment |
+| `POST /api/waf/run` | Start a WAF test run (tags/ids/concurrency) |
+| `GET /api/waf/recent-runs` | Get latest test run IDs and status |
+| `GET /api/waf/run/:runId/results` | Get run summary + failing tests (returns `status`, `running_seconds`, `stale`, `message` while run is still active) |
 
 ### Bot Network
 | Endpoint | Description |

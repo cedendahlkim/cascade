@@ -21,6 +21,7 @@ export const MORE_TAB_ITEMS = [
   { id: "vision", label: "👁️ Vision" },
   { id: "snapshots", label: "📸 Snapshots" },
   { id: "webhooks", label: "🔗 Webhooks" },
+  { id: "waf", label: "🛡️ WAF" },
   { id: "editor", label: "💻 Editor" },
   { id: "git", label: "🔀 Git" },
   { id: "install", label: "📦 Installera" },

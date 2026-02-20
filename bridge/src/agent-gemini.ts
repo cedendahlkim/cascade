@@ -12,6 +12,7 @@ import { handleFilesystemTool } from "./tools-filesystem.js";
 import { handleCommandTool } from "./tools-commands.js";
 import { handleProcessTool } from "./tools-process.js";
 import { handleWebTool } from "./tools-web.js";
+import { handleWafTool } from "./tools-waf.js";
 import { createMemory, searchMemories, listMemories, updateMemory, deleteMemory } from "./memory.js";
 import { ragSearch, ragListSources, ragStats, ragIndexText, ragIndexFile } from "./rag.js";
 import { getPluginToolDefinitions, handlePluginTool } from "./plugin-loader.js";
@@ -105,6 +106,14 @@ export class GeminiAgent {
         // Web tools
         { name: "web_search", description: "Search the web.", parameters: { type: SchemaType.OBJECT, properties: { query: { type: SchemaType.STRING, description: "Search query" } }, required: ["query"] } },
         { name: "fetch_url", description: "Fetch content from a URL.", parameters: { type: SchemaType.OBJECT, properties: { url: { type: SchemaType.STRING, description: "URL to fetch" } }, required: ["url"] } },
+        // WAF
+        { name: "waf_start", description: "Start WAF with a profile (pl1/pl2/pl3/pl4).", parameters: { type: SchemaType.OBJECT, properties: { profile: { type: SchemaType.STRING, description: "WAF profile" } } } },
+        { name: "waf_stop", description: "Stop WAF immediately.", parameters: { type: SchemaType.OBJECT, properties: {} } },
+        { name: "waf_status", description: "Get WAF status for a target base URL.", parameters: { type: SchemaType.OBJECT, properties: { base_url: { type: SchemaType.STRING, description: "Target base URL" } } } },
+        { name: "waf_run", description: "Run WAF test suite with raw parameters (no bridge-side clamping).", parameters: { type: SchemaType.OBJECT, properties: { base_url: { type: SchemaType.STRING, description: "Target base URL" }, tags: { type: SchemaType.STRING, description: "Comma-separated tags" }, exclude_tags: { type: SchemaType.STRING, description: "Comma-separated excluded tags" }, ids: { type: SchemaType.STRING, description: "Comma-separated test IDs" }, concurrency: { type: SchemaType.STRING, description: "Concurrency value forwarded as-is" } } } },
+        { name: "waf_recent_runs", description: "List recent WAF runs.", parameters: { type: SchemaType.OBJECT, properties: {} } },
+        { name: "waf_run_results", description: "Get results for a specific WAF run ID.", parameters: { type: SchemaType.OBJECT, properties: { run_id: { type: SchemaType.STRING, description: "Run ID" } }, required: ["run_id"] } },
+        { name: "waf_request", description: "Unrestricted raw request to WAF service path.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Path on WAF service" }, method: { type: SchemaType.STRING, description: "HTTP method" }, content_type: { type: SchemaType.STRING, description: "Content-Type header" }, headers: { type: SchemaType.STRING, description: "JSON object string of headers" }, body: { type: SchemaType.STRING, description: "Raw body" } }, required: ["path"] } },
         // RAG tools
         { name: "rag_search", description: "Search the knowledge base.", parameters: { type: SchemaType.OBJECT, properties: { query: { type: SchemaType.STRING, description: "Search query" } }, required: ["query"] } },
         { name: "rag_list_sources", description: "List all indexed sources in the knowledge base.", parameters: { type: SchemaType.OBJECT, properties: {} } },
@@ -129,6 +138,9 @@ export class GeminiAgent {
 
   private async handleToolCall(name: string, args: Record<string, unknown>): Promise<string> {
     try {
+      // WAF tools
+      if (name.startsWith("waf_")) return await handleWafTool(name, args);
+
       // Computer tools
       const computerTools = ["list_computers", "run_on_computer", "read_remote_file", "write_remote_file", "screenshot_computer", "computer_system_info"];
       if (computerTools.includes(name)) return await handleComputerTool(name, args);

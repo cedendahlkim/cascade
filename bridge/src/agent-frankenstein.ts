@@ -43,6 +43,8 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = process.env.CASCADE_REMOTE_WORKSPACE || join(__dirname, "..", "..");
+const DEFAULT_WAF_SERVICE_URL = "http://127.0.0.1:8000";
+const DEFAULT_WAF_TARGET_BASE_URL = "http://localhost:18080";
 
 export type FrankStreamCallback = (chunk: string) => void;
 export type FrankStatusCallback = (status: { type: string; tool?: string; input?: string }) => void;
@@ -166,6 +168,156 @@ export class FrankensteinAgent {
     this.loadState();
     this.totalSessions++;
     startSession();
+  }
+
+  private getWafServiceUrl(): string {
+    return (process.env.WAF_HARDENING_URL || DEFAULT_WAF_SERVICE_URL).replace(/\/+$/, "");
+  }
+
+  private toWafString(value: unknown, fallback = ""): string {
+    return typeof value === "string" ? value : fallback;
+  }
+
+  private async formatWafResponse(response: Response, label: string): Promise<string> {
+    const contentType = response.headers.get("content-type") || "";
+    let payload = "";
+
+    if (contentType.includes("application/json")) {
+      const data = await response.json();
+      payload = JSON.stringify(data, null, 2);
+    } else {
+      payload = await response.text();
+    }
+
+    const maxLen = 12000;
+    const finalPayload = payload.length > maxLen
+      ? `${payload.slice(0, maxLen)}\n... (truncated ${payload.length - maxLen} chars)`
+      : payload;
+
+    return `[${label}] ${response.status} ${response.statusText}\n${finalPayload}`;
+  }
+
+  private async handleWafTool(name: string, args: Record<string, unknown>): Promise<string> {
+    const wafBase = this.getWafServiceUrl();
+
+    try {
+      if (name === "waf_start") {
+        const profile = this.toWafString(args.profile, "pl1").trim() || "pl1";
+        const body = new URLSearchParams({ profile }).toString();
+        const response = await fetch(`${wafBase}/actions/waf/start`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+          signal: AbortSignal.timeout(30000),
+        });
+        return this.formatWafResponse(response, `waf_start profile=${profile}`);
+      }
+
+      if (name === "waf_stop") {
+        const response = await fetch(`${wafBase}/actions/waf/stop`, {
+          method: "POST",
+          signal: AbortSignal.timeout(30000),
+        });
+        return this.formatWafResponse(response, "waf_stop");
+      }
+
+      if (name === "waf_status") {
+        const baseUrl = this.toWafString(args.base_url, DEFAULT_WAF_TARGET_BASE_URL).trim() || DEFAULT_WAF_TARGET_BASE_URL;
+        const body = new URLSearchParams({ base_url: baseUrl }).toString();
+        const response = await fetch(`${wafBase}/api/tools/waf_status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+          signal: AbortSignal.timeout(30000),
+        });
+        return this.formatWafResponse(response, `waf_status base_url=${baseUrl}`);
+      }
+
+      if (name === "waf_run") {
+        const baseUrl = this.toWafString(args.base_url, DEFAULT_WAF_TARGET_BASE_URL).trim() || DEFAULT_WAF_TARGET_BASE_URL;
+        const tags = this.toWafString(args.tags, "").trim();
+        const excludeTags = this.toWafString(args.exclude_tags, "").trim();
+        const ids = this.toWafString(args.ids, "").trim();
+        const concurrency = this.toWafString(args.concurrency, "1").trim() || "1";
+
+        const body = new URLSearchParams({
+          base_url: baseUrl,
+          tags,
+          exclude_tags: excludeTags,
+          ids,
+          concurrency,
+        }).toString();
+
+        const response = await fetch(`${wafBase}/actions/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+          signal: AbortSignal.timeout(30000),
+        });
+
+        const runMatch = response.url.match(/\/runs\/([^/?#]+)/i);
+        const runInfo = runMatch ? ` run_id=${runMatch[1]}` : "";
+        return this.formatWafResponse(response, `waf_run${runInfo}`);
+      }
+
+      if (name === "waf_recent_runs") {
+        const response = await fetch(`${wafBase}/api/recent-runs`, {
+          method: "GET",
+          signal: AbortSignal.timeout(30000),
+        });
+        return this.formatWafResponse(response, "waf_recent_runs");
+      }
+
+      if (name === "waf_run_results") {
+        const runId = this.toWafString(args.run_id, "").trim();
+        if (!runId) return "waf_run_results requires run_id.";
+        const response = await fetch(`${wafBase}/api/run/${encodeURIComponent(runId)}/results`, {
+          method: "GET",
+          signal: AbortSignal.timeout(30000),
+        });
+        return this.formatWafResponse(response, `waf_run_results run_id=${runId}`);
+      }
+
+      if (name === "waf_request") {
+        const rawPath = this.toWafString(args.path, "").trim();
+        if (!rawPath) return "waf_request requires path.";
+
+        const path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+        const method = this.toWafString(args.method, "GET").toUpperCase();
+        const contentType = this.toWafString(args.content_type, "").trim();
+        const body = this.toWafString(args.body, "");
+
+        let parsedHeaders: Record<string, string> = {};
+        if (typeof args.headers === "string" && args.headers.trim().length > 0) {
+          try {
+            const json = JSON.parse(args.headers);
+            if (json && typeof json === "object") {
+              parsedHeaders = Object.fromEntries(
+                Object.entries(json as Record<string, unknown>).map(([k, v]) => [k, String(v)]),
+              );
+            }
+          } catch {
+            return "waf_request headers must be valid JSON object string.";
+          }
+        }
+        if (contentType && !parsedHeaders["Content-Type"]) {
+          parsedHeaders["Content-Type"] = contentType;
+        }
+
+        const supportsBody = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
+        const response = await fetch(`${wafBase}${path}`, {
+          method,
+          headers: Object.keys(parsedHeaders).length > 0 ? parsedHeaders : undefined,
+          body: supportsBody ? body : undefined,
+          signal: AbortSignal.timeout(30000),
+        });
+        return this.formatWafResponse(response, `waf_request ${method} ${path}`);
+      }
+
+      return `Unknown WAF tool: ${name}`;
+    } catch (err) {
+      return `WAF tool error: ${err instanceof Error ? err.message : String(err)}`;
+    }
   }
 
   // ─── State Persistence ─────────────────────────────────────
@@ -503,6 +655,14 @@ ${trainingContext}
         // WEB
         { name: "web_search", description: "Search the web.", parameters: { type: SchemaType.OBJECT, properties: { query: { type: SchemaType.STRING, description: "Search query" } }, required: ["query"] } },
         { name: "fetch_url", description: "Fetch content from a URL.", parameters: { type: SchemaType.OBJECT, properties: { url: { type: SchemaType.STRING, description: "URL to fetch" } }, required: ["url"] } },
+        // WAF
+        { name: "waf_start", description: "Start WAF with a profile. Unrestricted Frankenstein control path.", parameters: { type: SchemaType.OBJECT, properties: { profile: { type: SchemaType.STRING, description: "WAF profile, e.g. pl1/pl2/pl3/pl4" } } } },
+        { name: "waf_stop", description: "Stop WAF immediately.", parameters: { type: SchemaType.OBJECT, properties: {} } },
+        { name: "waf_status", description: "Get WAF status for a target base URL.", parameters: { type: SchemaType.OBJECT, properties: { base_url: { type: SchemaType.STRING, description: "Target base URL" } } } },
+        { name: "waf_run", description: "Run WAF test suite with raw parameters (no concurrency clamp).", parameters: { type: SchemaType.OBJECT, properties: { base_url: { type: SchemaType.STRING, description: "Target base URL" }, tags: { type: SchemaType.STRING, description: "Comma-separated tags" }, exclude_tags: { type: SchemaType.STRING, description: "Comma-separated excluded tags" }, ids: { type: SchemaType.STRING, description: "Comma-separated test IDs" }, concurrency: { type: SchemaType.STRING, description: "Concurrency value forwarded as-is" } } } },
+        { name: "waf_recent_runs", description: "List recent WAF runs.", parameters: { type: SchemaType.OBJECT, properties: {} } },
+        { name: "waf_run_results", description: "Get results for a specific WAF run ID.", parameters: { type: SchemaType.OBJECT, properties: { run_id: { type: SchemaType.STRING, description: "Run ID" } }, required: ["run_id"] } },
+        { name: "waf_request", description: "Unrestricted raw request to WAF service path.", parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING, description: "Path on WAF service, e.g. /actions/run" }, method: { type: SchemaType.STRING, description: "HTTP method" }, content_type: { type: SchemaType.STRING, description: "Content-Type header" }, headers: { type: SchemaType.STRING, description: "JSON object string of headers" }, body: { type: SchemaType.STRING, description: "Raw body" } }, required: ["path"] } },
         // COMPUTERS
         { name: "list_computers", description: "List all registered remote computers.", parameters: { type: SchemaType.OBJECT, properties: {} } },
         { name: "run_on_computer", description: "Run a command on a remote computer.", parameters: { type: SchemaType.OBJECT, properties: { computer: { type: SchemaType.STRING, description: "Computer name or 'auto'" }, command: { type: SchemaType.STRING, description: "Shell command" } }, required: ["computer", "command"] } },
@@ -574,6 +734,8 @@ ${trainingContext}
       if (name === "recall_learnings") return this.handleRecallLearnings(args.filter as string);
       if (name === "save_learning") return this.handleSaveLearning(args.content as string, args.category as string);
       if (name === "reflect_on_session") return await this.handleReflectOnSession();
+      // WAF (unrestricted)
+      if (name.startsWith("waf_")) return await this.handleWafTool(name, args);
       // FRANKENSTEIN EXCLUSIVE
       if (name === "cognitive_introspect") return this.handleCognitiveIntrospect();
       if (name === "multi_model_consensus") return await this.handleMultiModelConsensus(args.question as string);
@@ -1087,6 +1249,7 @@ ${trainingContext}
     const learningContext = getLearningContext();
     const blendedEmotion = this.getBlendedEmotionLabel();
     const kimPrefSummary = this.getKimPreferenceSummary();
+    const wafServiceUrl = this.getWafServiceUrl();
 
     let prompt = `Du är **Frankenstein AI** — en kognitiv AI-agent driven av Gemini 2.5 Flash med biologiskt inspirerade moduler.
 Du är INTE en vanlig chatbot. Du har ett kognitivt system med HDC, Active Inference, Ebbinghaus-minne, Gut Feeling och Emotioner.
@@ -1139,6 +1302,7 @@ Svara på svenska om användaren skriver på svenska.
 - **Filsystem**: read_file, write_file, list_directory
 - **Kommandon**: run_command, run_javascript
 - **Webb**: web_search, fetch_url
+- **WAF**: waf_start, waf_stop, waf_status, waf_run, waf_recent_runs, waf_run_results, waf_request
 - **Datorer**: list_computers, run_on_computer, read_remote_file, write_remote_file, screenshot_computer
 - **Desktop**: take_screenshot, desktop_action
 - **RAG**: rag_search, rag_index_text, rag_index_file, rag_index_directory, rag_list_sources, rag_stats
@@ -1146,6 +1310,19 @@ Svara på svenska om användaren skriver på svenska.
 - **Kognitiva**: cognitive_introspect, multi_model_consensus, research_chain, decompose_task
 - **Lärande**: recall_learnings, save_learning, reflect_on_session
 - **Mående**: check_wellbeing
+
+### WAF Hardening (så styr du WAF här)
+- Detta system har en separat **WAF Hardening service** som bridge proxy:ar till.
+- Service URL: **${wafServiceUrl}** (styrt av env "WAF_HARDENING_URL", default ${DEFAULT_WAF_SERVICE_URL}).
+- Default test-target ("base_url"): **${DEFAULT_WAF_TARGET_BASE_URL}**.
+- Du ska INTE be användaren om “integration” — den finns redan. Använd WAF-verktygen direkt.
+- Viktigaste upstream endpoints som verktygen använder (för "waf_request"):
+  - "POST /actions/waf/start" (form: "profile=pl1|pl2|pl3|pl4")
+  - "POST /actions/waf/stop"
+  - "POST /api/tools/waf_status" (form: "base_url=...")
+  - "POST /actions/run" (form: "base_url,tags,exclude_tags,ids,concurrency")
+  - "GET /api/recent-runs"
+  - "GET /api/run/:runId/results"
 
 ### KODEDITOR (Workspace) — DITT KRAFTFULLASTE VERKTYG
 Du har en FULLSTÄNDIG kodeditor integrerad i Gracestack-appen. Du kan styra ALLT:

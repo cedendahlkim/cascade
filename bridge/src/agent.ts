@@ -19,6 +19,7 @@ import { PROCESS_TOOLS, handleProcessTool } from "./tools-process.js";
 import { DESKTOP_TOOLS, handleDesktopTool } from "./tools-desktop.js";
 import { COMPUTER_TOOLS, handleComputerTool } from "./tools-computers.js";
 import { WEB_TOOLS, handleWebTool } from "./tools-web.js";
+import { handleWafTool } from "./tools-waf.js";
 import { getAuditLog, getSecurityConfig } from "./security.js";
 import {
   ragIndexText, ragIndexFile, ragIndexDirectory,
@@ -113,6 +114,79 @@ const MEMORY_TOOLS: Anthropic.Tool[] = [
         id: { type: "string", description: "Memory ID to delete" },
       },
       required: ["id"],
+    },
+  },
+];
+
+const WAF_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "waf_start",
+    description: "Start WAF with a profile (pl1/pl2/pl3/pl4).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        profile: { type: "string", description: "WAF profile, e.g. pl1/pl2/pl3/pl4" },
+      },
+    },
+  },
+  {
+    name: "waf_stop",
+    description: "Stop WAF immediately.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "waf_status",
+    description: "Get WAF status for a target base URL.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        base_url: { type: "string", description: "Target base URL" },
+      },
+    },
+  },
+  {
+    name: "waf_run",
+    description: "Run WAF test suite with raw parameters (no bridge-side clamping).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        base_url: { type: "string", description: "Target base URL" },
+        tags: { type: "string", description: "Comma-separated tags" },
+        exclude_tags: { type: "string", description: "Comma-separated excluded tags" },
+        ids: { type: "string", description: "Comma-separated test IDs" },
+        concurrency: { type: "string", description: "Concurrency value forwarded as-is" },
+      },
+    },
+  },
+  {
+    name: "waf_recent_runs",
+    description: "List recent WAF runs.",
+    input_schema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "waf_run_results",
+    description: "Get results for a specific WAF run ID.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        run_id: { type: "string", description: "Run ID" },
+      },
+      required: ["run_id"],
+    },
+  },
+  {
+    name: "waf_request",
+    description: "Unrestricted raw request to WAF service path.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        path: { type: "string", description: "Path on WAF service, e.g. /actions/run" },
+        method: { type: "string", description: "HTTP method" },
+        content_type: { type: "string", description: "Content-Type header" },
+        headers: { type: "string", description: "JSON object string of headers" },
+        body: { type: "string", description: "Raw body" },
+      },
+      required: ["path"],
     },
   },
 ];
@@ -229,6 +303,7 @@ function getAllTools(): Anthropic.Tool[] {
     ...PROCESS_TOOLS,
     ...DESKTOP_TOOLS,
     ...WEB_TOOLS,
+    ...WAF_TOOLS,
     ...RAG_TOOLS,
     ...COMPUTER_TOOLS,
     ...pluginDefs,
@@ -318,6 +393,7 @@ async function handleToolCall(name: string, input: Record<string, unknown>): Pro
       return `Knowledge base: ${stats.sourceCount} sources, ${stats.chunkCount} chunks, ${stats.totalChars} total characters`;
     }
     default: {
+      if (name.startsWith("waf_")) return await handleWafTool(name, input);
       // Delegate to other tool handlers
       const fsResult = handleFilesystemTool(name, input);
       if (!fsResult.startsWith("Unknown filesystem tool:")) return fsResult;

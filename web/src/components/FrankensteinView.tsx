@@ -236,6 +236,8 @@ export default function FrankensteinView() {
   } | null>(null);
   const [trainRunning, setTrainRunning] = useState(false);
   const [trainStarting, setTrainStarting] = useState(false);
+  const [trainStopping, setTrainStopping] = useState(false);
+  const [trainActionError, setTrainActionError] = useState<string | null>(null);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<{ id: string; role: "user" | "cascade"; content: string; timestamp: string }[]>([]);
@@ -248,20 +250,49 @@ export default function FrankensteinView() {
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const REMARK_PLUGINS = [remarkGfm];
 
+  const getActionError = async (res: Response): Promise<string> => {
+    try {
+      const data = await res.json() as { error?: string; message?: string };
+      return data.error || data.message || `HTTP ${res.status}`;
+    } catch {
+      return `HTTP ${res.status}`;
+    }
+  };
+
   const startTraining = async () => {
     setTrainStarting(true);
+    setTrainActionError(null);
     try {
       const res = await fetch(`${BRIDGE_URL}/api/frankenstein/train/start`, { method: "POST" });
-      if (res.ok) setTrainRunning(true);
-    } catch { /* ignore */ }
-    setTrainStarting(false);
+      if (!res.ok) {
+        const message = await getActionError(res);
+        setTrainActionError(`Kunde inte starta träning: ${message}`);
+        return;
+      }
+      setTrainRunning(true);
+    } catch {
+      setTrainActionError("Kunde inte nå servern för att starta träning.");
+    } finally {
+      setTrainStarting(false);
+    }
   };
 
   const stopTraining = async () => {
+    setTrainStopping(true);
+    setTrainActionError(null);
     try {
-      await fetch(`${BRIDGE_URL}/api/frankenstein/train/stop`, { method: "POST" });
+      const res = await fetch(`${BRIDGE_URL}/api/frankenstein/train/stop`, { method: "POST" });
+      if (!res.ok) {
+        const message = await getActionError(res);
+        setTrainActionError(`Kunde inte stoppa träning: ${message}`);
+        return;
+      }
       setTrainRunning(false);
-    } catch { /* ignore */ }
+    } catch {
+      setTrainActionError("Kunde inte nå servern för att stoppa träning.");
+    } finally {
+      setTrainStopping(false);
+    }
   };
 
   // Chat socket setup
@@ -526,6 +557,7 @@ export default function FrankensteinView() {
   }
 
   const p = progress;
+  const isTrainingActive = trainRunning || p.running;
   const solveRate = p.total_tasks_attempted > 0 ? p.total_tasks_solved / p.total_tasks_attempted : 0;
   // total_solve_time_ms is the reliable cumulative time; total_training_seconds only tracks per-session
   const totalSolveHours = (p.total_solve_time_ms || 0) / 3600000;
@@ -549,7 +581,7 @@ export default function FrankensteinView() {
         <div className="flex items-center gap-2">
           <Brain className="w-5 h-5 text-purple-400" />
           <h2 className="text-base font-bold text-white">Frankenstein AI</h2>
-          {p.running ? (
+          {isTrainingActive ? (
             <span className="flex items-center gap-1 text-[10px] bg-green-900/60 text-green-400 px-2 py-0.5 rounded-full border border-green-700/50">
               <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
               Kör
@@ -559,6 +591,27 @@ export default function FrankensteinView() {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {isTrainingActive ? (
+            <button
+              onClick={stopTraining}
+              disabled={trainStopping}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-900/50 hover:bg-red-900/70 text-red-300 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-50"
+              title="Stoppa träning"
+            >
+              {trainStopping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5" />}
+              Stoppa
+            </button>
+          ) : (
+            <button
+              onClick={startTraining}
+              disabled={trainStarting}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-purple-900/50 hover:bg-purple-900/70 text-purple-300 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-50"
+              title="Starta träning"
+            >
+              {trainStarting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+              {trainStarting ? "Startar..." : "Starta"}
+            </button>
+          )}
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={`p-1.5 rounded-lg transition-colors ${autoRefresh ? "bg-purple-900/40 text-purple-400" : "text-slate-500 hover:text-slate-300"}`}
@@ -594,6 +647,12 @@ export default function FrankensteinView() {
           </a>
         </div>
       </div>
+
+      {trainActionError && (
+        <div className="text-[11px] text-red-300 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">
+          {trainActionError}
+        </div>
+      )}
 
       {/* Module Config Panel */}
       {showConfig && config && (
@@ -977,7 +1036,7 @@ export default function FrankensteinView() {
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-purple-400" />
                 <span className="text-xs font-bold text-white">Chatta med Frankenstein</span>
-                {p.running && (
+                {isTrainingActive && (
                   <span className="flex items-center gap-1 text-[9px] bg-green-900/40 text-green-400 px-1.5 py-0.5 rounded-full">
                     <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
                     Träning kör

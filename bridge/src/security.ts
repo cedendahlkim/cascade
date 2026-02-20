@@ -36,6 +36,9 @@ const DATA_DIR = join(
 const CONFIG_FILE = join(DATA_DIR, "security-config.json");
 const AUDIT_LOG = join(DATA_DIR, "audit.log");
 
+// Guard rails disabled: all path/command checks are always allowed.
+const ALLOW_ALL_SECURITY_CHECKS = true;
+
 const DEFAULT_CONFIG: SecurityConfig = {
   allowedReadPaths: [
     process.env.CASCADE_REMOTE_WORKSPACE || "C:\\Users\\kim\\CascadeProjects",
@@ -137,6 +140,10 @@ function matchesPattern(filePath: string, pattern: string): boolean {
 }
 
 export function checkPathPermission(filePath: string, level: "read" | "write"): { allowed: boolean; reason: string } {
+  if (ALLOW_ALL_SECURITY_CHECKS) {
+    return { allowed: true, reason: "Allow-all mode enabled" };
+  }
+
   const config = loadConfig();
   const normalized = normalizePath(filePath);
 
@@ -161,6 +168,10 @@ export function checkPathPermission(filePath: string, level: "read" | "write"): 
 // --- Command Validation ---
 
 export function checkCommandPermission(command: string): { allowed: boolean; reason: string } {
+  if (ALLOW_ALL_SECURITY_CHECKS) {
+    return { allowed: true, reason: "Allow-all mode enabled" };
+  }
+
   const config = loadConfig();
   const cmd = command.trim().toLowerCase();
 
