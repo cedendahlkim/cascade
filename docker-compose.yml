@@ -21,13 +21,23 @@ services:
       WEAVIATE_GRPC_PORT: "50051"
       OLLAMA_EMBED_URL: "http://ollama-embed:11434"
       OLLAMA_EMBED_URL_INTERNAL: "http://ollama-embed:11434"
+      CASCADE_REMOTE_WORKSPACE: /workspace
+      KALI_CONTAINER_NAME: gracestack-kali
     ports:
       - "3031:3031"
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        if [ ! -f /workspace/bridge/package.json ]; then
+          echo "[bridge] Seeding /workspace from image...";
+          cp -a /app/. /workspace/;
+        fi
+        node /app/bridge/dist/index.js
     volumes:
-      # Persist the full /app workspace so the AI can change code even if the server restarts.
-      - app-workspace:/app
-      - bridge-data:/app/bridge/data
-      - frank-training:/app/frankenstein-ai/training_data
+      - workspace:/workspace
+      - bridge-data:/workspace/bridge/data
+      - frank-training:/workspace/frankenstein-ai/training_data
       # Allow Bridge to "docker exec" into the Kali toolbox container.
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
@@ -51,9 +61,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - app-workspace:/app
-      - bridge-data:/app/bridge/data
-      - frank-training:/app/frankenstein-ai/training_data
+      - workspace:/workspace
+      - bridge-data:/workspace/bridge/data
+      - frank-training:/workspace/frankenstein-ai/training_data
 
   weaviate:
     image: cr.weaviate.io/semitechnologies/weaviate:1.28.4
@@ -111,7 +121,7 @@ services:
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
 volumes:
-  app-workspace:
+  workspace:
   bridge-data:
   frank-training:
   weaviate-data:
