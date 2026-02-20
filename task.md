@@ -245,9 +245,9 @@
 - [ ] Smoke-test i CI för `npm run build` (web) + `tsc` (bridge/mcp-server)
 
 #### C. Konfigurations- och driftkvalitet
-- [ ] Central env-validering vid startup (saknade nycklar, fel format, tydliga felmeddelanden)
-- [ ] Standardisera loggformat (request-id, route, latency, error-code)
-- [ ] Lägg till `/healthz` + `/readyz` för enklare övervakning
+- [x] Central env-validering vid startup (saknade nycklar, fel format, tydliga felmeddelanden)
+- [x] Standardisera loggformat (request-id, route, latency, error-code)
+- [x] Lägg till `/healthz` + `/readyz` för enklare övervakning
 
 ### ⚡ Medium prioritet
 
