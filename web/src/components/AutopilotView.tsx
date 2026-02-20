@@ -36,12 +36,15 @@ interface MissionIteration {
 interface MissionResponse {
   goal: string;
   ok: boolean;
+  runner?: "host" | "kali";
   cwd: string;
+  verify_runner?: "host" | "kali";
   verify_cwd: string;
   iterations: MissionIteration[];
 }
 
 type VerifyPresetId = "none" | "web_build" | "bridge_test" | "all";
+type ShellRunner = "host" | "kali";
 
 const DEFAULT_MAX_ITERS = 3;
 
@@ -60,6 +63,8 @@ export default function AutopilotView() {
     "",
   );
   const [maxIterations, setMaxIterations] = useState<number>(DEFAULT_MAX_ITERS);
+  const [runner, setRunner] = useState<ShellRunner>("host");
+  const [verifyRunner, setVerifyRunner] = useState<ShellRunner>("host");
   const [verifyPreset, setVerifyPreset] = useState<VerifyPresetId>("all");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string>("");
@@ -94,13 +99,15 @@ export default function AutopilotView() {
 
     try {
       const preset = presets[verifyPreset];
+      const verifyPayload = preset.verify ? { ...preset.verify, runner: verifyRunner } : undefined;
       const response = await authFetch(`${BRIDGE_URL}/api/workspace/ai/mission`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           goal: goal.trim(),
           maxIterations,
-          verify: preset.verify,
+          runner,
+          verify: verifyPayload,
         }),
       });
 
@@ -158,6 +165,30 @@ export default function AutopilotView() {
           </div>
 
           <div className="flex flex-col gap-2">
+            <label htmlFor="autopilot-runner" className="text-[11px] text-slate-400">Runner</label>
+            <select
+              id="autopilot-runner"
+              aria-label="Runner"
+              value={runner}
+              onChange={(e) => setRunner(e.target.value as ShellRunner)}
+              className="w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-slate-800 text-xs text-slate-100"
+            >
+              <option value="host">host</option>
+              <option value="kali">kali</option>
+            </select>
+
+            <label htmlFor="autopilot-verify-runner" className="text-[11px] text-slate-400">Verify runner</label>
+            <select
+              id="autopilot-verify-runner"
+              aria-label="Verify runner"
+              value={verifyRunner}
+              onChange={(e) => setVerifyRunner(e.target.value as ShellRunner)}
+              className="w-full px-3 py-2 rounded-lg bg-slate-950/60 border border-slate-800 text-xs text-slate-100"
+            >
+              <option value="host">host</option>
+              <option value="kali">kali</option>
+            </select>
+
             <label htmlFor="autopilot-verify" className="text-[11px] text-slate-400">Verifiering</label>
             <select
               id="autopilot-verify"
@@ -214,6 +245,8 @@ export default function AutopilotView() {
                   <div className="text-sm font-semibold text-slate-100">
                     {result.ok ? "OK" : "FAILED"}
                   </div>
+                  <div className="text-[11px] text-slate-400">runner: {result.runner || runner}</div>
+                  <div className="text-[11px] text-slate-400">verify runner: {result.verify_runner || verifyRunner}</div>
                   <div className="text-[11px] text-slate-400">cwd: {result.cwd}</div>
                 </div>
               </div>
