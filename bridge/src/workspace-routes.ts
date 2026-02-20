@@ -234,6 +234,213 @@ router.get("/tree", (_req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/workspace/ai/mission
+ *
+ * Autopilot-style multi-step loop:
+ * plan (Gemini JSON) → execute (edit/create/run) → optional verify (build/test) → repeat.
+ */
+router.post("/ai/mission", async (req: Request, res: Response) => {
+  const {
+    goal,
+    currentFile,
+    currentContent,
+    openFiles,
+    cwd,
+    verify,
+    maxIterations,
+  } = (req.body || {}) as {
+    goal?: string;
+    currentFile?: string | null;
+    currentContent?: string | null;
+    openFiles?: string[];
+    cwd?: string;
+    verify?: { commands?: string[]; cwd?: string };
+    maxIterations?: number;
+  };
+
+  if (!goal || typeof goal !== "string" || goal.trim().length === 0) {
+    return res.status(400).json({ error: "goal required" });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+  const missionCwd = (() => {
+    if (!cwd) return WORKSPACE_ROOT;
+    const safe = safePath(String(cwd).replace(/^\/+/, ""));
+    return safe || WORKSPACE_ROOT;
+  })();
+
+  const verifyCwd = (() => {
+    const vcwd = verify?.cwd;
+    if (!vcwd) return missionCwd;
+    const safe = safePath(String(vcwd).replace(/^\/+/, ""));
+    return safe || missionCwd;
+  })();
+
+  const clamp = (value: unknown, max = 10_000) => String(value ?? "").slice(0, max);
+
+  const runShell = async (
+    command: string,
+    execCwd: string,
+    timeoutMs: number,
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }> => new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    const isWin = process.platform === "win32";
+    const sh = isWin ? "cmd.exe" : "/bin/bash";
+    const args = isWin ? ["/c", command] : ["-c", command];
+
+    const proc = spawn(sh, args, {
+      cwd: execCwd,
+      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+      timeout: timeoutMs,
+    });
+    proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString("utf-8"); });
+    proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf-8"); });
+    proc.on("close", (code) => resolve({
+      stdout: clamp(stdout, 20_000),
+      stderr: clamp(stderr, 20_000),
+      exitCode: code ?? 1,
+    }));
+    proc.on("error", (err) => resolve({ stdout: clamp(stdout, 20_000), stderr: String(err), exitCode: 1 }));
+  });
+
+  const verifyCommands: string[] = Array.isArray(verify?.commands)
+    ? (verify?.commands as unknown[]).map(String).filter((c) => c.trim().length > 0)
+    : [];
+
+  try {
+    const iterations: any[] = [];
+    const maxIters = Math.max(1, Math.min(10, Number.isFinite(maxIterations as number) ? (maxIterations as number) : 3));
+    let ok = false;
+    let prev = "";
+
+    for (let iter = 1; iter <= maxIters; iter++) {
+      const kbContext = await searchArchonKB(goal, 2);
+
+      const fileContext = currentContent && currentFile
+        ? `FILINNEHÅLL (${currentFile}):\n\`\`\`\n${String(currentContent).slice(0, 6000)}\n\`\`\`\n`
+        : "";
+
+      const planPrompt = `Du är Frankenstein Autopilot. Du kan redigera filer och köra kommandon i en monorepo.
+
+WORKSPACE ROOT: ${WORKSPACE_ROOT}
+MISSION CWD: ${missionCwd}
+${currentFile ? `AKTUELL FIL: ${currentFile}` : ""}
+${openFiles?.length ? `ÖPPNA FILER: ${openFiles.join(", ")}` : ""}
+${fileContext}
+
+MISSION GOAL: ${goal}
+
+${kbContext ? `KUNSKAPSBAS (Archon):\n${kbContext}\n` : ""}
+${prev ? `SENASTE RESULTAT (JSON, truncated):\n${prev}\n` : ""}
+
+Svara med EXAKT EN JSON-array med actions.
+Tillgängliga actions:
+- {"action":"edit","path":"relativ/sökväg","content":"HELA det nya filinnehållet"}
+- {"action":"create","path":"relativ/sökväg","content":"filinnehåll"}
+- {"action":"run","command":"shell-kommando"}
+- {"action":"done","text":"kort sammanfattning"}
+
+REGLER:
+- Vid edit/create: content måste vara HELA filen
+- Returnera BARA JSON-arrayen (ingen markdown, inga code fences).`;
+
+      const planRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: planPrompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 16384 },
+          }),
+        }
+      );
+
+      const planData = (await planRes.json()) as any;
+      let planText = planData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      planText = String(planText).replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?\s*```$/i, "").trim();
+
+      let actions: any[];
+      try {
+        actions = JSON.parse(planText);
+        if (!Array.isArray(actions)) actions = [actions];
+      } catch {
+        iterations.push({ iteration: iter, ok: false, error: "Invalid JSON from model", raw: clamp(planText, 8000) });
+        ok = false;
+        break;
+      }
+
+      const results: any[] = [];
+      for (const act of actions) {
+        try {
+          switch (act.action) {
+            case "edit":
+            case "create": {
+              const relPath = String(act.path || "");
+              const abs = safePath(relPath);
+              if (!abs) {
+                results.push({ ...act, success: false, error: "Path outside workspace" });
+                break;
+              }
+              const dir = dirname(abs);
+              if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+              const isNew = !existsSync(abs);
+              writeFileSync(abs, String(act.content || ""), "utf-8");
+              results.push({ action: isNew ? "create" : "edit", path: relPath, success: true, isNew });
+              break;
+            }
+            case "run": {
+              const cmd = String(act.command || "").trim();
+              if (!cmd) {
+                results.push({ action: "run", success: false, error: "command empty" });
+                break;
+              }
+              const r = await runShell(cmd, missionCwd, 120_000);
+              results.push({ action: "run", command: cmd, success: r.exitCode === 0, ...r });
+              break;
+            }
+            case "done":
+              results.push({ action: "done", success: true, text: String(act.text || "") });
+              break;
+            default:
+              results.push({ action: act.action, success: false, error: "Unknown action" });
+          }
+        } catch (err) {
+          results.push({ ...act, success: false, error: String(err) });
+        }
+      }
+
+      const verifyResults: any[] = [];
+      if (verifyCommands.length > 0) {
+        for (const cmd of verifyCommands) {
+          // eslint-disable-next-line no-await-in-loop
+          const r = await runShell(cmd, verifyCwd, 240_000);
+          verifyResults.push({ command: cmd, success: r.exitCode === 0, ...r });
+        }
+      }
+
+      const verifyOk = verifyResults.length > 0 ? verifyResults.every((v) => v.success) : true;
+      const resultsOk = results.every((r) => r.success !== false);
+      ok = verifyOk && resultsOk;
+
+      iterations.push({ iteration: iter, actions, results, verify: verifyResults, ok });
+
+      prev = clamp(JSON.stringify({ results, verify: verifyResults }, null, 2), 12_000);
+
+      const hasDone = actions.some((a) => a?.action === "done");
+      if (ok && hasDone) break;
+    }
+
+    res.json({ goal, ok, cwd: missionCwd, verify_cwd: verifyCwd, iterations });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
  * POST /api/workspace/ai/doctor
  *
  * Kör en uppsättning kommandon (t.ex. "npm run build") i ett givet cwd under WORKSPACE_ROOT

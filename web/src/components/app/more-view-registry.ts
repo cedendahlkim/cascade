@@ -23,6 +23,7 @@ export const MORE_TAB_ITEMS = [
   { id: "webhooks", label: "🔗 Webhooks" },
   { id: "waf", label: "🛡️ WAF" },
   { id: "pentest", label: "🧨 Pentest" },
+  { id: "autopilot", label: "🚀 Autopilot" },
   { id: "editor", label: "💻 Editor" },
   { id: "git", label: "🔀 Git" },
   { id: "install", label: "📦 Installera" },

@@ -30,6 +30,7 @@ const SnapshotsView = lazy(() => import("../SnapshotsView"));
 const WebhooksView = lazy(() => import("../WebhooksView"));
 const WafHardeningView = lazy(() => import("../WafHardeningView"));
 const PentestView = lazy(() => import("../PentestView"));
+const AutopilotView = lazy(() => import("../AutopilotView"));
 
 const LazyFallback = () => (
   <div className="flex-1 flex items-center justify-center">
@@ -88,6 +89,7 @@ export default function MoreViewRouter({ activeTab, moreTab, onMoreTabChange, ed
             {moreTab === "webhooks" && <WebhooksView />}
             {moreTab === "waf" && <WafHardeningView />}
             {moreTab === "pentest" && <PentestView />}
+            {moreTab === "autopilot" && <AutopilotView />}
             {moreTab === "git" && <GitView />}
             {moreTab === "install" && <InstallView />}
             {moreTab === "settings" && <SettingsView />}
