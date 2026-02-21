@@ -1902,7 +1902,15 @@ app.post("/api/trader/start", (req, res) => {
   const intervalSeconds = req.body?.intervalSeconds != null ? Number(req.body.intervalSeconds) : undefined;
   const riskPerTrade = req.body?.riskPerTrade != null ? Number(req.body.riskPerTrade) : undefined;
   const minConfidence = req.body?.minConfidence != null ? Number(req.body.minConfidence) : undefined;
+  const strategy = typeof req.body?.strategy === "string" ? String(req.body.strategy).trim().toLowerCase() : undefined;
+  const safeStrategy = strategy === "grid" || strategy === "inference" ? strategy : undefined;
   const klinesInterval = typeof req.body?.klinesInterval === "string" ? String(req.body.klinesInterval).trim() : undefined;
+
+  const gridLevels = req.body?.gridLevels != null ? Number(req.body.gridLevels) : undefined;
+  const gridSpacing = typeof req.body?.gridSpacing === "string" ? String(req.body.gridSpacing).trim().toLowerCase() : undefined;
+  const gridBudget = req.body?.gridBudget != null ? Number(req.body.gridBudget) : undefined;
+  const gridLower = req.body?.gridLower != null ? Number(req.body.gridLower) : undefined;
+  const gridUpper = req.body?.gridUpper != null ? Number(req.body.gridUpper) : undefined;
   const maxPositions = req.body?.maxPositions != null ? Number(req.body.maxPositions) : undefined;
   const cooldownSeconds = req.body?.cooldownSeconds != null ? Number(req.body.cooldownSeconds) : undefined;
   const takeProfitPct = req.body?.takeProfitPct != null ? Number(req.body.takeProfitPct) : undefined;
@@ -1927,7 +1935,14 @@ app.post("/api/trader/start", (req, res) => {
       ...(Number.isFinite(intervalSeconds) && intervalSeconds! > 0 ? { TRADING_INTERVAL_SECONDS: String(intervalSeconds) } : {}),
       ...(Number.isFinite(riskPerTrade) && riskPerTrade! > 0 ? { TRADING_RISK_PER_TRADE: String(riskPerTrade) } : {}),
       ...(Number.isFinite(minConfidence) && minConfidence! > 0 ? { TRADING_MIN_CONFIDENCE: String(minConfidence) } : {}),
+      ...(safeStrategy ? { TRADING_STRATEGY: safeStrategy } : {}),
       ...(klinesInterval ? { TRADING_KLINE_INTERVAL: klinesInterval } : {}),
+
+      ...(Number.isFinite(gridLevels) && gridLevels! > 0 ? { TRADING_GRID_LEVELS: String(Math.floor(gridLevels!)) } : {}),
+      ...(gridSpacing && (gridSpacing === "linear" || gridSpacing === "geometric") ? { TRADING_GRID_SPACING: gridSpacing } : {}),
+      ...(Number.isFinite(gridBudget) && gridBudget! > 0 ? { TRADING_GRID_BUDGET: String(gridBudget!) } : {}),
+      ...(Number.isFinite(gridLower) && gridLower! >= 0 ? { TRADING_GRID_LOWER: String(gridLower!) } : {}),
+      ...(Number.isFinite(gridUpper) && gridUpper! >= 0 ? { TRADING_GRID_UPPER: String(gridUpper!) } : {}),
       ...(Number.isFinite(maxPositions) && maxPositions! > 0 ? { TRADING_MAX_POSITIONS: String(maxPositions) } : {}),
       ...(Number.isFinite(cooldownSeconds) && cooldownSeconds! >= 0 ? { TRADING_COOLDOWN_SECONDS: String(cooldownSeconds) } : {}),
       ...(Number.isFinite(takeProfitPct) && takeProfitPct! >= 0 ? { TRADING_TAKE_PROFIT_PCT: String(takeProfitPct) } : {}),

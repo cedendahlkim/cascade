@@ -794,6 +794,12 @@ class FrankensteinTradingAgent:
         stop_loss_pct: float = 0.0,
         trailing_stop_pct: float = 0.0,
         aggression: float = 0.5,
+        strategy: str = "inference",
+        grid_levels: int = 0,
+        grid_spacing: str = "linear",
+        grid_budget: float = 0.25,
+        grid_lower: float = 0.0,
+        grid_upper: float = 0.0,
     ) -> None:
         self.exchange = exchange
         self.symbols = symbols
@@ -807,6 +813,24 @@ class FrankensteinTradingAgent:
         self.stop_loss_pct = max(0.0, float(stop_loss_pct))
         self.trailing_stop_pct = max(0.0, float(trailing_stop_pct))
         self.aggression = float(np.clip(float(aggression), 0.0, 1.0))
+
+        self.strategy = (strategy or "inference").strip().lower()
+        if self.strategy not in ("inference", "grid"):
+            self.strategy = "inference"
+
+        # Grid strategy config (used when strategy == "grid")
+        self.grid_levels = max(2, int(grid_levels)) if int(grid_levels) > 0 else 0
+        self.grid_spacing = (grid_spacing or "linear").strip().lower()
+        if self.grid_spacing not in ("linear", "geometric"):
+            self.grid_spacing = "linear"
+        self.grid_budget = float(grid_budget)
+        self.grid_lower = float(grid_lower)
+        self.grid_upper = float(grid_upper)
+
+        # Per-symbol grid runtime state
+        self._grid_bounds_by_symbol: dict[str, tuple[float, float]] = {}
+        self._grid_levels_by_symbol: dict[str, list[float]] = {}
+        self._grid_filled_by_symbol: dict[str, dict[int, float]] = {}
 
         self.hdc = HDCMarketEncoder()
         self.aif = ActiveInferenceDecider()
@@ -927,6 +951,197 @@ class FrankensteinTradingAgent:
         adjusted = float(base_allocation_usd) * float(confidence) * (0.5 + success_rate * 0.5)
         quantity = adjusted / (float(price) + 1e-10)
         return round(float(quantity), 6)
+
+    def _grid_budget_usd_per_symbol(self, portfolio: dict[str, Any]) -> float:
+        """Grid budget for *one* symbol.
+
+        - If grid_budget <= 1.0: treat as fraction of portfolio value.
+        - If grid_budget > 1.0: treat as USD.
+        """
+
+        cash_usdt = float(portfolio.get("usdt_cash", 0.0)) if isinstance(portfolio, dict) else 0.0
+        total_value = float(portfolio.get("total_value_usd", 0.0)) if isinstance(portfolio, dict) else 0.0
+        if self.grid_budget <= 1.0:
+            budget = total_value * float(self.grid_budget)
+        else:
+            budget = float(self.grid_budget)
+
+        # Divide budget across symbols (grid usually runs on 1, but we keep it safe)
+        per_symbol = float(budget) / float(max(1, len(self.symbols)))
+        per_symbol = min(per_symbol, float(cash_usdt))
+        per_symbol = max(0.0, per_symbol)
+        return float(per_symbol)
+
+    @staticmethod
+    def _grid_build_levels(lower: float, upper: float, levels: int, spacing: str) -> list[float]:
+        if not (lower > 0 and upper > lower and levels >= 2):
+            return []
+        if spacing == "geometric":
+            ratio = (upper / lower) ** (1.0 / float(levels - 1))
+            return [float(lower * (ratio**i)) for i in range(levels)]
+
+        step = (upper - lower) / float(levels - 1)
+        return [float(lower + step * i) for i in range(levels)]
+
+    def _grid_ensure_levels(self, symbol: str) -> list[float]:
+        levels = self._grid_levels_by_symbol.get(symbol)
+        if levels:
+            return levels
+
+        # Bounds: use explicit env values when valid, else infer from recent klines.
+        lower = float(self.grid_lower)
+        upper = float(self.grid_upper)
+        if not (lower > 0 and upper > lower):
+            try:
+                kl = self.exchange.get_klines(symbol, self.kline_interval, 120)
+                lows = [float(r[3]) for r in kl if isinstance(r, (list, tuple)) and len(r) > 4]
+                highs = [float(r[2]) for r in kl if isinstance(r, (list, tuple)) and len(r) > 4]
+                if lows and highs:
+                    lo = max(1e-12, float(min(lows)))
+                    hi = float(max(highs))
+                    # small padding to reduce immediate edge-trigger spam
+                    lower = lo * 0.995
+                    upper = hi * 1.005
+            except Exception:
+                pass
+
+        n = int(self.grid_levels) if int(self.grid_levels) >= 2 else 12
+        built = self._grid_build_levels(lower, upper, n, self.grid_spacing)
+        if built:
+            self._grid_bounds_by_symbol[symbol] = (float(lower), float(upper))
+            self._grid_levels_by_symbol[symbol] = built
+            self._grid_filled_by_symbol.setdefault(symbol, {})
+        return self._grid_levels_by_symbol.get(symbol, [])
+
+    def _grid_analyze(self, symbol: str) -> TradeSignal:
+        price = float(self.exchange.get_price(symbol))
+        portfolio = self.exchange.get_portfolio_value()
+
+        levels = self._grid_ensure_levels(symbol)
+        filled = self._grid_filled_by_symbol.setdefault(symbol, {})
+
+        # Cooldown gate
+        now_epoch = time.time()
+        cooldown_remaining = 0.0
+        if self.cooldown_seconds > 0:
+            last_trade = float(self._last_trade_epoch.get(symbol, 0.0) or 0.0)
+            cooldown_remaining = max(0.0, (last_trade + float(self.cooldown_seconds)) - now_epoch)
+            if cooldown_remaining > 0:
+                return TradeSignal(
+                    symbol=symbol,
+                    action="HOLD",
+                    confidence=1.0,
+                    quantity=0.0,
+                    price=price,
+                    reason=f"grid cooldown {cooldown_remaining:.1f}s",
+                    pattern="grid",
+                    pattern_similarity=1.0,
+                    details={"strategy": "grid", "cooldown_remaining_seconds": round(float(cooldown_remaining), 3)},
+                )
+
+        if len(levels) < 2 or price <= 0:
+            return TradeSignal(symbol=symbol, action="HOLD", confidence=1.0, quantity=0.0, price=price, reason="grid not ready")
+
+        # Position info (aggregated in exchange)
+        positions = portfolio.get("positions") if isinstance(portfolio, dict) else None
+        pos = positions.get(symbol) if isinstance(positions, dict) else None
+        held_qty = float(pos.get("quantity", 0.0)) if isinstance(pos, dict) else 0.0
+
+        # 1) Sell first: if we own level i and price >= next level i+1
+        for i in sorted(list(filled.keys()), reverse=True):
+            if i + 1 >= len(levels):
+                continue
+            target = float(levels[i + 1])
+            if price >= target:
+                qty = float(filled.get(i, 0.0))
+                qty = min(qty, held_qty)
+                qty = round(max(0.0, qty), 6)
+                if qty <= 0:
+                    continue
+                return TradeSignal(
+                    symbol=symbol,
+                    action="SELL",
+                    confidence=1.0,
+                    quantity=qty,
+                    price=price,
+                    reason=f"grid sell level={i} -> {i + 1} @>= {target:.6f}",
+                    pattern="grid",
+                    pattern_similarity=1.0,
+                    details={
+                        "strategy": "grid",
+                        "grid_level_index": i,
+                        "grid_sell_to_level": i + 1,
+                        "grid_sell_target_price": target,
+                        "grid_price": price,
+                    },
+                )
+
+        # 2) Buy: find the highest level (closest above price) that is not filled.
+        buy_i: Optional[int] = None
+        for i in range(0, len(levels) - 1):
+            if i in filled:
+                continue
+            if price <= float(levels[i]):
+                buy_i = i
+
+        if buy_i is None:
+            return TradeSignal(symbol=symbol, action="HOLD", confidence=1.0, quantity=0.0, price=price, reason="grid no trigger")
+
+        per_symbol_budget = float(self._grid_budget_usd_per_symbol(portfolio))
+        per_level_budget = per_symbol_budget / float(max(1, len(levels) - 1))
+        per_level_budget = max(0.0, per_level_budget)
+
+        cash_usdt = float(portfolio.get("usdt_cash", 0.0)) if isinstance(portfolio, dict) else 0.0
+        spend = min(float(per_level_budget), float(cash_usdt))
+        if spend <= 1.0:
+            return TradeSignal(symbol=symbol, action="HOLD", confidence=1.0, quantity=0.0, price=price, reason="grid insufficient cash")
+
+        qty = round(float(spend) / (float(price) + 1e-12), 6)
+        if qty <= 0:
+            return TradeSignal(symbol=symbol, action="HOLD", confidence=1.0, quantity=0.0, price=price, reason="grid qty<=0")
+
+        return TradeSignal(
+            symbol=symbol,
+            action="BUY",
+            confidence=1.0,
+            quantity=qty,
+            price=price,
+            reason=f"grid buy level={buy_i} @<= {float(levels[buy_i]):.6f}",
+            pattern="grid",
+            pattern_similarity=1.0,
+            details={
+                "strategy": "grid",
+                "grid_level_index": buy_i,
+                "grid_buy_level_price": float(levels[buy_i]),
+                "grid_price": price,
+                "grid_spacing": self.grid_spacing,
+                "grid_levels": len(levels),
+                "grid_budget_per_symbol_usd": round(float(per_symbol_budget), 6),
+                "grid_budget_per_level_usd": round(float(per_level_budget), 6),
+            },
+        )
+
+    def _grid_on_filled_order(self, signal: TradeSignal, order: dict[str, Any]) -> None:
+        try:
+            if not str(order.get("status", "")).startswith("FILLED"):
+                return
+            symbol = str(signal.symbol).strip().upper()
+            idx_raw = signal.details.get("grid_level_index") if isinstance(signal.details, dict) else None
+            if idx_raw is None:
+                return
+            idx = int(idx_raw)
+            filled = self._grid_filled_by_symbol.setdefault(symbol, {})
+            qty = float(order.get("quantity", signal.quantity) or 0.0)
+            qty = round(max(0.0, qty), 6)
+            if qty <= 0:
+                return
+            if signal.action == "BUY":
+                filled[idx] = float(filled.get(idx, 0.0)) + qty
+            elif signal.action == "SELL":
+                # Selling releases the level
+                filled.pop(idx, None)
+        except Exception:
+            return
 
     def analyze(self, symbol: str) -> TradeSignal:
         klines = self.exchange.get_klines(symbol, self.kline_interval, 100)
@@ -1092,10 +1307,10 @@ class FrankensteinTradingAgent:
 
         for symbol in self.symbols:
             try:
-                sig = self.analyze(symbol)
+                sig = self._grid_analyze(symbol) if self.strategy == "grid" else self.analyze(symbol)
                 signals.append(sig)
                 self.recent_signals.append(sig)
-                if sig.action in ("BUY", "SELL"):
+                if self.strategy != "grid" and sig.action in ("BUY", "SELL"):
                     self.memory.remember(sig)
 
                 _send_bridge_event({"type": "trader_signal", "symbol": symbol, "signal": asdict(sig), "ts": _utc_now_iso()})
@@ -1112,6 +1327,9 @@ class FrankensteinTradingAgent:
                     orders.append(order)
                     self.order_count += 1
                     _send_bridge_event({"type": "trader_order", "symbol": symbol, "order": order, "ts": _utc_now_iso()})
+
+                    if self.strategy == "grid":
+                        self._grid_on_filled_order(sig, order)
 
                     # Cooldown + trailing bookkeeping (only when an order actually fills)
                     try:
@@ -1163,6 +1381,7 @@ class FrankensteinTradingAgent:
             "target_order_count": target_order_count,
             "target_order_remaining": max(0, target_order_count - self.order_count) if target_order_count > 0 else 0,
             "max_runtime_seconds": max_runtime_seconds,
+            "strategy": self.strategy,
             "exchange": getattr(self.exchange, "name", self.exchange.__class__.__name__),
             "symbols": self.symbols,
             "paper_mode": self.exchange.paper_mode,
@@ -1175,6 +1394,23 @@ class FrankensteinTradingAgent:
             "stop_loss_pct": self.stop_loss_pct,
             "trailing_stop_pct": self.trailing_stop_pct,
             "aggression": self.aggression,
+            "grid": {
+                "enabled": self.strategy == "grid",
+                "levels": self.grid_levels,
+                "spacing": self.grid_spacing,
+                "budget": self.grid_budget,
+                "lower": self.grid_lower,
+                "upper": self.grid_upper,
+                "by_symbol": {
+                    sym: {
+                        "bounds": self._grid_bounds_by_symbol.get(sym),
+                        "levels_count": len(self._grid_levels_by_symbol.get(sym, [])),
+                        "filled_levels": sorted(list(self._grid_filled_by_symbol.get(sym, {}).keys())),
+                        "filled_count": len(self._grid_filled_by_symbol.get(sym, {})),
+                    }
+                    for sym in self.symbols
+                },
+            },
             "portfolio": portfolio,
             "recent_signals": [asdict(s) for s in list(self.recent_signals)[-20:]],
             "memory": self.memory.stats(),
@@ -1236,6 +1472,13 @@ def main() -> int:
     trailing_stop_pct = float(os.environ.get("TRADING_TRAILING_STOP_PCT", "0"))
     aggression = float(os.environ.get("TRADING_AGGRESSION", "0.5"))
 
+    strategy = (os.environ.get("TRADING_STRATEGY") or "inference").strip().lower()
+    grid_levels = int(float(os.environ.get("TRADING_GRID_LEVELS", "0")))
+    grid_spacing = (os.environ.get("TRADING_GRID_SPACING") or "linear").strip().lower()
+    grid_budget = float(os.environ.get("TRADING_GRID_BUDGET", "0.25"))
+    grid_lower = float(os.environ.get("TRADING_GRID_LOWER", "0"))
+    grid_upper = float(os.environ.get("TRADING_GRID_UPPER", "0"))
+
     # Optional burst controls
     try:
         target_order_count = int(float(os.environ.get("TRADING_TARGET_ORDER_COUNT", "0")))
@@ -1258,11 +1501,13 @@ def main() -> int:
     _ensure_dirs()
 
     _log("=== Frankenstein Trading Bot starting ===")
-    _log(f"exchange={exchange_name} symbols={symbols} paper_mode={paper_mode} interval={interval_seconds}s")
+    _log(f"exchange={exchange_name} symbols={symbols} paper_mode={paper_mode} interval={interval_seconds}s strategy={strategy}")
     if target_order_count > 0:
         _log(f"burst: target_order_count={target_order_count}")
     if max_runtime_seconds > 0:
         _log(f"burst: max_runtime_seconds={max_runtime_seconds}")
+    if strategy == "grid":
+        _log(f"grid: levels={grid_levels} spacing={grid_spacing} budget={grid_budget} lower={grid_lower} upper={grid_upper}")
 
     _send_bridge_event({
         "type": "trader_start",
@@ -1302,6 +1547,12 @@ def main() -> int:
         stop_loss_pct=stop_loss_pct,
         trailing_stop_pct=trailing_stop_pct,
         aggression=aggression,
+        strategy=strategy,
+        grid_levels=grid_levels,
+        grid_spacing=grid_spacing,
+        grid_budget=grid_budget,
+        grid_lower=grid_lower,
+        grid_upper=grid_upper,
     )
 
     signal.signal(signal.SIGINT, _handle_shutdown)

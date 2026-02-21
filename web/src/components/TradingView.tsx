@@ -10,6 +10,27 @@ type TraderStatus = {
   last_update: number;
 };
 
+type TraderGridPlan = {
+  // Symbol selection
+  symbolMode?: "selected" | "top20_all" | "top20_random";
+  randomCount?: number;
+
+  // Grid config
+  gridLevels: number;
+  gridSpacing?: "linear" | "geometric";
+  gridBudget: number; // <=1 => fraction of portfolio, >1 => USD
+  gridLower?: number; // optional, bot can infer from klines
+  gridUpper?: number; // optional, bot can infer from klines
+
+  // Optional runtime/burst controls
+  targetOrderCount?: number;
+  maxRuntimeSeconds?: number;
+
+  // Optional overrides
+  klineInterval?: string;
+  cooldownSeconds?: number;
+};
+
 type TraderLive = {
   active: boolean;
   events: any[];
@@ -33,6 +54,7 @@ type TraderState = {
   target_order_count?: number;
   target_order_remaining?: number;
   max_runtime_seconds?: number;
+  strategy?: string;
   exchange?: string;
   symbols?: string[];
   paper_mode?: boolean;
@@ -45,6 +67,7 @@ type TraderState = {
   stop_loss_pct?: number;
   trailing_stop_pct?: number;
   aggression?: number;
+  grid?: any;
   portfolio?: {
     usdt_cash: number;
     positions: Record<string, {
@@ -87,6 +110,7 @@ type TraderBurstPlan = {
 };
 
 const TRADER_BURST_PREFIX = "TRADER_BURST_JSON:";
+const TRADER_GRID_PREFIX = "TRADER_GRID_JSON:";
 
 function parseTraderBurstPlan(text: string): { plan: TraderBurstPlan; rawJson: string } | { error: string } | null {
   if (!text) return null;
@@ -125,6 +149,55 @@ function parseTraderBurstPlan(text: string): { plan: TraderBurstPlan; rawJson: s
     return { plan, rawJson };
   } catch (e) {
     return { error: `Invalid JSON in TRADER_BURST_JSON: ${String(e)}` };
+  }
+
+  // explicit close (keeps the next parser from nesting inside this function)
+}
+
+function parseTraderGridPlan(text: string): { plan: TraderGridPlan; rawJson: string } | { error: string } | null {
+  if (!text) return null;
+  const idx = text.indexOf(TRADER_GRID_PREFIX);
+  if (idx < 0) return null;
+
+  const after = text.slice(idx + TRADER_GRID_PREFIX.length);
+  const fence = after.match(/```json\s*([\s\S]*?)```/i) || after.match(/```\s*([\s\S]*?)```/);
+  const candidate = (fence ? fence[1] : after).trim();
+  const a = candidate.indexOf("{");
+  const b = candidate.lastIndexOf("}");
+  if (a < 0 || b <= a) return { error: "No JSON object found after TRADER_GRID_JSON" };
+
+  const rawJson = candidate.slice(a, b + 1).trim();
+  try {
+    const obj = JSON.parse(rawJson) as Partial<TraderGridPlan>;
+    const levels = Number(obj?.gridLevels);
+    const budget = Number(obj?.gridBudget);
+    if (!Number.isFinite(levels) || levels < 2) return { error: "gridLevels must be >= 2" };
+    if (!Number.isFinite(budget) || budget <= 0) return { error: "gridBudget must be > 0" };
+
+    const plan: TraderGridPlan = {
+      symbolMode: obj?.symbolMode,
+      randomCount: obj?.randomCount != null ? Math.max(1, Math.min(20, Math.floor(Number(obj.randomCount) || 0))) : undefined,
+      gridLevels: Math.max(2, Math.min(200, Math.floor(levels))),
+      gridSpacing: obj?.gridSpacing === "geometric" ? "geometric" : "linear",
+      gridBudget: budget,
+      gridLower: obj?.gridLower != null ? Number(obj.gridLower) : undefined,
+      gridUpper: obj?.gridUpper != null ? Number(obj.gridUpper) : undefined,
+      targetOrderCount: obj?.targetOrderCount != null ? Math.max(1, Math.min(200, Math.floor(Number(obj.targetOrderCount) || 0))) : undefined,
+      maxRuntimeSeconds: obj?.maxRuntimeSeconds != null ? Math.max(10, Math.min(24 * 3600, Math.floor(Number(obj.maxRuntimeSeconds) || 0))) : undefined,
+      klineInterval: typeof obj?.klineInterval === "string" ? obj.klineInterval : undefined,
+      cooldownSeconds: obj?.cooldownSeconds != null ? Math.max(0, Math.floor(Number(obj.cooldownSeconds) || 0)) : undefined,
+    };
+
+    // If bounds are provided, validate them lightly.
+    if (plan.gridLower != null && plan.gridUpper != null) {
+      if (!(Number.isFinite(plan.gridLower) && Number.isFinite(plan.gridUpper) && plan.gridLower > 0 && plan.gridUpper > plan.gridLower)) {
+        return { error: "gridLower/gridUpper must be finite and upper > lower" };
+      }
+    }
+
+    return { plan, rawJson };
+  } catch (e) {
+    return { error: `Invalid JSON in TRADER_GRID_JSON: ${String(e)}` };
   }
 }
 
@@ -605,6 +678,9 @@ export default function TradingView() {
   const [pendingBurstPlan, setPendingBurstPlan] = useState<TraderBurstPlan | null>(null);
   const [pendingBurstPlanError, setPendingBurstPlanError] = useState<string | null>(null);
 
+  const [pendingGridPlan, setPendingGridPlan] = useState<TraderGridPlan | null>(null);
+  const [pendingGridPlanError, setPendingGridPlanError] = useState<string | null>(null);
+
   useEffect(() => {
     chartPausedRef.current = chartPaused;
   }, [chartPaused]);
@@ -909,6 +985,17 @@ export default function TradingView() {
             setPendingBurstPlanError(parsed.error);
           }
         }
+
+        const gridParsed = parseTraderGridPlan(text);
+        if (gridParsed) {
+          if ("plan" in gridParsed) {
+            setPendingGridPlan(gridParsed.plan);
+            setPendingGridPlanError(null);
+          } else {
+            setPendingGridPlan(null);
+            setPendingGridPlanError(gridParsed.error);
+          }
+        }
         setStrategyThinking(false);
         setStrategyStream("");
         awaitingStrategyReplyRef.current = false;
@@ -1003,6 +1090,11 @@ export default function TradingView() {
       "```json\n" +
       `{"targetOrderCount":20,"maxRuntimeSeconds":900,"symbolMode":"top20_random","randomCount":5,"klineInterval":"5m","aggression":0.85}\n` +
       "```\n" +
+      `\nOm användaren ber om GRID-bot, lägg till ett block i slutet:\n` +
+      `${TRADER_GRID_PREFIX}\n` +
+      "```json\n" +
+      `{"gridLevels":25,"gridSpacing":"geometric","gridBudget":0.25,"symbolMode":"selected","klineInterval":"5m","maxRuntimeSeconds":3600}\n` +
+      "```\n" +
       `Regler: detta körs paper-only. Om något verkar farligt/otydligt: föreslå plan men be om bekräftelse i text.`;
 
     socketRef.current?.emit("frank_message", { content: prompt, files });
@@ -1024,6 +1116,67 @@ export default function TradingView() {
       trailingStopPct,
       aggression,
     };
+    await startTraderWithPayload(payload);
+  };
+
+  const executeGridPlan = async () => {
+    if (!pendingGridPlan) return;
+    if (running) {
+      setError("Stoppa trader först (grid startar en ny process)");
+      return;
+    }
+    if (!allowAiExecution) {
+      setError("Slå på 'AI execution' först (paper only)");
+      return;
+    }
+
+    const plan = pendingGridPlan;
+    const mode = plan.symbolMode || "selected";
+    const pickN = plan.randomCount != null ? plan.randomCount : 1;
+
+    let resolvedSymbols: string[] = [];
+    if (mode === "top20_all") {
+      resolvedSymbols = symbolUniverse.slice(0, 20);
+    } else if (mode === "top20_random") {
+      const arr = symbolUniverse.slice(0, 20);
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+      }
+      resolvedSymbols = arr.slice(0, Math.max(1, Math.min(20, pickN)));
+    } else {
+      resolvedSymbols = selectedSymbols;
+    }
+
+    if (resolvedSymbols.length === 0) {
+      setError("No symbols selected. Välj coins först (eller använd top-20 pickern)");
+      return;
+    }
+
+    const gridIntervalSeconds = clamp(Math.round(intervalSeconds), 5, 15);
+
+    const payload: any = {
+      exchange,
+      symbols: resolvedSymbols,
+      paperMode: true,
+      intervalSeconds: gridIntervalSeconds,
+
+      strategy: "grid",
+      klinesInterval: plan.klineInterval ?? klineInterval,
+      cooldownSeconds: plan.cooldownSeconds ?? cooldownSeconds,
+
+      gridLevels: plan.gridLevels,
+      gridSpacing: plan.gridSpacing ?? "linear",
+      gridBudget: plan.gridBudget,
+      ...(plan.gridLower != null ? { gridLower: plan.gridLower } : {}),
+      ...(plan.gridUpper != null ? { gridUpper: plan.gridUpper } : {}),
+
+      ...(plan.targetOrderCount != null ? { targetOrderCount: plan.targetOrderCount } : {}),
+      ...(plan.maxRuntimeSeconds != null ? { maxRuntimeSeconds: plan.maxRuntimeSeconds } : {}),
+    };
+
     await startTraderWithPayload(payload);
   };
 
@@ -2150,6 +2303,53 @@ export default function TradingView() {
             </div>
             <div className="mt-1 text-[10px] text-slate-500">
               Obs: "20 ordrar" betyder upp till 20 fyllda BUY/SELL enligt botens signaler. Den kan stoppa tidigare om maxRuntimeSeconds nås.
+            </div>
+          </div>
+        )}
+
+        {pendingGridPlanError && (
+          <div className="text-[11px] text-amber-200 bg-amber-950/25 border border-amber-700/30 rounded-lg px-2 py-1">
+            Grid parse: {pendingGridPlanError}
+          </div>
+        )}
+
+        {pendingGridPlan && (
+          <div className="bg-slate-950/40 border border-cyan-700/30 rounded-lg p-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] text-cyan-400 font-semibold uppercase tracking-wider">Grid plan</div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={executeGridPlan}
+                  disabled={actionBusy !== null || running || !allowAiExecution}
+                  className="px-2 py-0.5 rounded-md bg-cyan-900/40 border border-cyan-700/40 text-cyan-200 hover:bg-cyan-900/60 text-[10px] disabled:opacity-50"
+                  title="Startar Grid bot (paper-only)"
+                >
+                  Execute Grid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingGridPlan(null);
+                    setPendingGridPlanError(null);
+                  }}
+                  disabled={actionBusy !== null}
+                  className="px-2 py-0.5 rounded-md bg-slate-900/50 border border-slate-700/50 text-slate-200 hover:bg-slate-900/70 text-[10px] disabled:opacity-50"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-1 text-[11px] text-slate-300 font-mono whitespace-pre-wrap">
+              gridLevels={pendingGridPlan.gridLevels}  spacing={pendingGridPlan.gridSpacing ?? "linear"}  budget={pendingGridPlan.gridBudget}
+              {pendingGridPlan.symbolMode ? `\nsymbolMode=${pendingGridPlan.symbolMode}` : ""}
+              {pendingGridPlan.randomCount != null ? `  randomCount=${pendingGridPlan.randomCount}` : ""}
+              {pendingGridPlan.gridLower != null && pendingGridPlan.gridUpper != null
+                ? `\nbounds=${pendingGridPlan.gridLower}..${pendingGridPlan.gridUpper}`
+                : "\nbounds=auto (infer from klines)"}
+              {pendingGridPlan.targetOrderCount != null ? `\ntargetOrderCount=${pendingGridPlan.targetOrderCount}` : ""}
+              {pendingGridPlan.maxRuntimeSeconds != null ? `  maxRuntimeSeconds=${pendingGridPlan.maxRuntimeSeconds}` : ""}
             </div>
           </div>
         )}
