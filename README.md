@@ -568,6 +568,8 @@ Trading bot settings are read from environment variables and from `frankenstein-
 | `TRADING_STOP_LOSS_PCT` | `0` | Stop loss threshold (percent) for open positions |
 | `TRADING_TRAILING_STOP_PCT` | `0` | Trailing stop (percent). Uses peak price since entry |
 | `TRADING_AGGRESSION` | `0.5` | 0..1 entry aggressiveness (0 = chill, 1 = degenerate) |
+| `TRADING_TARGET_ORDER_COUNT` | `0` | Optional burst mode: stop the bot after N filled orders |
+| `TRADING_MAX_RUNTIME_SECONDS` | `0` | Optional burst mode: stop the bot after max runtime (seconds) |
 | `KRAKEN_API_KEY` | — | Kraken API key (only required for live trading) |
 | `KRAKEN_API_SECRET` | — | Kraken API secret (only required for live trading) |
 | `KRAKEN_BASE_URL` | `https://api.kraken.com` | Kraken REST API base URL |
