@@ -22,10 +22,24 @@ description: Deploy Gracestack AI Lab to server (Docker Compose)
    git pull
    ```
 
+   No-`cd` variant:
+
+   ```bash
+   git -C /home/kim/cascade-remote pull
+   ```
+
 2. Rebuild + restart services
 
    ```bash
    docker compose up -d --build
+   ```
+
+   No-`cd` variant:
+
+   ```bash
+   docker compose -f /home/kim/cascade-remote/docker-compose.yml \
+     --project-directory /home/kim/cascade-remote \
+     up -d --build
    ```
 
 3. Verify health/logs
