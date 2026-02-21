@@ -192,6 +192,14 @@ export function getFileMeta(id: string): SharedFile | undefined {
   return files.get(id);
 }
 
+export function getFilePath(id: string): string | null {
+  const file = files.get(id);
+  if (!file) return null;
+  const filePath = join(FILES_DIR, file.storedName);
+  if (!existsSync(filePath)) return null;
+  return filePath;
+}
+
 export function listFiles(options?: {
   uploadedBy?: SharedFile["uploadedBy"];
   mimeType?: string;

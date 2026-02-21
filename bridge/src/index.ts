@@ -49,7 +49,7 @@ import {
   type ScheduleAction,
 } from "./scheduler.js";
 import {
-  saveFile, saveFileFromBase64, getFileBuffer, getFileMeta,
+  saveFile, saveFileFromBase64, getFileBuffer, getFileMeta, getFilePath,
   listFiles, deleteFile, getStorageStats, getFileBase64,
 } from "./file-sharing.js";
 import { searchConversations, getConversationStats, exportConversation } from "./search.js";
@@ -3310,8 +3310,61 @@ app.get("/api/files/:id/base64", (req, res) => {
   const meta = getFileMeta(req.params.id);
   if (!meta) return res.status(404).json({ error: "File not found" });
   const data = getFileBase64(req.params.id);
-  if (!data) return res.status(404).json({ error: "File data not found" });
+  if (!data) return res.status(404).json({ error: "File not found" });
   res.json({ ...meta, data });
+});
+
+// Index an uploaded shared file into RAG (BM25 + optional Weaviate).
+// This avoids users having to provide a raw server file path.
+app.post("/api/files/:id/index-rag", async (req, res) => {
+  const id = req.params.id;
+  const meta = getFileMeta(id);
+  if (!meta) return res.status(404).json({ error: "File not found" });
+
+  const filePath = getFilePath(id);
+  if (!filePath) return res.status(404).json({ error: "File not found" });
+
+  try {
+    const origin = `shared-file:${id}`;
+    let bm25Src: any;
+    let wSrc: any = null;
+
+    // PDFs
+    if (meta.mimeType === "application/pdf" || meta.originalName.toLowerCase().endsWith(".pdf")) {
+      const { readFileSync } = await import("fs");
+      const pdfParse = (await import("pdf-parse")).default;
+      const data = await pdfParse(readFileSync(filePath));
+      const text = String(data?.text || "").trim();
+      if (!text) return res.status(422).json({ error: "PDF contains no extractable text" });
+
+      bm25Src = ragIndexText(text, meta.originalName, "pdf", origin);
+      if (isWeaviateConnected()) {
+        wSrc = await weaviateIndexText(text, meta.originalName, "file");
+      }
+
+      return res.json({ bm25: bm25Src, weaviate: wSrc });
+    }
+
+    // Text/code/markdown
+    if (meta.mimeType.startsWith("text/") || /\.(md|txt|csv|json|xml|py|ts|tsx|js|jsx|html|css|yml|yaml|toml|ini|cfg|sh|ps1|sql|log)$/i.test(meta.originalName)) {
+      const { readFileSync } = await import("fs");
+      const text = readFileSync(filePath, "utf-8");
+
+      bm25Src = ragIndexText(text, meta.originalName, "file", origin);
+      if (isWeaviateConnected()) {
+        wSrc = await weaviateIndexText(text, meta.originalName, "file");
+      }
+
+      return res.json({ bm25: bm25Src, weaviate: wSrc });
+    }
+
+    return res.status(415).json({
+      error: `Unsupported file type for RAG indexing: ${meta.mimeType}`,
+      supported: ["text/*", "application/pdf"],
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 app.delete("/api/files/:id", (req, res) => {

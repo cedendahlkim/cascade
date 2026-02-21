@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, DragEvent } from "react";
-import { File, Upload, Download, Trash2, Image, FileText, Archive, RefreshCw, HardDrive, Filter, X, Eye } from "lucide-react";
+import { File, Upload, Download, Trash2, Image, FileText, Archive, RefreshCw, HardDrive, Filter, X, Eye, Brain, Loader2 } from "lucide-react";
 import { BRIDGE_URL } from "../config";
 
 interface SharedFile {
@@ -50,6 +50,8 @@ export default function FilesView() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [preview, setPreview] = useState<{ file: SharedFile; data: string } | null>(null);
+  const [indexingId, setIndexingId] = useState<string | null>(null);
+  const [indexMessage, setIndexMessage] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [filter, setFilter] = useState<"all" | "image" | "code" | "archive" | "other">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -126,6 +128,28 @@ export default function FilesView() {
     }
   };
 
+  const canIndexToRag = (f: SharedFile) => {
+    return f.mimeType.startsWith("text/") || f.mimeType === "application/pdf" || f.originalName.toLowerCase().endsWith(".pdf");
+  };
+
+  const indexToRag = async (f: SharedFile) => {
+    if (!canIndexToRag(f)) return;
+    setIndexingId(f.id);
+    setIndexMessage(null);
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/files/${f.id}/index-rag`, { method: "POST" });
+      const payload = await res.json().catch(() => ({} as any));
+      if (!res.ok) {
+        throw new Error(payload?.error || `HTTP ${res.status}`);
+      }
+      setIndexMessage(`Indexerat till kunskapsbas: ${f.originalName}`);
+    } catch (err) {
+      setIndexMessage(`Index-fel: ${String(err)}`);
+    } finally {
+      setIndexingId(null);
+    }
+  };
+
   const filteredFiles = filter === "all" ? files : files.filter(f => getFileCategory(f.mimeType) === filter);
   const filterCounts = {
     all: files.length,
@@ -146,6 +170,12 @@ export default function FilesView() {
           {stats && (
             <p className="text-[10px] text-slate-500">{stats.fileCount} filer · {stats.totalSizeFormatted}</p>
           )}
+
+      {indexMessage && (
+        <div className={`text-[11px] rounded-xl px-3 py-2 border ${indexMessage.startsWith("Index-fel") ? "bg-red-950/30 border-red-800/40 text-red-300" : "bg-emerald-950/25 border-emerald-800/40 text-emerald-300"}`}>
+          {indexMessage}
+        </div>
+      )}
         </div>
         <div className="flex gap-2">
           <button onClick={fetchFiles} className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors" title="Uppdatera">
@@ -262,6 +292,16 @@ export default function FilesView() {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+                {canIndexToRag(f) && (
+                  <button
+                    onClick={() => indexToRag(f)}
+                    disabled={indexingId === f.id}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 transition-colors disabled:opacity-50"
+                    title="Indexera till kunskapsbas (RAG)"
+                  >
+                    {indexingId === f.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
+                  </button>
+                )}
                 <button onClick={() => downloadFile(f)} className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 transition-colors" title="Ladda ner">
                   <Download className="w-3.5 h-3.5" />
                 </button>
