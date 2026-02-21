@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BRIDGE_URL } from "../config";
 import { io, Socket } from "socket.io-client";
 import { Play, Square, RefreshCw, Brain, Activity, DollarSign, AlertTriangle, Loader2, MessageSquareText, LineChart, Pause, Trash2, TrendingUp } from "lucide-react";
@@ -75,8 +75,134 @@ type SignalPoint = {
 
 type ChartLine = { id: string; color: string; data: Array<{ t: number; y: number }> };
 
+type Candle = {
+  t: number; // bucket start (ms)
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+};
+
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
+}
+
+function toCandles(points: Array<{ t: number; price: number }>, bucketMs: number): Candle[] {
+  if (!Number.isFinite(bucketMs) || bucketMs <= 0) return [];
+  if (points.length < 1) return [];
+
+  const out: Candle[] = [];
+  let cur: Candle | null = null;
+
+  for (const p of points) {
+    const t = Number.isFinite(p.t) ? p.t : Date.now();
+    const price = Number.isFinite(p.price) ? p.price : NaN;
+    if (!Number.isFinite(price) || price <= 0) continue;
+
+    const bucket = Math.floor(t / bucketMs) * bucketMs;
+
+    if (!cur || cur.t !== bucket) {
+      cur = { t: bucket, open: price, high: price, low: price, close: price };
+      out.push(cur);
+    } else {
+      cur.high = Math.max(cur.high, price);
+      cur.low = Math.min(cur.low, price);
+      cur.close = price;
+    }
+  }
+
+  return out;
+}
+
+function MiniCandleChart(
+  {
+    candles,
+    height = 96,
+    maxCandles = 180,
+    upColor = "rgba(16,185,129,0.95)",
+    downColor = "rgba(248,113,113,0.95)",
+  }: {
+    candles: Candle[];
+    height?: number;
+    maxCandles?: number;
+    upColor?: string;
+    downColor?: string;
+  },
+) {
+  const data = useMemo(() => downsample(candles, maxCandles), [candles, maxCandles]);
+  if (data.length < 2) {
+    return (
+      <div className="h-24 flex items-center justify-center text-[11px] text-slate-500">
+        Väntar på data…
+      </div>
+    );
+  }
+
+  let yMinRaw = Infinity;
+  let yMaxRaw = -Infinity;
+  for (const c of data) {
+    yMinRaw = Math.min(yMinRaw, c.low);
+    yMaxRaw = Math.max(yMaxRaw, c.high);
+  }
+  if (!Number.isFinite(yMinRaw) || !Number.isFinite(yMaxRaw) || yMinRaw <= 0) {
+    return (
+      <div className="h-24 flex items-center justify-center text-[11px] text-slate-500">
+        Väntar på data…
+      </div>
+    );
+  }
+
+  const pad = (yMaxRaw - yMinRaw) * 0.08;
+  const yMin = yMinRaw - pad;
+  const yMax = yMaxRaw + pad;
+  const toY = (y: number) => {
+    if (yMax === yMin) return 50;
+    const v = (y - yMin) / (yMax - yMin);
+    return 60 - v * 60;
+  };
+
+  const n = data.length;
+  const cw = 100 / n;
+  const bodyW = Math.max(0.7, cw * 0.62);
+
+  return (
+    <div className="w-full">
+      <svg viewBox="0 0 100 60" width="100%" height={height} preserveAspectRatio="none" className="block">
+        {/* grid */}
+        {[0, 1, 2, 3].map((i) => (
+          <line key={i} x1={0} x2={100} y1={(60 / 3) * i} y2={(60 / 3) * i} stroke="rgba(148,163,184,0.12)" strokeWidth={0.6} />
+        ))}
+
+        {data.map((c, idx) => {
+          const up = c.close >= c.open;
+          const color = up ? upColor : downColor;
+          const xMid = idx * cw + cw * 0.5;
+          const yHigh = toY(c.high);
+          const yLow = toY(c.low);
+          const yOpen = toY(c.open);
+          const yClose = toY(c.close);
+          const yTop = Math.min(yOpen, yClose);
+          const yBot = Math.max(yOpen, yClose);
+          const bodyH = Math.max(0.8, yBot - yTop);
+          const xBody = xMid - bodyW * 0.5;
+
+          return (
+            <g key={c.t}>
+              {/* wick */}
+              <line x1={xMid} y1={yHigh} x2={xMid} y2={yLow} stroke={color} strokeWidth={1.0} opacity={0.9} />
+              {/* body */}
+              <rect x={xBody} y={yTop} width={bodyW} height={bodyH} fill={color} opacity={0.9} rx={0.25} />
+            </g>
+          );
+        })}
+      </svg>
+
+      <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
+        <span>{fmtUsd(yMinRaw)}</span>
+        <span>{fmtUsd(yMaxRaw)}</span>
+      </div>
+    </div>
+  );
 }
 
 function downsample<T>(data: T[], maxPoints: number): T[] {
@@ -97,7 +223,21 @@ function fmtUsd(n: number) {
 }
 
 function MiniTimeSeriesChart(
-  { lines, height = 96, maxPoints = 260 }: { lines: ChartLine[]; height?: number; maxPoints?: number },
+  {
+    lines,
+    height = 96,
+    maxPoints = 260,
+    colorByDelta = false,
+    upColor = "rgba(16,185,129,0.95)",
+    downColor = "rgba(248,113,113,0.95)",
+  }: {
+    lines: ChartLine[];
+    height?: number;
+    maxPoints?: number;
+    colorByDelta?: boolean;
+    upColor?: string;
+    downColor?: string;
+  },
 ) {
   const decimated = useMemo(
     () => lines.map((l) => ({ ...l, data: downsample(l.data, maxPoints) })),
@@ -160,6 +300,32 @@ function MiniTimeSeriesChart(
 
         {decimated.map((line) => {
           const data = line.data;
+
+          if (colorByDelta) {
+            // Red/green movement segments (up = green, down = red)
+            const segs: ReactNode[] = [];
+            for (let i = 1; i < data.length; i++) {
+              const a = data[i - 1];
+              const b = data[i];
+              const up = b.y >= a.y;
+              segs.push(
+                <line
+                  key={`${line.id}-seg-${i}`}
+                  x1={toX(a.t)}
+                  y1={toY(a.y)}
+                  x2={toX(b.t)}
+                  y2={toY(b.y)}
+                  stroke={up ? upColor : downColor}
+                  strokeWidth={1.8}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  opacity={0.95}
+                />,
+              );
+            }
+            return <g key={line.id}>{segs}</g>;
+          }
+
           const parts = new Array<string>(data.length);
           for (let i = 0; i < data.length; i++) {
             const p = data[i];
@@ -235,6 +401,8 @@ export default function TradingView() {
   const [equitySeries, setEquitySeries] = useState<EquityPoint[]>([]);
   const [signalSeriesBySymbol, setSignalSeriesBySymbol] = useState<Record<string, SignalPoint[]>>({});
   const [priceChartSymbol, setPriceChartSymbol] = useState<string>("");
+  const [priceChartMode, setPriceChartMode] = useState<"candles" | "line">("candles");
+  const [priceTimeframeMs, setPriceTimeframeMs] = useState<number>(60_000);
   const lastTickCountRef = useRef<number | null>(null);
 
   const [lastTickMs, setLastTickMs] = useState<number | null>(null);
@@ -536,15 +704,36 @@ export default function TradingView() {
     return signalSeriesBySymbol[priceChartSymbol] || [];
   }, [priceChartSymbol, signalSeriesBySymbol]);
 
+  const priceCandles = useMemo(() => {
+    // Standard OHLC aggregation: open=first, high=max, low=min, close=last per bucket
+    return toCandles(priceSeries.map((p) => ({ t: p.t, price: p.price })), priceTimeframeMs).slice(-260);
+  }, [priceSeries, priceTimeframeMs]);
+
   const priceMeta = useMemo(() => {
+    // Show last price + delta based on selected timeframe (candle close-to-close)
     if (priceSeries.length < 1) return null;
-    const last = priceSeries[priceSeries.length - 1];
+
+    const lastPoint = priceSeries[priceSeries.length - 1];
+    const lastPrice = lastPoint?.price;
+    if (!Number.isFinite(lastPrice) || lastPrice <= 0) return null;
+
+    const lastCandle = priceCandles.length >= 1 ? priceCandles[priceCandles.length - 1] : null;
+    const prevCandle = priceCandles.length >= 2 ? priceCandles[priceCandles.length - 2] : null;
+
+    const prevClose = prevCandle?.close;
+    const close = lastCandle?.close ?? lastPrice;
+    const delta = (typeof prevClose === "number" && Number.isFinite(prevClose)) ? (close - prevClose) : null;
+    const deltaPct = (typeof prevClose === "number" && prevClose > 0 && delta !== null)
+      ? (delta / prevClose) * 100
+      : null;
     return {
-      price: last.price,
-      action: last.action,
-      conf: last.conf,
+      price: close,
+      action: lastPoint.action,
+      conf: lastPoint.conf,
+      delta,
+      deltaPct,
     };
-  }, [priceSeries]);
+  }, [priceSeries, priceCandles]);
 
   const priceLine = useMemo<ChartLine[]>(
     () => [{ id: "price", color: "#e2e8f0", data: priceSeries.map((p) => ({ t: p.t, y: p.price })) }],
@@ -800,32 +989,74 @@ export default function TradingView() {
                 <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Price</div>
                 {priceMeta && (
                   <div className="text-[10px] text-slate-500 font-mono">
-                    {fmtUsd(priceMeta.price)}
+                    <span>{fmtUsd(priceMeta.price)}</span>
+                    {typeof priceMeta.deltaPct === "number" && typeof priceMeta.delta === "number" && (
+                      <span className={priceMeta.delta >= 0 ? "text-emerald-200" : "text-red-200"}>
+                        {" "}({priceMeta.delta >= 0 ? "+" : ""}{priceMeta.deltaPct.toFixed(2)}%)
+                      </span>
+                    )}
                     {priceMeta.action ? ` · ${priceMeta.action}` : ""}
                     {Number.isFinite(priceMeta.conf) ? ` ${(priceMeta.conf * 100).toFixed(0)}%` : ""}
                   </div>
                 )}
               </div>
-              <select
-                value={priceChartSymbol}
-                onChange={(e) => setPriceChartSymbol(e.target.value)}
-                aria-label="Price chart symbol"
-                title="Välj symbol för prisgraf"
-                className="bg-slate-950/40 border border-slate-700/50 rounded-lg px-2 py-1 text-[11px] text-white"
-              >
-                {(Object.keys(signalSeriesBySymbol).length > 0
-                  ? Object.keys(signalSeriesBySymbol)
-                  : (state?.symbols || []).map((s) => String(s)))
-                  .filter(Boolean)
-                  .map((sym) => (
-                    <option key={sym} value={sym}>{sym}</option>
-                  ))}
-              </select>
+              <div className="flex items-center gap-1">
+                <select
+                  value={priceChartSymbol}
+                  onChange={(e) => setPriceChartSymbol(e.target.value)}
+                  aria-label="Price chart symbol"
+                  title="Välj symbol för prisgraf"
+                  className="bg-slate-950/40 border border-slate-700/50 rounded-lg px-2 py-1 text-[11px] text-white"
+                >
+                  {(Object.keys(signalSeriesBySymbol).length > 0
+                    ? Object.keys(signalSeriesBySymbol)
+                    : (state?.symbols || []).map((s) => String(s)))
+                    .filter(Boolean)
+                    .map((sym) => (
+                      <option key={sym} value={sym}>{sym}</option>
+                    ))}
+                </select>
+
+                <select
+                  value={String(priceTimeframeMs)}
+                  onChange={(e) => setPriceTimeframeMs(Number(e.target.value) || 60_000)}
+                  aria-label="Price chart timeframe"
+                  title="Välj timeframe för candles (OHLC)"
+                  className="bg-slate-950/40 border border-slate-700/50 rounded-lg px-2 py-1 text-[11px] text-white"
+                >
+                  <option value={1_000}>1s</option>
+                  <option value={5_000}>5s</option>
+                  <option value={15_000}>15s</option>
+                  <option value={60_000}>1m</option>
+                  <option value={300_000}>5m</option>
+                  <option value={900_000}>15m</option>
+                  <option value={3_600_000}>1h</option>
+                </select>
+
+                <select
+                  value={priceChartMode}
+                  onChange={(e) => setPriceChartMode(e.target.value === "line" ? "line" : "candles")}
+                  aria-label="Price chart mode"
+                  title="Välj visning"
+                  className="bg-slate-950/40 border border-slate-700/50 rounded-lg px-2 py-1 text-[11px] text-white"
+                >
+                  <option value="candles">Candles</option>
+                  <option value="line">Line</option>
+                </select>
+              </div>
             </div>
-            <MiniTimeSeriesChart
-              lines={priceLine}
-              maxPoints={240}
-            />
+            {priceChartMode === "candles" ? (
+              <MiniCandleChart
+                candles={priceCandles}
+                maxCandles={180}
+              />
+            ) : (
+              <MiniTimeSeriesChart
+                lines={priceLine}
+                maxPoints={240}
+                colorByDelta
+              />
+            )}
             <div className="text-[10px] text-slate-500 mt-1">
               Källa: live <span className="font-mono">trader_signal</span> events (senaste {priceSeries.length}).
             </div>
