@@ -1313,6 +1313,12 @@ export default function TradingView() {
                 );
               })}
             </div>
+
+            {(klineInterval === "1m" || klineInterval === "5m") && selectedSymbols.length >= 12 && (
+              <div className="mt-2 text-[10px] text-amber-200/90">
+                ⚠️ Short interval + many coins can be slow / rate-limited. Tip: use 15m/1h or fewer symbols.
+              </div>
+            )}
           </div>
           <label className="text-[11px] text-slate-300">
             Interval (s)
