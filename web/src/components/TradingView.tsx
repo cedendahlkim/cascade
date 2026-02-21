@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type MouseEvent as ReactMouseEvent } from "react";
 import { BRIDGE_URL } from "../config";
 import { io, Socket } from "socket.io-client";
-import { Play, Square, RefreshCw, Brain, Activity, DollarSign, AlertTriangle, Loader2, MessageSquareText, LineChart, Pause, Trash2, TrendingUp } from "lucide-react";
+import { Play, Square, RefreshCw, Brain, Activity, DollarSign, AlertTriangle, Loader2, MessageSquareText, LineChart, Pause, Trash2, TrendingUp, Bell, BellOff, Download, Keyboard, ChevronDown, ChevronUp, Timer, BarChart3, Calculator, Gauge, StickyNote, Target, Bookmark, PieChart } from "lucide-react";
 
 type TraderStatus = {
   running: boolean;
@@ -680,6 +680,30 @@ export default function TradingView() {
 
   const [pendingGridPlan, setPendingGridPlan] = useState<TraderGridPlan | null>(null);
   const [pendingGridPlanError, setPendingGridPlanError] = useState<string | null>(null);
+
+  // ── Feature state (20 new features) ──
+  const [soundAlerts, setSoundAlerts] = useState(false);
+  const [collapseConfig, setCollapseConfig] = useState(false);
+  const [collapseLog, setCollapseLog] = useState(true);
+  const [collapseEvents, setCollapseEvents] = useState(true);
+  const [collapseTrades, setCollapseTrades] = useState(true);
+  const [collapsePortfolio, setCollapsePortfolio] = useState(false);
+  const [showHotkeys, setShowHotkeys] = useState(false);
+  const [heatmapMode, setHeatmapMode] = useState(false);
+  const [showPosCalc, setShowPosCalc] = useState(false);
+  const [posCalcEntry, setPosCalcEntry] = useState("");
+  const [posCalcStop, setPosCalcStop] = useState("");
+  const [posCalcRisk, setPosCalcRisk] = useState("");
+  const [tradeNotes, setTradeNotes] = useState<Record<string, string>>({});
+  const [priceAlerts, setPriceAlerts] = useState<Array<{ symbol: string; price: number; direction: "above" | "below"; triggered: boolean }>>([]);
+  const [newAlertSymbol, setNewAlertSymbol] = useState("");
+  const [newAlertPrice, setNewAlertPrice] = useState("");
+  const [newAlertDir, setNewAlertDir] = useState<"above" | "below">("above");
+  const [configPresets, setConfigPresets] = useState<Array<{ name: string; config: any }>>(() => {
+    try { return JSON.parse(localStorage.getItem("trading_presets") || "[]"); } catch { return []; }
+  });
+  const [presetName, setPresetName] = useState("");
+  const lastAlertSoundRef = useRef(0);
 
   useEffect(() => {
     chartPausedRef.current = chartPaused;
@@ -1418,6 +1442,251 @@ export default function TradingView() {
   const marketIsLive = marketAgeMs != null && marketAgeMs <= Math.max(9000, marketPollMs * 3);
   const marketAgeLabel = marketAgeMs == null ? "—" : `${Math.round(marketAgeMs / 1000)}s`;
 
+  // ── Feature 1+2+6: Trade stats (PnL, win rate, hold duration) ──
+  const tradeStats = useMemo(() => {
+    if (trades.length === 0) return null;
+    let wins = 0, losses = 0, totalPnl = 0, totalHoldMs = 0, holdCount = 0;
+    let longest = 0, shortest = Infinity;
+    for (const t of trades) {
+      const pnl = t?.order?.realized_usdt ?? t?.order?.realized_pnl ?? null;
+      if (typeof pnl === "number") {
+        totalPnl += pnl;
+        if (pnl >= 0) wins++; else losses++;
+      }
+      const openTs = t?.signal?.timestamp ? Date.parse(t.signal.timestamp) : null;
+      const closeTs = t?.closed_at ? Date.parse(t.closed_at) : null;
+      if (openTs && closeTs && closeTs > openTs) {
+        const dur = closeTs - openTs;
+        totalHoldMs += dur;
+        holdCount++;
+        if (dur > longest) longest = dur;
+        if (dur < shortest) shortest = dur;
+      }
+    }
+    const total = wins + losses;
+    const winRate = total > 0 ? (wins / total) * 100 : 0;
+    const avgHoldMs = holdCount > 0 ? totalHoldMs / holdCount : 0;
+    return { wins, losses, total, winRate, totalPnl, avgHoldMs, longest, shortest: shortest === Infinity ? 0 : shortest };
+  }, [trades]);
+
+  // ── Feature 3: Sharpe ratio from equity series ──
+  const sharpeRatio = useMemo(() => {
+    if (equitySeries.length < 3) return null;
+    const returns: number[] = [];
+    for (let i = 1; i < equitySeries.length; i++) {
+      const prev = equitySeries[i - 1].total;
+      const cur = equitySeries[i].total;
+      if (prev > 0) returns.push((cur - prev) / prev);
+    }
+    if (returns.length < 2) return null;
+    const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((a, r) => a + (r - mean) ** 2, 0) / (returns.length - 1);
+    const std = Math.sqrt(variance);
+    if (std === 0) return null;
+    return (mean / std) * Math.sqrt(252);
+  }, [equitySeries]);
+
+  // ── Feature 11: Session timer ──
+  const sessionDuration = useMemo(() => {
+    if (!status?.started_at) return null;
+    const start = Date.parse(status.started_at);
+    if (!Number.isFinite(start)) return null;
+    const ms = Math.max(0, uiNowEpoch - start);
+    const h = Math.floor(ms / 3_600_000);
+    const m = Math.floor((ms % 3_600_000) / 60_000);
+    const s = Math.floor((ms % 60_000) / 1000);
+    return `${h}h ${m}m ${s}s`;
+  }, [status?.started_at, uiNowEpoch]);
+
+  // ── Feature 15: Fear & Greed meter ──
+  const fearGreed = useMemo(() => {
+    if (equitySeries.length < 5) return null;
+    const recent = equitySeries.slice(-20);
+    const returns: number[] = [];
+    for (let i = 1; i < recent.length; i++) {
+      const prev = recent[i - 1].total;
+      if (prev > 0) returns.push((recent[i].total - prev) / prev);
+    }
+    if (returns.length < 2) return null;
+    const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const vol = Math.sqrt(returns.reduce((a, r) => a + (r - mean) ** 2, 0) / returns.length);
+    const momentum = mean * 100;
+    const score = clamp(50 + momentum * 500 - vol * 2000, 0, 100);
+    const label = score <= 20 ? "Extreme Fear" : score <= 40 ? "Fear" : score <= 60 ? "Neutral" : score <= 80 ? "Greed" : "Extreme Greed";
+    return { score: Math.round(score), label };
+  }, [equitySeries]);
+
+  // ── Feature 17: BTC benchmark comparison ──
+  const btcComparison = useMemo(() => {
+    const btcData = signalSeriesBySymbol["XBTUSDT"] || signalSeriesBySymbol["BTCUSDT"] || [];
+    if (btcData.length < 2 || equitySeries.length < 2) return null;
+    const btcStart = btcData[0].price;
+    const btcEnd = btcData[btcData.length - 1].price;
+    const btcPct = btcStart > 0 ? ((btcEnd - btcStart) / btcStart) * 100 : 0;
+    const portStart = equitySeries[0].total;
+    const portEnd = equitySeries[equitySeries.length - 1].total;
+    const portPct = portStart > 0 ? ((portEnd - portStart) / portStart) * 100 : 0;
+    const alpha = portPct - btcPct;
+    return { btcPct, portPct, alpha };
+  }, [signalSeriesBySymbol, equitySeries]);
+
+  // ── Feature 13: Signal confidence histogram ──
+  const confHistogram = useMemo(() => {
+    const sigs = state?.recent_signals || [];
+    if (sigs.length === 0) return null;
+    const buckets = [0, 0, 0, 0, 0]; // 0-20, 20-40, 40-60, 60-80, 80-100
+    for (const s of sigs) {
+      const c = Math.round((s.confidence || 0) * 100);
+      const idx = Math.min(4, Math.floor(c / 20));
+      buckets[idx]++;
+    }
+    const max = Math.max(...buckets, 1);
+    return { buckets, max, labels: ["0-20", "20-40", "40-60", "60-80", "80-100"] };
+  }, [state?.recent_signals]);
+
+  // ── Feature 8: Sound alert on BUY/SELL ──
+  useEffect(() => {
+    if (!soundAlerts) return;
+    const sigs = state?.recent_signals || [];
+    if (sigs.length === 0) return;
+    const last = sigs[sigs.length - 1];
+    if (!last?.timestamp) return;
+    const ts = Date.parse(last.timestamp);
+    if (ts > lastAlertSoundRef.current && (last.action === "BUY" || last.action === "SELL")) {
+      lastAlertSoundRef.current = ts;
+      try {
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = last.action === "BUY" ? 880 : 440;
+        gain.gain.value = 0.08;
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+      } catch {}
+    }
+  }, [soundAlerts, state?.recent_signals]);
+
+  // ── Feature 9: Hotkeys ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (e.key === " " && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (running) stopTrader(); else startTrader();
+      }
+      if (e.key === "p" || e.key === "P") setChartPaused((v) => !v);
+      if (e.key === "r" || e.key === "R") fetchAll();
+      if (e.key === "?" || e.key === "h" || e.key === "H") setShowHotkeys((v) => !v);
+      if (e.key === "m" || e.key === "M") setSoundAlerts((v) => !v);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [running]);
+
+  // ── Feature 18: Price alert checker ──
+  useEffect(() => {
+    if (priceAlerts.length === 0) return;
+    setPriceAlerts((prev) =>
+      prev.map((a) => {
+        if (a.triggered) return a;
+        const series = signalSeriesBySymbol[a.symbol] || [];
+        const last = series[series.length - 1];
+        if (!last) return a;
+        const hit = a.direction === "above" ? last.price >= a.price : last.price <= a.price;
+        if (hit) {
+          if (soundAlerts) {
+            try {
+              const ctx = new AudioContext();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.connect(gain); gain.connect(ctx.destination);
+              osc.frequency.value = 660; gain.gain.value = 0.1;
+              osc.start(); osc.stop(ctx.currentTime + 0.3);
+            } catch {}
+          }
+          return { ...a, triggered: true };
+        }
+        return a;
+      })
+    );
+  }, [signalSeriesBySymbol, priceAlerts.length, soundAlerts]);
+
+  // ── Feature 7: Export trades CSV ──
+  const exportTradesCsv = useCallback(() => {
+    if (trades.length === 0) return;
+    const headers = ["timestamp", "symbol", "action", "confidence", "price", "quantity", "realized_pnl", "pattern"];
+    const rows = trades.map((t) => [
+      t?.signal?.timestamp || "",
+      t?.signal?.symbol || "",
+      t?.signal?.action || "",
+      String(t?.signal?.confidence ?? ""),
+      String(t?.signal?.price ?? ""),
+      String(t?.signal?.quantity ?? ""),
+      String(t?.order?.realized_usdt ?? t?.order?.realized_pnl ?? ""),
+      t?.signal?.pattern || "",
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `trades_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }, [trades]);
+
+  // ── Feature 19: Config presets ──
+  const savePreset = useCallback(() => {
+    const name = presetName.trim() || `Preset ${configPresets.length + 1}`;
+    const config = { exchange, symbols, paperMode, intervalSeconds, riskPerTrade, minConfidence, klineInterval, maxPositions, cooldownSeconds, takeProfitPct, stopLossPct, trailingStopPct, aggression };
+    const next = [...configPresets.filter((p) => p.name !== name), { name, config }];
+    setConfigPresets(next);
+    localStorage.setItem("trading_presets", JSON.stringify(next));
+    setPresetName("");
+  }, [presetName, configPresets, exchange, symbols, paperMode, intervalSeconds, riskPerTrade, minConfidence, klineInterval, maxPositions, cooldownSeconds, takeProfitPct, stopLossPct, trailingStopPct, aggression]);
+
+  const loadPreset = useCallback((config: any) => {
+    setConfigDirty(true);
+    if (config.exchange) setExchange(config.exchange);
+    if (config.symbols) setSymbols(config.symbols);
+    if (typeof config.paperMode === "boolean") setPaperMode(config.paperMode);
+    if (typeof config.intervalSeconds === "number") setIntervalSeconds(config.intervalSeconds);
+    if (typeof config.riskPerTrade === "number") setRiskPerTrade(config.riskPerTrade);
+    if (typeof config.minConfidence === "number") setMinConfidence(config.minConfidence);
+    if (config.klineInterval) setKlineInterval(config.klineInterval);
+    if (typeof config.maxPositions === "number") setMaxPositions(config.maxPositions);
+    if (typeof config.cooldownSeconds === "number") setCooldownSeconds(config.cooldownSeconds);
+    if (typeof config.takeProfitPct === "number") setTakeProfitPct(config.takeProfitPct);
+    if (typeof config.stopLossPct === "number") setStopLossPct(config.stopLossPct);
+    if (typeof config.trailingStopPct === "number") setTrailingStopPct(config.trailingStopPct);
+    if (typeof config.aggression === "number") setAggression(config.aggression);
+  }, []);
+
+  const deletePreset = useCallback((name: string) => {
+    const next = configPresets.filter((p) => p.name !== name);
+    setConfigPresets(next);
+    localStorage.setItem("trading_presets", JSON.stringify(next));
+  }, [configPresets]);
+
+  // ── Feature 14: Position sizing calculator ──
+  const posCalcResult = useMemo(() => {
+    const entry = parseFloat(posCalcEntry);
+    const stop = parseFloat(posCalcStop);
+    const risk = parseFloat(posCalcRisk) || (totalUsd * riskPerTrade);
+    if (!Number.isFinite(entry) || !Number.isFinite(stop) || entry <= 0 || stop <= 0 || entry === stop) return null;
+    const riskPerUnit = Math.abs(entry - stop);
+    const qty = risk / riskPerUnit;
+    const positionValue = qty * entry;
+    return { qty: qty.toFixed(6), value: positionValue.toFixed(2), riskUsed: risk.toFixed(2), riskPct: totalUsd > 0 ? ((risk / totalUsd) * 100).toFixed(2) : "0" };
+  }, [posCalcEntry, posCalcStop, posCalcRisk, totalUsd, riskPerTrade]);
+
+  // ── Helper: format duration ──
+  const fmtDuration = (ms: number) => {
+    if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+    if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
+    return `${(ms / 3_600_000).toFixed(1)}h`;
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -1450,9 +1719,54 @@ export default function TradingView() {
             <span className={"w-1.5 h-1.5 rounded-full " + (marketIsLive ? "bg-emerald-400" : "bg-amber-400") + " animate-pulse-dot"} />
             Market {marketIsLive ? "live" : "stale"} · {marketAgeLabel}
           </span>
+          {sessionDuration && running && (
+            <span className="text-[10px] bg-violet-950/25 text-violet-200 px-2 py-0.5 rounded-full border border-violet-700/30 flex items-center gap-1">
+              <Timer className="w-3 h-3" /> {sessionDuration}
+            </span>
+          )}
+          {fearGreed && (
+            <span className={
+              "text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 " +
+              (fearGreed.score <= 30 ? "bg-red-950/25 text-red-200 border-red-700/30"
+                : fearGreed.score >= 70 ? "bg-green-950/25 text-green-200 border-green-700/30"
+                : "bg-slate-800/60 text-slate-300 border-slate-700/50")
+            } title={`Fear & Greed: ${fearGreed.score}/100`}>
+              <Gauge className="w-3 h-3" /> {fearGreed.score} {fearGreed.label}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => setSoundAlerts((v) => !v)}
+            className={"p-2 rounded-lg transition-colors " + (soundAlerts ? "bg-amber-900/40 text-amber-200" : "bg-slate-800 text-slate-400 hover:text-white")}
+            title={soundAlerts ? "Ljud PÅ (M)" : "Ljud AV (M)"}
+          >
+            {soundAlerts ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => setShowHotkeys((v) => !v)}
+            className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            title="Visa hotkeys (H)"
+          >
+            <Keyboard className="w-4 h-4" />
+          </button>
+          {trades.length > 0 && (
+            <button
+              onClick={exportTradesCsv}
+              className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              title="Exportera trades som CSV"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={() => setShowPosCalc((v) => !v)}
+            className={"p-2 rounded-lg transition-colors " + (showPosCalc ? "bg-cyan-900/40 text-cyan-200" : "bg-slate-800 text-slate-400 hover:text-white")}
+            title="Position sizing calculator"
+          >
+            <Calculator className="w-4 h-4" />
+          </button>
           {running ? (
             <button
               onClick={stopTrader}
@@ -1489,9 +1803,122 @@ export default function TradingView() {
         </div>
       )}
 
+      {/* ── Feature 9: Hotkeys overlay ── */}
+      {showHotkeys && (
+        <div className="trading-card rounded-xl p-3 border border-violet-700/30 bg-violet-950/20">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] text-violet-300 font-semibold uppercase tracking-wider flex items-center gap-1"><Keyboard className="w-3.5 h-3.5" /> Hotkeys</div>
+            <button onClick={() => setShowHotkeys(false)} className="text-[10px] text-slate-400 hover:text-white">Stäng</button>
+          </div>
+          <div className="grid grid-cols-2 gap-1 text-[11px]">
+            {[
+              ["Space", "Start / Stoppa trader"],
+              ["P", "Pausa / återuppta chart"],
+              ["R", "Refresh data"],
+              ["M", "Ljud av/på"],
+              ["H / ?", "Visa/dölj hotkeys"],
+            ].map(([key, desc]) => (
+              <div key={key} className="flex items-center gap-2">
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 text-slate-200 font-mono text-[10px]">{key}</kbd>
+                <span className="text-slate-400">{desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Feature 14: Position sizing calculator ── */}
+      {showPosCalc && (
+        <div className="trading-card rounded-xl p-3 border border-cyan-700/30 bg-cyan-950/10">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] text-cyan-300 font-semibold uppercase tracking-wider flex items-center gap-1"><Calculator className="w-3.5 h-3.5" /> Position Calculator</div>
+            <button onClick={() => setShowPosCalc(false)} className="text-[10px] text-slate-400 hover:text-white">Stäng</button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <label className="text-[11px] text-slate-300">
+              Entry price
+              <input value={posCalcEntry} onChange={(e) => setPosCalcEntry(e.target.value)} type="number" step="any" className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white" placeholder="0.00" />
+            </label>
+            <label className="text-[11px] text-slate-300">
+              Stop loss price
+              <input value={posCalcStop} onChange={(e) => setPosCalcStop(e.target.value)} type="number" step="any" className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white" placeholder="0.00" />
+            </label>
+            <label className="text-[11px] text-slate-300">
+              Risk ($)
+              <input value={posCalcRisk} onChange={(e) => setPosCalcRisk(e.target.value)} type="number" step="any" className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white" placeholder={`Auto: $${(totalUsd * riskPerTrade).toFixed(2)}`} />
+            </label>
+          </div>
+          {posCalcResult && (
+            <div className="mt-2 grid grid-cols-4 gap-2 text-[11px]">
+              <div className="bg-slate-900/40 rounded-lg p-2 text-center"><div className="text-slate-500 text-[9px]">Quantity</div><div className="text-white font-mono">{posCalcResult.qty}</div></div>
+              <div className="bg-slate-900/40 rounded-lg p-2 text-center"><div className="text-slate-500 text-[9px]">Position $</div><div className="text-white font-mono">${posCalcResult.value}</div></div>
+              <div className="bg-slate-900/40 rounded-lg p-2 text-center"><div className="text-slate-500 text-[9px]">Risk $</div><div className="text-white font-mono">${posCalcResult.riskUsed}</div></div>
+              <div className="bg-slate-900/40 rounded-lg p-2 text-center"><div className="text-slate-500 text-[9px]">Risk %</div><div className="text-white font-mono">{posCalcResult.riskPct}%</div></div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Feature 18: Price alerts ── */}
+      {priceAlerts.length > 0 && (
+        <div className="trading-card rounded-xl p-3 border border-amber-700/20">
+          <div className="text-[10px] text-amber-300 font-semibold uppercase tracking-wider mb-1 flex items-center gap-1"><Target className="w-3.5 h-3.5" /> Price Alerts</div>
+          <div className="space-y-1">
+            {priceAlerts.map((a, i) => (
+              <div key={i} className={"flex items-center justify-between text-[11px] px-2 py-1 rounded-lg " + (a.triggered ? "bg-green-950/30 border border-green-700/30" : "bg-slate-900/30 border border-slate-700/30")}>
+                <span className="text-slate-200 font-mono">{a.symbol} {a.direction === "above" ? "≥" : "≤"} {a.price}</span>
+                <div className="flex items-center gap-2">
+                  {a.triggered && <span className="text-green-300 text-[10px]">TRIGGERED</span>}
+                  <button onClick={() => setPriceAlerts((prev) => prev.filter((_, j) => j !== i))} className="text-slate-500 hover:text-red-300 text-[10px]">×</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center gap-1">
+            <input value={newAlertSymbol} onChange={(e) => setNewAlertSymbol(e.target.value.toUpperCase())} placeholder="Symbol" className="w-24 bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white" />
+            <select value={newAlertDir} onChange={(e) => setNewAlertDir(e.target.value as "above" | "below")} aria-label="Alert direction" className="bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white">
+              <option value="above">≥ Above</option>
+              <option value="below">≤ Below</option>
+            </select>
+            <input value={newAlertPrice} onChange={(e) => setNewAlertPrice(e.target.value)} type="number" step="any" placeholder="Price" className="w-24 bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white" />
+            <button onClick={() => {
+              const sym = newAlertSymbol.trim();
+              const price = parseFloat(newAlertPrice);
+              if (sym && Number.isFinite(price) && price > 0) {
+                setPriceAlerts((prev) => [...prev, { symbol: sym, price, direction: newAlertDir, triggered: false }]);
+                setNewAlertSymbol(""); setNewAlertPrice("");
+              }
+            }} className="px-2 py-1 rounded-lg bg-amber-900/40 border border-amber-700/40 text-amber-200 text-[10px] hover:bg-amber-900/60">Add</button>
+          </div>
+        </div>
+      )}
+      {priceAlerts.length === 0 && (
+        <div className="flex items-center gap-1">
+          <input value={newAlertSymbol} onChange={(e) => setNewAlertSymbol(e.target.value.toUpperCase())} placeholder="Alert: Symbol" className="w-20 bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[10px] text-white" />
+          <select value={newAlertDir} onChange={(e) => setNewAlertDir(e.target.value as "above" | "below")} aria-label="Alert direction" className="bg-slate-900/60 border border-slate-700 rounded-lg px-1 py-1 text-[10px] text-white">
+            <option value="above">≥</option>
+            <option value="below">≤</option>
+          </select>
+          <input value={newAlertPrice} onChange={(e) => setNewAlertPrice(e.target.value)} type="number" step="any" placeholder="Price" className="w-20 bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[10px] text-white" />
+          <button onClick={() => {
+            const sym = newAlertSymbol.trim();
+            const price = parseFloat(newAlertPrice);
+            if (sym && Number.isFinite(price) && price > 0) {
+              setPriceAlerts((prev) => [...prev, { symbol: sym, price, direction: newAlertDir, triggered: false }]);
+              setNewAlertSymbol(""); setNewAlertPrice("");
+            }
+          }} className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-[10px] hover:bg-slate-700">
+            <Target className="w-3 h-3 inline mr-1" />Add Alert
+          </button>
+        </div>
+      )}
+
       <div className="trading-card rounded-xl p-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Konfiguration</div>
+          <button type="button" onClick={() => setCollapseConfig((v) => !v)} className="flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider hover:text-white">
+            {collapseConfig ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            Konfiguration
+          </button>
           <div className="flex items-center gap-2">
             {running && <span className="text-[10px] text-slate-500">Stoppa för att ändra</span>}
             {configDirty && !running && (
@@ -1509,6 +1936,7 @@ export default function TradingView() {
             )}
           </div>
         </div>
+        {!collapseConfig && (<div className="space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <label className="text-[11px] text-slate-300">
             Exchange
@@ -1811,6 +2239,23 @@ export default function TradingView() {
           />
           Paper mode (recommended)
         </label>
+
+        {/* ── Feature 19: Config presets ── */}
+        <div className="border-t border-slate-700/30 pt-2 mt-1">
+          <div className="flex items-center gap-1 flex-wrap">
+            <Bookmark className="w-3 h-3 text-slate-400" />
+            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Presets</span>
+            <input value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="Namn…" className="w-24 bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-0.5 text-[10px] text-white ml-1" />
+            <button onClick={savePreset} disabled={running} className="px-2 py-0.5 rounded-md bg-emerald-900/40 border border-emerald-700/40 text-emerald-200 text-[10px] hover:bg-emerald-900/60 disabled:opacity-50">Spara</button>
+            {configPresets.map((p) => (
+              <div key={p.name} className="flex items-center gap-0.5">
+                <button onClick={() => loadPreset(p.config)} disabled={running} className="px-2 py-0.5 rounded-md bg-slate-900/50 border border-slate-700/50 text-slate-200 text-[10px] hover:bg-slate-900/70 disabled:opacity-50">{p.name}</button>
+                <button onClick={() => deletePreset(p.name)} className="text-slate-500 hover:text-red-300 text-[10px]">×</button>
+              </div>
+            ))}
+          </div>
+        </div>
+        </div>)}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -1842,6 +2287,79 @@ export default function TradingView() {
           <div className="text-[10px] text-slate-500">Last tick: {state?.last_tick_at || "—"}</div>
         </div>
       </div>
+
+      {/* ── Features 1-6, 13, 17: Enhanced stats row ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2">
+        {tradeStats && (
+          <>
+            <div className="trading-card rounded-xl p-2">
+              <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Realized PnL</div>
+              <div className={"text-sm font-bold " + (tradeStats.totalPnl >= 0 ? "text-emerald-300" : "text-red-300")}>${tradeStats.totalPnl.toFixed(2)}</div>
+              <div className="text-[9px] text-slate-500">{tradeStats.total} trades</div>
+            </div>
+            <div className="trading-card rounded-xl p-2">
+              <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Win Rate</div>
+              <div className="flex items-center gap-1.5">
+                <div className="text-sm font-bold text-white">{tradeStats.winRate.toFixed(1)}%</div>
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="rgba(100,116,139,0.3)" strokeWidth="3" />
+                  <circle cx="12" cy="12" r="10" fill="none" stroke={tradeStats.winRate >= 50 ? "#34d399" : "#f87171"} strokeWidth="3"
+                    strokeDasharray={`${(tradeStats.winRate / 100) * 62.83} 62.83`}
+                    strokeLinecap="round" transform="rotate(-90 12 12)" />
+                </svg>
+              </div>
+              <div className="text-[9px] text-slate-500">{tradeStats.wins}W / {tradeStats.losses}L</div>
+            </div>
+            <div className="trading-card rounded-xl p-2">
+              <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Avg Hold</div>
+              <div className="text-sm font-bold text-white">{tradeStats.avgHoldMs > 0 ? fmtDuration(tradeStats.avgHoldMs) : "—"}</div>
+              <div className="text-[9px] text-slate-500">
+                {tradeStats.shortest > 0 ? `${fmtDuration(tradeStats.shortest)} – ${fmtDuration(tradeStats.longest)}` : "—"}
+              </div>
+            </div>
+          </>
+        )}
+        {sharpeRatio != null && (
+          <div className="trading-card rounded-xl p-2">
+            <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Sharpe (ann.)</div>
+            <div className={"text-sm font-bold " + (sharpeRatio >= 1 ? "text-emerald-300" : sharpeRatio >= 0 ? "text-amber-200" : "text-red-300")}>{sharpeRatio.toFixed(2)}</div>
+            <div className="text-[9px] text-slate-500">{equitySeries.length} samples</div>
+          </div>
+        )}
+        {equityStats && (
+          <div className="trading-card rounded-xl p-2">
+            <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Max Drawdown</div>
+            <div className="text-sm font-bold text-amber-300">{fmtPct(-equityStats.drawdownPct, 2)}</div>
+            <div className="w-full h-1.5 rounded-full bg-slate-800 mt-1">
+              <div className="h-full rounded-full bg-amber-500/60" style={{ width: `${Math.min(100, equityStats.drawdownPct)}%` }} />
+            </div>
+          </div>
+        )}
+        {btcComparison && (
+          <div className="trading-card rounded-xl p-2">
+            <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">vs BTC</div>
+            <div className={"text-sm font-bold " + (btcComparison.alpha >= 0 ? "text-emerald-300" : "text-red-300")}>
+              {btcComparison.alpha >= 0 ? "+" : ""}{btcComparison.alpha.toFixed(2)}% alpha
+            </div>
+            <div className="text-[9px] text-slate-500">Port {btcComparison.portPct.toFixed(1)}% · BTC {btcComparison.btcPct.toFixed(1)}%</div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Feature 13: Confidence histogram ── */}
+      {confHistogram && (
+        <div className="trading-card rounded-xl p-2">
+          <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold mb-1 flex items-center gap-1"><BarChart3 className="w-3 h-3" /> Signal Confidence</div>
+          <div className="flex items-end gap-1 h-10">
+            {confHistogram.buckets.map((count, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                <div className="w-full rounded-t bg-cyan-500/50" style={{ height: `${(count / confHistogram.max) * 100}%`, minHeight: count > 0 ? "2px" : "0" }} />
+                <span className="text-[8px] text-slate-500">{confHistogram.labels[i]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="trading-card rounded-xl p-3 space-y-3">
         <div className="flex items-center justify-between gap-2">
@@ -2087,8 +2605,33 @@ export default function TradingView() {
           <div className="bg-slate-950/30 border border-slate-700/40 rounded-xl p-2">
             <div className="flex items-center justify-between gap-2">
               <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Watchlist</div>
-              <div className="text-[10px] text-slate-500 font-mono">{watchRows.length}</div>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setHeatmapMode((v) => !v)} className={"px-1.5 py-0.5 rounded text-[9px] border " + (heatmapMode ? "bg-cyan-900/40 text-cyan-200 border-cyan-700/40" : "bg-slate-900/40 text-slate-400 border-slate-700/40 hover:text-white")} title="Heatmap view">
+                  Heatmap
+                </button>
+                <div className="text-[10px] text-slate-500 font-mono">{watchRows.length}</div>
+              </div>
             </div>
+            {heatmapMode ? (
+              <div className="mt-2 grid grid-cols-3 gap-1 max-h-[420px] overflow-auto pr-1">
+                {watchRows.map((row) => {
+                  const dp = row.deltaPct;
+                  const intensity = dp == null ? 0 : Math.min(1, Math.abs(dp) / 5);
+                  const bg = dp == null ? "bg-slate-800/60" : dp >= 0 ? `rgba(16,185,129,${0.1 + intensity * 0.4})` : `rgba(239,68,68,${0.1 + intensity * 0.4})`;
+                  return (
+                    <button key={row.sym} type="button" onClick={() => setPriceChartSymbol(row.sym)}
+                      className={"rounded-lg p-1.5 text-center border transition-colors " + (row.sym === priceChartSymbol ? "border-cyan-500/50" : "border-transparent hover:border-slate-600/50")}
+                      style={dp != null ? { backgroundColor: bg } : undefined}
+                    >
+                      <div className="text-[10px] text-white font-semibold">{row.sym.replace("USDT", "")}</div>
+                      <div className={"text-[10px] font-mono " + (dp == null ? "text-slate-500" : dp >= 0 ? "text-emerald-200" : "text-red-200")}>
+                        {dp == null ? "—" : fmtPct(dp, 1)}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
             <div className="mt-2 space-y-2 max-h-[420px] overflow-auto pr-1">
               {watchRows.map((row) => {
                 const selected = row.sym === priceChartSymbol;
@@ -2130,6 +2673,7 @@ export default function TradingView() {
                 );
               })}
             </div>
+            )}
           </div>
         </div>
 
@@ -2158,7 +2702,35 @@ export default function TradingView() {
 
       {Object.keys(positions).length > 0 && (
         <div className="trading-card rounded-xl p-3">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Portfolio</div>
+          <button type="button" onClick={() => setCollapsePortfolio((v) => !v)} className="flex items-center gap-1 text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2 hover:text-white">
+            {collapsePortfolio ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            <PieChart className="w-3.5 h-3.5" /> Portfolio
+          </button>
+          {!collapsePortfolio && (<>
+          {/* Feature 20: Donut chart */}
+          <div className="flex items-center justify-center mb-2">
+            <svg viewBox="0 0 100 100" width="80" height="80">
+              {(() => {
+                const entries = Object.entries(positions)
+                  .map(([sym, p]) => ({ sym, val: Number(p?.value_usd ?? 0) }))
+                  .filter((e) => e.val > 0)
+                  .sort((a, b) => b.val - a.val);
+                const total = entries.reduce((a, e) => a + e.val, 0);
+                if (total <= 0) return null;
+                const colors = ["#34d399", "#22d3ee", "#f59e0b", "#a78bfa", "#f87171", "#fb923c", "#38bdf8", "#e879f9"];
+                let offset = 0;
+                return entries.map((e, i) => {
+                  const pct = (e.val / total) * 100;
+                  const dash = (pct / 100) * 251.33;
+                  const el = <circle key={e.sym} cx="50" cy="50" r="40" fill="none" stroke={colors[i % colors.length]} strokeWidth="12" strokeDasharray={`${dash} ${251.33 - dash}`} strokeDashoffset={-offset * 2.5133} transform="rotate(-90 50 50)" />;
+                  offset += pct;
+                  return el;
+                });
+              })()}
+              <circle cx="50" cy="50" r="30" fill="rgb(15,23,42)" />
+              <text x="50" y="53" textAnchor="middle" fill="white" fontSize="10" fontFamily="monospace">${totalUsd.toFixed(0)}</text>
+            </svg>
+          </div>
           <div className="space-y-1">
             {Object.entries(positions).map(([sym, p]) => (
               <div key={sym} className="flex items-center justify-between text-[11px]">
@@ -2172,6 +2744,7 @@ export default function TradingView() {
               </div>
             ))}
           </div>
+          </>)}
         </div>
       )}
 
@@ -2194,17 +2767,25 @@ export default function TradingView() {
 
       {logLines.length > 0 && (
         <div className="bg-slate-900/60 border border-slate-700/50 rounded-xl p-3">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Log</div>
+          <button type="button" onClick={() => setCollapseLog((v) => !v)} className="flex items-center gap-1 text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2 hover:text-white">
+            {collapseLog ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            Log ({logLines.length})
+          </button>
+          {!collapseLog && (
           <pre className="text-[10px] text-slate-300 font-mono whitespace-pre-wrap max-h-72 overflow-auto">
             {logLines.join("\n")}
           </pre>
+          )}
         </div>
       )}
 
       {Array.isArray(live?.events) && live!.events.length > 0 && (
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Live events (senaste {Math.min(200, live!.events.length)})</div>
-          <div className="space-y-1">
+          <button type="button" onClick={() => setCollapseEvents((v) => !v)} className="flex items-center gap-1 text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2 hover:text-white">
+            {collapseEvents ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            Live events (senaste {Math.min(200, live!.events.length)})
+          </button>
+          {!collapseEvents && (<div className="space-y-1">
             {[...live!.events].slice(-60).reverse().map((ev, idx) => (
               <details key={idx} className="text-[11px]">
                 <summary className="cursor-pointer list-none flex items-center gap-2 text-slate-300">
@@ -2215,16 +2796,22 @@ export default function TradingView() {
                 <pre className="mt-2 bg-slate-950/50 border border-slate-700/50 rounded-lg p-2 text-[10px] text-slate-300 font-mono whitespace-pre-wrap max-h-64 overflow-auto">{JSON.stringify(ev, null, 2)}</pre>
               </details>
             ))}
-          </div>
+          </div>)}
         </div>
       )}
 
       {trades.length > 0 && (
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Trades / trace (trades.jsonl)</div>
-          <div className="space-y-1">
-            {[...trades].slice(-80).reverse().map((t, idx) => (
-              <details key={idx} className="text-[11px]">
+          <button type="button" onClick={() => setCollapseTrades((v) => !v)} className="flex items-center gap-1 text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2 hover:text-white">
+            {collapseTrades ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            Trades / trace ({trades.length})
+          </button>
+          {!collapseTrades && (<div className="space-y-1">
+            {[...trades].slice(-80).reverse().map((t, idx) => {
+              const tradeKey = `${t?.signal?.timestamp || idx}_${t?.signal?.symbol || ""}`;
+              return (
+              <div key={idx}>
+              <details className="text-[11px]">
                 <summary className="cursor-pointer list-none flex items-center gap-2 text-slate-300">
                   <span className="text-slate-500 font-mono">{t?.signal?.timestamp ? new Date(t.signal.timestamp).toLocaleString("sv-SE") : "—"}</span>
                   <span className="text-slate-400">{t?.type || "record"}</span>
@@ -2234,8 +2821,20 @@ export default function TradingView() {
                 </summary>
                 <pre className="mt-2 bg-slate-950/50 border border-slate-700/50 rounded-lg p-2 text-[10px] text-slate-300 font-mono whitespace-pre-wrap max-h-64 overflow-auto">{JSON.stringify(t, null, 2)}</pre>
               </details>
-            ))}
-          </div>
+              {/* Feature 16: Trade journal notes */}
+              <div className="mt-1 flex items-center gap-1">
+                <StickyNote className="w-3 h-3 text-slate-500" />
+                <input
+                  value={tradeNotes[tradeKey] || ""}
+                  onChange={(e) => setTradeNotes((prev) => ({ ...prev, [tradeKey]: e.target.value }))}
+                  placeholder="Anteckning…"
+                  className="flex-1 bg-slate-950/30 border border-slate-700/30 rounded px-2 py-0.5 text-[10px] text-slate-300"
+                />
+              </div>
+              </div>
+              );
+            })}
+          </div>)}
         </div>
       )}
 
