@@ -1,0 +1,1 @@
+"""Frankenstein AI Trading package."""

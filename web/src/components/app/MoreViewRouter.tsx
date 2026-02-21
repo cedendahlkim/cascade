@@ -17,6 +17,7 @@ const InstallView = lazy(() => import("../InstallView"));
 const NetworkView = lazy(() => import("../NetworkView"));
 const SwarmView = lazy(() => import("../SwarmView"));
 const FrankensteinView = lazy(() => import("../FrankensteinView"));
+const TradingView = lazy(() => import("../TradingView"));
 const HierarchyView = lazy(() => import("../HierarchyView"));
 const FlipperZeroView = lazy(() => import("../FlipperZeroView"));
 const GitView = lazy(() => import("../GitView"));
@@ -78,6 +79,7 @@ export default function MoreViewRouter({ activeTab, moreTab, onMoreTabChange, ed
             {moreTab === "network" && <NetworkView />}
             {moreTab === "swarm" && <SwarmView />}
             {moreTab === "frankenstein" && <FrankensteinView />}
+            {moreTab === "trading" && <TradingView />}
             {moreTab === "researchlab" && <ResearchLabView />}
             {moreTab === "hierarchy" && <HierarchyView />}
             {moreTab === "debate" && <DebateView />}

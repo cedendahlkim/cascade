@@ -1581,6 +1581,31 @@ const frankTrainState: {
   pid: number | null;
 } = { process: null, running: false, started_at: null, pid: null };
 
+// --- Frankenstein Trading Bot Start/Stop ---
+const traderState: {
+  process: ReturnType<typeof spawn> | null;
+  running: boolean;
+  started_at: string | null;
+  pid: number | null;
+} = { process: null, running: false, started_at: null, pid: null };
+
+const traderLiveState: {
+  active: boolean;
+  events: any[];
+  last_update: number;
+} = { active: false, events: [], last_update: 0 };
+
+function tailLines(path: string, maxLines: number): string[] {
+  try {
+    if (!existsSync(path)) return [];
+    const content = readFileSync(path, "utf-8");
+    const lines = content.split("\n");
+    return lines.slice(-maxLines).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 app.post("/api/frankenstein/train/start", (_req, res) => {
   if (frankTrainState.running && frankTrainState.process) {
     return res.status(409).json({ error: "Training already running", pid: frankTrainState.pid });
@@ -1638,6 +1663,125 @@ app.get("/api/frankenstein/train/status", (_req, res) => {
     pid: frankTrainState.pid,
     started_at: frankTrainState.started_at,
   });
+});
+
+app.post("/api/trader/start", (req, res) => {
+  if (traderState.running && traderState.process) {
+    return res.status(409).json({ error: "Trader already running", pid: traderState.pid });
+  }
+
+  const botScript = join(DEFAULT_WORKSPACE_ROOT, "frankenstein-ai", "trading", "trading_bot.py");
+  if (!existsSync(botScript)) {
+    return res.status(404).json({ error: "trading_bot.py not found" });
+  }
+
+  const symbols = Array.isArray(req.body?.symbols)
+    ? req.body.symbols.map((s: any) => String(s).trim()).filter(Boolean)
+    : undefined;
+  const paperMode = typeof req.body?.paperMode === "boolean" ? req.body.paperMode : true;
+  const intervalSeconds = req.body?.intervalSeconds != null ? Number(req.body.intervalSeconds) : undefined;
+  const riskPerTrade = req.body?.riskPerTrade != null ? Number(req.body.riskPerTrade) : undefined;
+  const minConfidence = req.body?.minConfidence != null ? Number(req.body.minConfidence) : undefined;
+
+  const pythonCmd = process.platform === "win32" ? "python" : "python3";
+  const proc = spawn(pythonCmd, ["-u", botScript], {
+    cwd: join(DEFAULT_WORKSPACE_ROOT, "frankenstein-ai"),
+    stdio: ["ignore", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      PYTHONIOENCODING: "utf-8",
+      BRIDGE_URL: `http://localhost:${PORT}`,
+      TRADING_DATA_DIR: join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data"),
+      ...(symbols && symbols.length > 0 ? { TRADING_SYMBOLS: symbols.join(",") } : {}),
+      TRADING_PAPER_MODE: paperMode ? "true" : "false",
+      ...(Number.isFinite(intervalSeconds) && intervalSeconds! > 0 ? { TRADING_INTERVAL_SECONDS: String(intervalSeconds) } : {}),
+      ...(Number.isFinite(riskPerTrade) && riskPerTrade! > 0 ? { TRADING_RISK_PER_TRADE: String(riskPerTrade) } : {}),
+      ...(Number.isFinite(minConfidence) && minConfidence! > 0 ? { TRADING_MIN_CONFIDENCE: String(minConfidence) } : {}),
+    },
+  });
+
+  traderState.process = proc;
+  traderState.running = true;
+  traderState.started_at = new Date().toISOString();
+  traderState.pid = proc.pid || null;
+
+  traderLiveState.active = true;
+  traderLiveState.last_update = Date.now();
+
+  proc.stdout?.on("data", (data: Buffer) => {
+    const line = data.toString("utf-8").trim();
+    if (line) console.log(`[trader] ${line}`);
+  });
+  proc.stderr?.on("data", (data: Buffer) => {
+    const line = data.toString("utf-8").trim();
+    if (line) console.error(`[trader] ${line}`);
+  });
+  proc.on("close", (code) => {
+    console.log(`[trader] Process exited with code ${code}`);
+    traderState.process = null;
+    traderState.running = false;
+    traderState.pid = null;
+    traderLiveState.active = false;
+  });
+
+  res.json({ status: "started", pid: proc.pid });
+});
+
+app.post("/api/trader/stop", (_req, res) => {
+  if (!traderState.running || !traderState.process) {
+    return res.json({ status: "not_running" });
+  }
+  traderState.process.kill("SIGTERM");
+  traderState.process = null;
+  traderState.running = false;
+  traderState.pid = null;
+  traderLiveState.active = false;
+  res.json({ status: "stopped" });
+});
+
+app.get("/api/trader/status", (_req, res) => {
+  res.json({
+    running: traderState.running,
+    pid: traderState.pid,
+    started_at: traderState.started_at,
+    last_update: traderLiveState.last_update,
+  });
+});
+
+app.post("/api/trader/event", (req, res) => {
+  const { event } = req.body || {};
+  if (!event) return res.status(400).json({ error: "No event" });
+  event.timestamp = Date.now();
+  traderLiveState.events.push(event);
+  traderLiveState.last_update = Date.now();
+  if (traderLiveState.events.length > 200) traderLiveState.events = traderLiveState.events.slice(-200);
+  io.emit("trader_event", event);
+  res.json({ ok: true });
+});
+
+app.get("/api/trader/live", (_req, res) => {
+  res.json({
+    active: traderLiveState.active,
+    events: traderLiveState.events.slice(-50),
+    last_update: traderLiveState.last_update,
+    event_count: traderLiveState.events.length,
+  });
+});
+
+app.get("/api/trader/state", (_req, res) => {
+  try {
+    const statePath = join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data", "state.json");
+    if (!existsSync(statePath)) return res.json({ running: false, state: null });
+    const data = JSON.parse(readFileSync(statePath, "utf-8"));
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get("/api/trader/log", (_req, res) => {
+  const logPath = join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data", "trader.log");
+  res.json({ lines: tailLines(logPath, 200) });
 });
 
 // --- Frankenstein AI Progress ---

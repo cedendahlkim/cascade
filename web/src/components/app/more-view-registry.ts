@@ -13,6 +13,7 @@ export const MORE_TAB_ITEMS = [
   { id: "network", label: "🧬 Nätverk" },
   { id: "swarm", label: "🍄 Swarm" },
   { id: "frankenstein", label: "🧟 Frankenstein" },
+  { id: "trading", label: "💹 Trading" },
   { id: "researchlab", label: "🔬 Research Lab" },
   { id: "hierarchy", label: "🏗️ Hierarki" },
   { id: "debate", label: "🏛️ Debatt" },
