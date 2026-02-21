@@ -69,6 +69,43 @@ SOLUTIONS_DIR = DATA_DIR / "solutions"
 BRIDGE_URL = os.environ.get("BRIDGE_URL", "http://localhost:3031")
 
 
+def _load_env_file(path: Path) -> None:
+    """Minimal .env loader (no dependencies).
+
+    Allows keeping API keys (e.g., GEMINI_API_KEY) in frankenstein-ai/.env without
+    hardcoding them in code or setting global machine-wide environment variables.
+    """
+    if not path.exists() or not path.is_file():
+        return
+    try:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if not key:
+                continue
+            if key not in os.environ:
+                os.environ[key] = value
+    except Exception:
+        # Never crash training due to env loading issues
+        return
+
+
+# Load optional env files next to this script
+_ENV_DIR = Path(__file__).parent
+_load_env_file(_ENV_DIR / ".env.local")
+_load_env_file(_ENV_DIR / ".env")
+
+if not os.environ.get("GEMINI_API_KEY"):
+    # Keep warning generic to avoid leaking secrets in logs
+    print("WARNING: GEMINI_API_KEY not set (set in frankenstein-ai/.env or as an environment variable)")
+
+
 def _send_terminal_event(event: dict):
     """Send a live terminal event to bridge for real-time UI updates. Fire-and-forget."""
     try:

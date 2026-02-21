@@ -74,6 +74,8 @@ interface AgentRanking {
 }
 
 interface FrankensteinProgress {
+  running?: boolean;
+  last_update_age_seconds?: number;
   total_tasks_solved: number;
   total_tasks_attempted: number;
   current_difficulty: number;
@@ -378,6 +380,14 @@ export default function ResearchLabView() {
     fetch(`${BRIDGE_URL}/api/frankenstein/wellbeing`).then(r => r.json()).then(setWellbeing).catch(() => {});
     fetch(`${BRIDGE_URL}/api/frankenstein/ab-test`).then(r => r.json()).then(setAbTestResult).catch(() => {});
   }, []);
+
+  // Keep training/stack stats live (progress.json updates frequently during training)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchStackData();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchStackData]);
 
   const fetchResearchMeta = useCallback(() => {
     fetch(`${BRIDGE_URL}/api/arena/participants`).then(r => r.json()).then(setParticipants).catch(() => {});
