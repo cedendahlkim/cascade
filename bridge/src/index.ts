@@ -13,7 +13,7 @@ import { createServer } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
-import { writeFileSync, readFileSync, mkdirSync, existsSync, readdirSync, statSync, unlinkSync } from "fs";
+import { writeFileSync, readFileSync, mkdirSync, existsSync, readdirSync, statSync, unlinkSync, appendFileSync } from "fs";
 import { join, dirname } from "path";
 import { spawn } from "child_process";
 import archiver from "archiver";
@@ -2056,6 +2056,63 @@ app.get("/api/trader/trades", (req, res) => {
     res.json({ trades, line_count: lines.length });
   } catch (err) {
     res.status(500).json({ error: String(err) });
+  }
+});
+
+// --- Manual Order Placement ---
+app.post("/api/trader/order", (req, res) => {
+  const { symbol, side, quantity, price } = req.body || {};
+  if (!symbol || !side || !quantity) {
+    return res.status(400).json({ error: "Missing required fields: symbol, side, quantity" });
+  }
+  const safeSide = String(side).toUpperCase();
+  if (safeSide !== "BUY" && safeSide !== "SELL") {
+    return res.status(400).json({ error: "side must be BUY or SELL" });
+  }
+  const safeQty = Number(quantity);
+  if (!Number.isFinite(safeQty) || safeQty <= 0) {
+    return res.status(400).json({ error: "quantity must be a positive number" });
+  }
+  const safePrice = price != null ? Number(price) : null;
+
+  const order = {
+    symbol: String(symbol).toUpperCase().trim(),
+    side: safeSide,
+    quantity: safeQty,
+    price: safePrice,
+    timestamp: new Date().toISOString(),
+    source: "manual",
+  };
+
+  // Write to manual orders queue file
+  const ordersDir = join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data");
+  const queueFile = join(ordersDir, "manual_orders.jsonl");
+  try {
+    if (!existsSync(ordersDir)) mkdirSync(ordersDir, { recursive: true });
+    appendFileSync(queueFile, JSON.stringify(order) + "\n", "utf-8");
+  } catch (err) {
+    return res.status(500).json({ error: `Failed to queue order: ${err}` });
+  }
+
+  // Also emit as trader event for live UI
+  const event = { type: "manual_order", ...order, ts: Date.now() };
+  traderLiveState.events.push(event);
+  traderLiveState.last_update = Date.now();
+  if (traderLiveState.events.length > 200) traderLiveState.events = traderLiveState.events.slice(-200);
+  io.emit("trader_event", event);
+
+  console.log(`[trader] Manual order queued: ${safeSide} ${safeQty} ${order.symbol}${safePrice ? ` @ ${safePrice}` : " @ market"}`);
+  res.json({ ok: true, order });
+});
+
+app.get("/api/trader/orders", (_req, res) => {
+  const queueFile = join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data", "manual_orders.jsonl");
+  try {
+    const lines = tailLines(queueFile, 50);
+    const orders = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+    res.json({ orders });
+  } catch {
+    res.json({ orders: [] });
   }
 });
 

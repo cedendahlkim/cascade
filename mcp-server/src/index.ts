@@ -575,6 +575,31 @@ server.tool(
   }
 );
 
+// Tool: Place a manual trading order
+server.tool(
+  "trader_order",
+  "Place a manual trading order (BUY or SELL). The order is queued and executed by the trading bot on its next tick.",
+  {
+    symbol: z.string().describe("Trading symbol, e.g. XBTUSDT, ETHUSDT"),
+    side: z.enum(["BUY", "SELL"]).describe("Order side"),
+    quantity: z.number().positive().describe("Quantity to trade"),
+    price: z.number().optional().describe("Limit price (omit for market price)"),
+  },
+  async ({ symbol, side, quantity, price }) => {
+    try {
+      const res = await bridgeFetch("/api/trader/order", {
+        method: "POST",
+        body: JSON.stringify({ symbol, side, quantity, price }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { content: [{ type: "text", text: `Order failed: ${data.error || res.statusText}` }] };
+      return { content: [{ type: "text", text: `Order queued: ${side} ${quantity} ${symbol}${price ? ` @ ${price}` : " @ market"}` }] };
+    } catch (error) {
+      return { content: [{ type: "text", text: `Bridge not reachable at ${BRIDGE_URL}` }] };
+    }
+  }
+);
+
 // Tool: Bridge health check
 server.tool(
   "bridge_health",

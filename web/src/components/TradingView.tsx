@@ -705,6 +705,14 @@ export default function TradingView() {
   const [presetName, setPresetName] = useState("");
   const lastAlertSoundRef = useRef(0);
 
+  // ── Manual order state ──
+  const [orderSymbol, setOrderSymbol] = useState("");
+  const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
+  const [orderQty, setOrderQty] = useState("");
+  const [orderPrice, setOrderPrice] = useState("");
+  const [orderBusy, setOrderBusy] = useState(false);
+  const [orderResult, setOrderResult] = useState<string | null>(null);
+
   useEffect(() => {
     chartPausedRef.current = chartPaused;
   }, [chartPaused]);
@@ -1614,6 +1622,38 @@ export default function TradingView() {
   }, [signalSeriesBySymbol, priceAlerts.length, soundAlerts]);
 
   // ── Feature 7: Export trades CSV ──
+  // ── Manual order placement ──
+  const placeManualOrder = useCallback(async () => {
+    const sym = orderSymbol.trim().toUpperCase();
+    const qty = parseFloat(orderQty);
+    const price = orderPrice.trim() ? parseFloat(orderPrice) : undefined;
+    if (!sym || !Number.isFinite(qty) || qty <= 0) {
+      setOrderResult("Ange symbol och quantity");
+      return;
+    }
+    setOrderBusy(true);
+    setOrderResult(null);
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/trader/order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: sym, side: orderSide, quantity: qty, price }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setOrderResult(`Fel: ${data.error || res.statusText}`);
+      } else {
+        setOrderResult(`✓ ${orderSide} ${qty} ${sym}${price ? ` @ ${price}` : " @ market"} — köad`);
+        setOrderQty("");
+        setOrderPrice("");
+      }
+    } catch (err) {
+      setOrderResult(`Kunde inte nå servern`);
+    } finally {
+      setOrderBusy(false);
+    }
+  }, [orderSymbol, orderSide, orderQty, orderPrice]);
+
   const exportTradesCsv = useCallback(() => {
     if (trades.length === 0) return;
     const headers = ["timestamp", "symbol", "action", "confidence", "price", "quantity", "realized_pnl", "pattern"];
@@ -2360,6 +2400,47 @@ export default function TradingView() {
           </div>
         </div>
       )}
+
+      {/* ── Manual Order Form ── */}
+      <div className="trading-card rounded-xl p-3 border border-emerald-700/20">
+        <div className="text-[10px] text-emerald-300 font-semibold uppercase tracking-wider mb-2 flex items-center gap-1">
+          <DollarSign className="w-3.5 h-3.5" /> Lägg order
+        </div>
+        <div className="flex items-end gap-2 flex-wrap">
+          <label className="text-[11px] text-slate-300">
+            Symbol
+            <input value={orderSymbol} onChange={(e) => setOrderSymbol(e.target.value.toUpperCase())} placeholder={priceChartSymbol || "XBTUSDT"} className="mt-1 w-28 bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white" />
+          </label>
+          <label className="text-[11px] text-slate-300">
+            Sida
+            <div className="mt-1 flex">
+              <button type="button" onClick={() => setOrderSide("BUY")} className={"px-3 py-1 rounded-l-lg text-[11px] font-medium border " + (orderSide === "BUY" ? "bg-emerald-900/50 text-emerald-200 border-emerald-700/50" : "bg-slate-900/40 text-slate-400 border-slate-700/50")}>BUY</button>
+              <button type="button" onClick={() => setOrderSide("SELL")} className={"px-3 py-1 rounded-r-lg text-[11px] font-medium border border-l-0 " + (orderSide === "SELL" ? "bg-red-900/50 text-red-200 border-red-700/50" : "bg-slate-900/40 text-slate-400 border-slate-700/50")}>SELL</button>
+            </div>
+          </label>
+          <label className="text-[11px] text-slate-300">
+            Quantity
+            <input value={orderQty} onChange={(e) => setOrderQty(e.target.value)} type="number" step="any" min="0" placeholder="0.001" className="mt-1 w-24 bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white" />
+          </label>
+          <label className="text-[11px] text-slate-300">
+            Pris (tomt = market)
+            <input value={orderPrice} onChange={(e) => setOrderPrice(e.target.value)} type="number" step="any" min="0" placeholder="Market" className="mt-1 w-24 bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white" />
+          </label>
+          <button
+            onClick={placeManualOrder}
+            disabled={orderBusy}
+            className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium disabled:opacity-50 " + (orderSide === "BUY" ? "bg-emerald-900/50 hover:bg-emerald-900/70 text-emerald-200" : "bg-red-900/50 hover:bg-red-900/70 text-red-200")}
+          >
+            {orderBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DollarSign className="w-3.5 h-3.5" />}
+            {orderSide} Order
+          </button>
+        </div>
+        {orderResult && (
+          <div className={"mt-2 text-[11px] px-2 py-1 rounded-lg " + (orderResult.startsWith("✓") ? "bg-emerald-950/30 text-emerald-300 border border-emerald-700/30" : "bg-red-950/30 text-red-300 border border-red-700/30")}>
+            {orderResult}
+          </div>
+        )}
+      </div>
 
       <div className="trading-card rounded-xl p-3 space-y-3">
         <div className="flex items-center justify-between gap-2">

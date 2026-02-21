@@ -55,6 +55,7 @@ DATA_DIR = Path(os.environ.get("TRADING_DATA_DIR", "/workspace/frankenstein-ai/t
 STATE_FILE = DATA_DIR / "state.json"
 LOG_FILE = DATA_DIR / "trader.log"
 TRADES_FILE = DATA_DIR / "trades.jsonl"
+MANUAL_ORDERS_FILE = DATA_DIR / "manual_orders.jsonl"
 
 BRIDGE_URL = os.environ.get("BRIDGE_URL", "http://localhost:3031")
 
@@ -1293,6 +1294,52 @@ class FrankensteinTradingAgent:
             details=details,
         )
 
+    def _process_manual_orders(self) -> list[dict[str, Any]]:
+        """Read and execute manual orders from the queue file."""
+        results: list[dict[str, Any]] = []
+        if not MANUAL_ORDERS_FILE.exists():
+            return results
+        try:
+            lines = MANUAL_ORDERS_FILE.read_text(encoding="utf-8").strip().splitlines()
+            if not lines:
+                return results
+            # Clear the file immediately to avoid re-processing
+            MANUAL_ORDERS_FILE.write_text("", encoding="utf-8")
+            for line in lines:
+                try:
+                    data = json.loads(line)
+                    symbol = str(data.get("symbol", "")).upper().strip()
+                    side = str(data.get("side", "")).upper().strip()
+                    qty = float(data.get("quantity", 0))
+                    price_raw = data.get("price")
+                    if not symbol or side not in ("BUY", "SELL") or qty <= 0:
+                        _log(f"MANUAL ORDER SKIPPED: invalid data {data}")
+                        continue
+                    # Use provided price or fetch current market price
+                    if price_raw is not None and float(price_raw) > 0:
+                        price = float(price_raw)
+                    else:
+                        try:
+                            price = self.exchange.get_price(symbol)
+                        except Exception as e:
+                            _log(f"MANUAL ORDER FAILED: could not get price for {symbol}: {e}")
+                            continue
+                    _log(f"MANUAL ORDER: {side} {qty} {symbol} @ {price}")
+                    order = self.exchange.place_order(symbol, side, qty, price)
+                    results.append(order)
+                    self.order_count += 1
+                    _send_bridge_event({"type": "manual_order_executed", "symbol": symbol, "side": side, "quantity": qty, "price": price, "order": order, "ts": _utc_now_iso()})
+                    try:
+                        with open(TRADES_FILE, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"type": "manual_order", "symbol": symbol, "side": side, "quantity": qty, "price": price, "order": order}, ensure_ascii=False) + "\n")
+                    except Exception:
+                        pass
+                except Exception as e:
+                    _log(f"MANUAL ORDER ERROR: {e} — line: {line[:100]}")
+        except Exception as e:
+            _log(f"MANUAL ORDERS FILE ERROR: {e}")
+        return results
+
     def execute(self, signal: TradeSignal) -> dict[str, Any] | None:
         if signal.action not in ("BUY", "SELL"):
             return None
@@ -1304,6 +1351,10 @@ class FrankensteinTradingAgent:
         self.tick_count += 1
         signals: list[TradeSignal] = []
         orders: list[dict[str, Any]] = []
+
+        # Process any manual orders from the UI
+        manual_results = self._process_manual_orders()
+        orders.extend(manual_results)
 
         for symbol in self.symbols:
             try:
