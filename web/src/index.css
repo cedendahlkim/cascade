@@ -12,6 +12,50 @@ html, body, #root {
   width: 100%;
 }
 
+/* === Trading UI surface === */
+.trading-surface {
+  /* Deep “terminal” gradient + subtle cyan/emerald aura */
+  background:
+    radial-gradient(900px circle at 15% 10%, rgba(34, 211, 238, 0.12), transparent 52%),
+    radial-gradient(900px circle at 85% 15%, rgba(16, 185, 129, 0.10), transparent 55%),
+    radial-gradient(900px circle at 55% 85%, rgba(248, 113, 113, 0.09), transparent 58%),
+    linear-gradient(180deg, rgba(2, 6, 23, 1), rgba(15, 23, 42, 1));
+}
+
+.trading-card {
+  border: 1px solid rgba(51, 65, 85, 0.55);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(2, 6, 23, 0.72));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(51, 65, 85, 0.55);
+  background: rgba(2, 6, 23, 0.45);
+}
+
+.segmented-btn {
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 11px;
+  color: rgba(203, 213, 225, 0.85);
+  border: 1px solid transparent;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.segmented-btn:hover {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.segmented-btn-active {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: rgba(255, 255, 255, 0.96);
+}
+
 /* Smooth scrolling for chat */
 .chat-scroll {
   scroll-behavior: smooth;

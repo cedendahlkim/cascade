@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type MouseEvent as ReactMouseEvent } from "react";
 import { BRIDGE_URL } from "../config";
 import { io, Socket } from "socket.io-client";
 import { Play, Square, RefreshCw, Brain, Activity, DollarSign, AlertTriangle, Loader2, MessageSquareText, LineChart, Pause, Trash2, TrendingUp } from "lucide-react";
@@ -57,6 +57,10 @@ type TraderTradesResponse = {
 };
 
 type TradingExchange = "kraken" | "binance";
+
+type PriceChartMode = "candles" | "line" | "area";
+type PriceValueMode = "price" | "pct";
+type PriceScale = "linear" | "log";
 
 type EquityPoint = {
   t: number;
@@ -124,17 +128,24 @@ function MiniCandleChart(
     candles,
     height = 96,
     maxCandles = 180,
+    showAxis = true,
+    interactive = true,
     upColor = "rgba(16,185,129,0.95)",
     downColor = "rgba(248,113,113,0.95)",
   }: {
     candles: Candle[];
     height?: number;
     maxCandles?: number;
+    showAxis?: boolean;
+    interactive?: boolean;
     upColor?: string;
     downColor?: string;
   },
 ) {
   const data = useMemo(() => downsample(candles, maxCandles), [candles, maxCandles]);
+
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
   if (data.length < 2) {
     return (
       <div className="h-24 flex items-center justify-center text-[11px] text-slate-500">
@@ -170,9 +181,30 @@ function MiniCandleChart(
   const cw = 100 / n;
   const bodyW = Math.max(0.7, cw * 0.62);
 
+  const hover = hoverIdx != null && hoverIdx >= 0 && hoverIdx < n ? data[hoverIdx] : null;
+  const hoverXMid = hover ? hoverIdx! * cw + cw * 0.5 : null;
+  const hoverLabel = hover ? `${fmtCompactTime(hover.t)}  ${fmtUsd(hover.close)}` : "";
+
+  const handleMove = (e: ReactMouseEvent<SVGSVGElement>) => {
+    if (!interactive) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const pct = rect.width > 0 ? (x / rect.width) * 100 : 0;
+    const idx = clamp(Math.floor(pct / cw), 0, n - 1);
+    setHoverIdx(idx);
+  };
+
   return (
     <div className="w-full">
-      <svg viewBox="0 0 100 60" width="100%" height={height} preserveAspectRatio="none" className="block">
+      <svg
+        viewBox="0 0 100 60"
+        width="100%"
+        height={height}
+        preserveAspectRatio="none"
+        className="block"
+        onMouseMove={handleMove}
+        onMouseLeave={() => setHoverIdx(null)}
+      >
         {/* grid */}
         {[0, 1, 2, 3].map((i) => (
           <line key={i} x1={0} x2={100} y1={(60 / 3) * i} y2={(60 / 3) * i} stroke="rgba(148,163,184,0.12)" strokeWidth={0.6} />
@@ -200,12 +232,24 @@ function MiniCandleChart(
             </g>
           );
         })}
+
+        {hover && hoverXMid != null && (
+          <g>
+            <line x1={hoverXMid} y1={0} x2={hoverXMid} y2={60} stroke="rgba(226,232,240,0.35)" strokeWidth={0.6} />
+            <rect x={clamp(hoverXMid - 26, 1, 99 - 52)} y={1} width={52} height={10} rx={2} fill="rgba(2,6,23,0.75)" stroke="rgba(148,163,184,0.22)" />
+            <text x={clamp(hoverXMid, 1 + 26, 99 - 26)} y={8.3} textAnchor="middle" fontSize={4.2} fill="rgba(226,232,240,0.92)" fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace">
+              {hoverLabel}
+            </text>
+          </g>
+        )}
       </svg>
 
-      <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
-        <span>{fmtUsd(yMinRaw)}</span>
-        <span>{fmtUsd(yMaxRaw)}</span>
-      </div>
+      {showAxis && (
+        <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
+          <span>{fmtUsd(yMinRaw)}</span>
+          <span>{fmtUsd(yMaxRaw)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -227,12 +271,27 @@ function fmtUsd(n: number) {
   return `$${v.toFixed(2)}`;
 }
 
+function fmtPct(n: number, digits = 2) {
+  const v = Number.isFinite(n) ? n : 0;
+  return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`;
+}
+
+function fmtCompactTime(t: number) {
+  const d = new Date(Number.isFinite(t) ? t : Date.now());
+  // HH:MM:SS (sv-SE) keeps it clean and predictable
+  return d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
 function MiniTimeSeriesChart(
   {
     lines,
     height = 96,
     maxPoints = 260,
     colorByDelta = false,
+    fill = false,
+    showAxis = true,
+    yScale = "linear",
+    formatY,
     upColor = "rgba(16,185,129,0.95)",
     downColor = "rgba(248,113,113,0.95)",
   }: {
@@ -240,6 +299,10 @@ function MiniTimeSeriesChart(
     height?: number;
     maxPoints?: number;
     colorByDelta?: boolean;
+    fill?: boolean;
+    showAxis?: boolean;
+    yScale?: "linear" | "log";
+    formatY?: (n: number) => string;
     upColor?: string;
     downColor?: string;
   },
@@ -338,25 +401,40 @@ function MiniTimeSeriesChart(
           }
           const pts = parts.join(" ");
 
+          // Optional area fill (used for "Area" mode)
+          const fillPts = fill && data.length >= 2
+            ? `${pts} 100,60 0,60`
+            : null;
+
           return (
-            <polyline
-              key={line.id}
-              fill="none"
-              stroke={line.color}
-              strokeWidth={1.6}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              points={pts}
-              opacity={0.95}
-            />
+            <g key={line.id}>
+              {fillPts && (
+                <polygon
+                  points={fillPts}
+                  fill="rgba(34,211,238,0.10)"
+                  opacity={0.9}
+                />
+              )}
+              <polyline
+                fill="none"
+                stroke={line.color}
+                strokeWidth={1.8}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                points={pts}
+                opacity={0.95}
+              />
+            </g>
           );
         })}
       </svg>
 
-      <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
-        <span>{fmtUsd(yMinRaw)}</span>
-        <span>{fmtUsd(yMaxRaw)}</span>
-      </div>
+      {showAxis && (
+        <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
+          <span>{(formatY || fmtUsd)(yMinRaw)}</span>
+          <span>{(formatY || fmtUsd)(yMaxRaw)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -393,6 +471,9 @@ export default function TradingView() {
   const [strategyThinking, setStrategyThinking] = useState(false);
   const [strategyStream, setStrategyStream] = useState("");
 
+  const [configDirty, setConfigDirty] = useState(false);
+  const configDirtyRef = useRef(false);
+
   const [exchange, setExchange] = useState<TradingExchange>("kraken");
   const [symbols, setSymbols] = useState("BTCUSDT,ETHUSDT");
   const [paperMode, setPaperMode] = useState(true);
@@ -406,8 +487,16 @@ export default function TradingView() {
   const [equitySeries, setEquitySeries] = useState<EquityPoint[]>([]);
   const [signalSeriesBySymbol, setSignalSeriesBySymbol] = useState<Record<string, SignalPoint[]>>({});
   const [priceChartSymbol, setPriceChartSymbol] = useState<string>("");
-  const [priceChartMode, setPriceChartMode] = useState<"candles" | "line">("candles");
+  const [priceChartMode, setPriceChartMode] = useState<PriceChartMode>("candles");
   const [priceTimeframeMs, setPriceTimeframeMs] = useState<number>(60_000);
+  const [priceValueMode, setPriceValueMode] = useState<PriceValueMode>("price");
+  const [priceScale, setPriceScale] = useState<PriceScale>("linear");
+  const [priceRangeMs, setPriceRangeMs] = useState<number>(3_600_000); // 1h window by default
+  const [rangeNowEpoch, setRangeNowEpoch] = useState<number>(() => Date.now());
+  const [autoFollow, setAutoFollow] = useState(true);
+  const autoFollowRef = useRef(true);
+  const [lastMarketPriceAt, setLastMarketPriceAt] = useState<number | null>(null);
+  const [uiNowEpoch, setUiNowEpoch] = useState<number>(() => Date.now());
   const lastTickCountRef = useRef<number | null>(null);
 
   const [lastTickMs, setLastTickMs] = useState<number | null>(null);
@@ -423,6 +512,24 @@ export default function TradingView() {
   useEffect(() => {
     chartPausedRef.current = chartPaused;
   }, [chartPaused]);
+
+  useEffect(() => {
+    autoFollowRef.current = autoFollow;
+  }, [autoFollow]);
+
+  useEffect(() => {
+    const t = setInterval(() => setUiNowEpoch(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (priceChartMode === "candles" && priceScale === "log") setPriceScale("linear");
+    if (priceValueMode === "pct" && priceScale === "log") setPriceScale("linear");
+  }, [priceChartMode, priceValueMode, priceScale]);
+
+  useEffect(() => {
+    configDirtyRef.current = configDirty;
+  }, [configDirty]);
 
   const appendEquityPoint = useCallback((t: number, portfolio: any) => {
     const total = Number(portfolio?.total_value_usd ?? portfolio?.total_value ?? 0);
@@ -445,7 +552,8 @@ export default function TradingView() {
       const last = list[list.length - 1];
       if (last && Math.abs(last.t - p.t) < 900 && Math.abs(last.price - p.price) < 1e-9 && last.action === p.action) return prev;
       const nextList = [...list, p];
-      const capped = nextList.length > 400 ? nextList.slice(-400) : nextList;
+      // Keep more history so we can switch ranges/timeframes without the chart feeling "empty".
+      const capped = nextList.length > 2400 ? nextList.slice(-2400) : nextList;
       return { ...prev, [p.symbol]: capped };
     });
   }, []);
@@ -465,14 +573,17 @@ export default function TradingView() {
       if (stRes.ok) {
         const st = await stRes.json();
         setState(st);
-        if (typeof st?.exchange === "string") {
-          const ex = st.exchange.trim().toLowerCase();
-          if (ex === "kraken" || ex === "binance") setExchange(ex);
+        // Avoid clobbering local config edits (UI is polled every 3s).
+        if (!configDirtyRef.current) {
+          if (typeof st?.exchange === "string") {
+            const ex = st.exchange.trim().toLowerCase();
+            if (ex === "kraken" || ex === "binance") setExchange(ex);
+          }
+          if (Array.isArray(st?.symbols) && st.symbols.length > 0) setSymbols(st.symbols.join(","));
+          if (typeof st?.paper_mode === "boolean") setPaperMode(st.paper_mode);
+          if (typeof st?.risk_per_trade === "number") setRiskPerTrade(st.risk_per_trade);
+          if (typeof st?.min_confidence === "number") setMinConfidence(st.min_confidence);
         }
-        if (Array.isArray(st?.symbols) && st.symbols.length > 0) setSymbols(st.symbols.join(","));
-        if (typeof st?.paper_mode === "boolean") setPaperMode(st.paper_mode);
-        if (typeof st?.risk_per_trade === "number") setRiskPerTrade(st.risk_per_trade);
-        if (typeof st?.min_confidence === "number") setMinConfidence(st.min_confidence);
 
         if (!chartPausedRef.current) {
           const tickCount = typeof st?.tick_count === "number" ? st.tick_count : null;
@@ -559,6 +670,9 @@ export default function TradingView() {
         if (symbol && Number.isFinite(price) && price > 0) {
           const t = sig?.timestamp ? Date.parse(sig.timestamp) : (ev?.ts ? Date.parse(ev.ts) : Date.now());
           appendSignalPoint({ t, symbol, action, conf: clamp(conf, 0, 1), price });
+          if (autoFollowRef.current) {
+            setRangeNowEpoch((prev) => Math.max(prev, Number.isFinite(t) ? t : Date.now()));
+          }
           setPriceChartSymbol((prev) => prev || symbol);
         }
       }
@@ -571,6 +685,10 @@ export default function TradingView() {
 
       const t = data?.ts ? Date.parse(String(data.ts)) : Date.now();
       const safeT = Number.isFinite(t) ? t : Date.now();
+      setLastMarketPriceAt(safeT);
+      if (autoFollowRef.current) {
+        setRangeNowEpoch((prev) => Math.max(prev, safeT));
+      }
       const prices = data?.prices && typeof data.prices === "object" ? data.prices : null;
       if (!prices) return;
 
@@ -710,6 +828,7 @@ export default function TradingView() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error || `HTTP ${res.status}`);
       }
+      setConfigDirty(false);
       await fetchAll();
     } catch (e) {
       setError(String(e));
@@ -727,6 +846,7 @@ export default function TradingView() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error || `HTTP ${res.status}`);
       }
+      setConfigDirty(false);
       await fetchAll();
     } catch (e) {
       setError(String(e));
@@ -758,10 +878,28 @@ export default function TradingView() {
     [equitySeries],
   );
 
-  const priceSeries = useMemo(() => {
+  const rangeEnd = rangeNowEpoch;
+  const rangeStart = Math.max(0, rangeEnd - (Number.isFinite(priceRangeMs) ? priceRangeMs : 0));
+
+  const symbolList = useMemo(() => {
+    const fromState = Array.isArray(state?.symbols) ? state!.symbols.map((s) => String(s)) : [];
+    const fromConfig = symbols.split(",").map((s) => s.trim()).filter(Boolean);
+    const fromData = Object.keys(signalSeriesBySymbol);
+    const merged = [...fromState, ...fromConfig, ...fromData]
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    return Array.from(new Set(merged)).slice(0, 20);
+  }, [state?.symbols, symbols, signalSeriesBySymbol]);
+
+  const priceSeriesAll = useMemo(() => {
     if (!priceChartSymbol) return [];
     return signalSeriesBySymbol[priceChartSymbol] || [];
   }, [priceChartSymbol, signalSeriesBySymbol]);
+
+  const priceSeries = useMemo(() => {
+    if (priceSeriesAll.length === 0) return [];
+    return priceSeriesAll.filter((p) => p.t >= rangeStart && p.t <= rangeEnd);
+  }, [priceSeriesAll, rangeStart, rangeEnd]);
 
   const priceCandles = useMemo(() => {
     // Standard OHLC aggregation: open=first, high=max, low=min, close=last per bucket
@@ -794,10 +932,47 @@ export default function TradingView() {
     };
   }, [priceSeries, priceCandles]);
 
-  const priceLine = useMemo<ChartLine[]>(
-    () => [{ id: "price", color: "#e2e8f0", data: priceSeries.map((p) => ({ t: p.t, y: p.price })) }],
-    [priceSeries],
-  );
+  const priceLine = useMemo<ChartLine[]>(() => {
+    if (priceSeries.length === 0) return [{ id: "price", color: "#e2e8f0", data: [] }];
+    if (priceValueMode === "pct") {
+      const base = priceSeries[0]?.price;
+      const safeBase = Number.isFinite(base) && base > 0 ? base : null;
+      return [{
+        id: "pct",
+        color: "#22d3ee",
+        data: priceSeries
+          .filter((p) => safeBase != null && Number.isFinite(p.price))
+          .map((p) => ({ t: p.t, y: ((p.price - safeBase!) / safeBase!) * 100 })),
+      }];
+    }
+
+    return [{ id: "price", color: "#e2e8f0", data: priceSeries.map((p) => ({ t: p.t, y: p.price })) }];
+  }, [priceSeries, priceValueMode]);
+
+  const watchRows = useMemo(() => {
+    const rows = symbolList.map((sym) => {
+      const s = signalSeriesBySymbol[sym] || [];
+      const inRange = s.filter((p) => p.t >= rangeStart && p.t <= rangeEnd);
+      const last = inRange.length > 0 ? inRange[inRange.length - 1] : (s.length > 0 ? s[s.length - 1] : null);
+      const base = inRange.length > 0 ? inRange[0] : (s.length > 0 ? s[Math.max(0, s.length - 60)] : null);
+      const lastPrice = last?.price;
+      const basePrice = base?.price;
+      const deltaPct = (Number.isFinite(lastPrice) && Number.isFinite(basePrice) && (basePrice as number) > 0)
+        ? (((lastPrice as number) - (basePrice as number)) / (basePrice as number)) * 100
+        : null;
+      const candles = toCandles(inRange.map((p) => ({ t: p.t, price: p.price })), priceTimeframeMs).slice(-64);
+      return { sym, lastPrice: Number.isFinite(lastPrice) ? (lastPrice as number) : null, deltaPct, candles };
+    });
+
+    // Sort: selected first, then biggest abs move
+    return rows.sort((a, b) => {
+      if (a.sym === priceChartSymbol) return -1;
+      if (b.sym === priceChartSymbol) return 1;
+      const ad = a.deltaPct == null ? -1 : Math.abs(a.deltaPct);
+      const bd = b.deltaPct == null ? -1 : Math.abs(b.deltaPct);
+      return bd - ad;
+    });
+  }, [symbolList, signalSeriesBySymbol, rangeStart, rangeEnd, priceTimeframeMs, priceChartSymbol]);
 
   const recentSignals = useMemo(() => {
     const list = state?.recent_signals || [];
@@ -813,6 +988,10 @@ export default function TradingView() {
     return Array.isArray(list) ? list.length : 0;
   }, [state]);
 
+  const marketAgeMs = lastMarketPriceAt != null ? Math.max(0, uiNowEpoch - lastMarketPriceAt) : null;
+  const marketIsLive = marketAgeMs != null && marketAgeMs <= Math.max(9000, marketPollMs * 3);
+  const marketAgeLabel = marketAgeMs == null ? "—" : `${Math.round(marketAgeMs / 1000)}s`;
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -822,7 +1001,7 @@ export default function TradingView() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+    <div className="flex-1 overflow-y-auto p-3 space-y-3 trading-surface">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Brain className="w-5 h-5 text-emerald-400" />
@@ -833,6 +1012,18 @@ export default function TradingView() {
           ) : (
             <span className="text-[10px] bg-slate-800/60 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700/50">Stoppad</span>
           )}
+          <span
+            className={
+              "text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 " +
+              (marketIsLive
+                ? "bg-emerald-950/25 text-emerald-200 border-emerald-700/30"
+                : "bg-amber-950/20 text-amber-200 border-amber-700/30")
+            }
+            title="Freshness för market_prices"
+          >
+            <span className={"w-1.5 h-1.5 rounded-full " + (marketIsLive ? "bg-emerald-400" : "bg-amber-400") + " animate-pulse-dot"} />
+            Market {marketIsLive ? "live" : "stale"} · {marketAgeLabel}
+          </span>
         </div>
 
         <div className="flex items-center gap-1">
@@ -872,19 +1063,39 @@ export default function TradingView() {
         </div>
       )}
 
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3 space-y-2">
-        <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Konfiguration</div>
+      <div className="trading-card rounded-xl p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Konfiguration</div>
+          <div className="flex items-center gap-2">
+            {running && <span className="text-[10px] text-slate-500">Stoppa för att ändra</span>}
+            {configDirty && !running && (
+              <button
+                type="button"
+                onClick={() => {
+                  setConfigDirty(false);
+                  fetchAll();
+                }}
+                className="text-[10px] px-2 py-0.5 rounded-md bg-slate-900/50 border border-slate-700/50 text-slate-200 hover:bg-slate-900/70"
+                title="Återställ fälten från serverns nuvarande state"
+              >
+                Återställ
+              </button>
+            )}
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <label className="text-[11px] text-slate-300">
             Exchange
             <select
               value={exchange}
               onChange={(e) => {
+                setConfigDirty(true);
                 const ex = e.target.value as TradingExchange;
                 setExchange(ex);
                 // Friendly defaults (users can still edit symbols freely)
                 if (ex === "kraken" && symbols.trim() === "BTCUSDT,ETHUSDT") setSymbols("XBTUSDT,ETHUSDT");
               }}
+              disabled={running}
               className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
             >
               <option value="kraken">Kraken</option>
@@ -895,7 +1106,11 @@ export default function TradingView() {
             Symbols
             <input
               value={symbols}
-              onChange={(e) => setSymbols(e.target.value)}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setSymbols(e.target.value);
+              }}
+              disabled={running}
               className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
               placeholder="BTCUSDT,ETHUSDT"
             />
@@ -904,9 +1119,13 @@ export default function TradingView() {
             Interval (s)
             <input
               value={intervalSeconds}
-              onChange={(e) => setIntervalSeconds(Number(e.target.value))}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setIntervalSeconds(Number(e.target.value));
+              }}
               type="number"
               min={5}
+              disabled={running}
               className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
             />
           </label>
@@ -914,10 +1133,14 @@ export default function TradingView() {
             Risk per trade
             <input
               value={riskPerTrade}
-              onChange={(e) => setRiskPerTrade(Number(e.target.value))}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setRiskPerTrade(Number(e.target.value));
+              }}
               type="number"
               step={0.001}
               min={0}
+              disabled={running}
               className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
             />
           </label>
@@ -925,30 +1148,42 @@ export default function TradingView() {
             Min confidence
             <input
               value={minConfidence}
-              onChange={(e) => setMinConfidence(Number(e.target.value))}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setMinConfidence(Number(e.target.value));
+              }}
               type="number"
               step={0.01}
               min={0}
               max={1}
+              disabled={running}
               className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
             />
           </label>
         </div>
         <label className="flex items-center gap-2 text-[11px] text-slate-300">
-          <input type="checkbox" checked={paperMode} onChange={(e) => setPaperMode(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={paperMode}
+            onChange={(e) => {
+              setConfigDirty(true);
+              setPaperMode(e.target.checked);
+            }}
+            disabled={running}
+          />
           Paper mode (recommended)
         </label>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div className="trading-card rounded-xl p-3">
           <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
             <DollarSign className="w-3.5 h-3.5" /> Total
           </div>
           <div className="text-lg font-bold text-white">${totalUsd.toLocaleString()}</div>
           <div className="text-[10px] text-slate-500">Cash: ${usdtCash.toLocaleString()}</div>
         </div>
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
+        <div className="trading-card rounded-xl p-3">
           <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
             <TrendingUp className="w-3.5 h-3.5" /> Signals
           </div>
@@ -963,21 +1198,23 @@ export default function TradingView() {
             )}
           </div>
         </div>
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
+        <div className="trading-card rounded-xl p-3">
           <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Positions</div>
           <div className="text-lg font-bold text-white">{Object.keys(positions).length}</div>
           <div className="text-[10px] text-slate-500">Last tick: {state?.last_tick_at || "—"}</div>
         </div>
       </div>
 
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
-            <LineChart className="w-3.5 h-3.5" /> Live charts
+      <div className="trading-card rounded-xl p-3 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-[10px] text-slate-300 uppercase tracking-wider font-semibold">
+            <LineChart className="w-3.5 h-3.5 text-cyan-300" /> Market view
+            <span className="text-[10px] text-slate-500 font-mono">· {priceChartSymbol || "—"}</span>
             {lastTickMs != null && (
-              <span className="text-[10px] text-slate-500 font-mono">· {Math.round(lastTickMs)}ms</span>
+              <span className="text-[10px] text-slate-500 font-mono">· tick {Math.round(lastTickMs)}ms</span>
             )}
           </div>
+
           <div className="flex items-center gap-1">
             <button
               onClick={() => setChartPaused((v) => !v)}
@@ -992,6 +1229,29 @@ export default function TradingView() {
               <Pause className="w-3.5 h-3.5" />
               {chartPaused ? "Pausad" : "Pausa"}
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (autoFollow) {
+                  setAutoFollow(false);
+                } else {
+                  setAutoFollow(true);
+                  setRangeNowEpoch(Date.now());
+                }
+              }}
+              className={
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border " +
+                (autoFollow
+                  ? "bg-emerald-950/20 text-emerald-200 border-emerald-700/30 hover:bg-emerald-950/35"
+                  : "bg-slate-900/40 text-slate-200 border-slate-700/50 hover:bg-slate-900/60")
+              }
+              title={autoFollow ? "Frys range (stannar i tiden)" : "Hoppa till nu och följ marknaden"}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              {autoFollow ? "Följer" : "Fryst"}
+            </button>
+
             <button
               onClick={() => {
                 setEquitySeries([]);
@@ -1005,137 +1265,250 @@ export default function TradingView() {
           </div>
         </div>
 
-        {equityStats && (
-          <div className="flex flex-wrap gap-2 text-[11px]">
-            <span className="text-slate-500">Start:</span>
-            <span className="text-slate-200 font-mono">{fmtUsd(equityStats.start)}</span>
-            <span className="text-slate-500">Nu:</span>
-            <span className="text-slate-200 font-mono">{fmtUsd(equityStats.last)}</span>
-            <span className="text-slate-500">PnL:</span>
-            <span className={equityStats.pnlPct >= 0 ? "text-emerald-200 font-mono" : "text-red-200 font-mono"}>
-              {equityStats.pnlPct >= 0 ? "+" : ""}{equityStats.pnlPct.toFixed(2)}%
-            </span>
-            <span className="text-slate-500">Max DD:</span>
-            <span className="text-amber-200 font-mono">{equityStats.drawdownPct.toFixed(2)}%</span>
-          </div>
-        )}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-3">
+          <div className="space-y-3">
+            <div className="bg-slate-950/30 border border-slate-700/40 rounded-xl p-2 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Price</div>
+                  {priceMeta && (
+                    <div className="text-[10px] text-slate-500 font-mono">
+                      <span>{fmtUsd(priceMeta.price)}</span>
+                      {typeof priceMeta.deltaPct === "number" && typeof priceMeta.delta === "number" && (
+                        <span className={priceMeta.delta >= 0 ? "text-emerald-200" : "text-red-200"}>
+                          {" "}({priceMeta.delta >= 0 ? "+" : ""}{priceMeta.deltaPct.toFixed(2)}%)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-2">
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Equity</div>
-              <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" /> total
+                <div className="flex items-center gap-1 flex-wrap justify-end">
+                  <select
+                    value={priceChartSymbol}
+                    onChange={(e) => setPriceChartSymbol(e.target.value)}
+                    aria-label="Price chart symbol"
+                    title="Välj symbol"
+                    className="bg-slate-950/40 border border-slate-700/50 rounded-lg px-2 py-1 text-[11px] text-white"
+                  >
+                    {symbolList
+                      .filter(Boolean)
+                      .map((sym) => (
+                        <option key={sym} value={sym}>{sym}</option>
+                      ))}
+                  </select>
+
+                  <select
+                    value={String(priceTimeframeMs)}
+                    onChange={(e) => setPriceTimeframeMs(Number(e.target.value) || 60_000)}
+                    aria-label="Price chart timeframe"
+                    title="Candle timeframe (OHLC)"
+                    className="bg-slate-950/40 border border-slate-700/50 rounded-lg px-2 py-1 text-[11px] text-white"
+                  >
+                    <option value={1_000}>1s</option>
+                    <option value={5_000}>5s</option>
+                    <option value={15_000}>15s</option>
+                    <option value={60_000}>1m</option>
+                    <option value={300_000}>5m</option>
+                    <option value={900_000}>15m</option>
+                    <option value={3_600_000}>1h</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="segmented" aria-label="Chart mode">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPriceChartMode("candles");
+                      setPriceValueMode("price");
+                    }}
+                    className={"segmented-btn " + (priceChartMode === "candles" ? "segmented-btn-active" : "")}
+                  >
+                    Candles
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPriceChartMode("line")}
+                    className={"segmented-btn " + (priceChartMode === "line" ? "segmented-btn-active" : "")}
+                  >
+                    Line
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPriceChartMode("area")}
+                    className={"segmented-btn " + (priceChartMode === "area" ? "segmented-btn-active" : "")}
+                  >
+                    Area
+                  </button>
+                </div>
+
+                <div className="segmented" aria-label="Value mode">
+                  <button
+                    type="button"
+                    onClick={() => setPriceValueMode("price")}
+                    className={"segmented-btn " + (priceValueMode === "price" ? "segmented-btn-active" : "")}
+                  >
+                    Price
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPriceValueMode("pct");
+                      if (priceChartMode === "candles") setPriceChartMode("line");
+                    }}
+                    className={"segmented-btn " + (priceValueMode === "pct" ? "segmented-btn-active" : "")}
+                  >
+                    %
+                  </button>
+                </div>
+
+                <div className="segmented" aria-label="Scale">
+                  <button
+                    type="button"
+                    onClick={() => setPriceScale("linear")}
+                    className={"segmented-btn " + (priceScale === "linear" ? "segmented-btn-active" : "")}
+                  >
+                    Lin
+                  </button>
+                  <button
+                    type="button"
+                    disabled={priceChartMode === "candles" || priceValueMode === "pct"}
+                    onClick={() => setPriceScale("log")}
+                    className={
+                      "segmented-btn " +
+                      (priceScale === "log" ? "segmented-btn-active" : "") +
+                      ((priceChartMode === "candles" || priceValueMode === "pct") ? " opacity-40 cursor-not-allowed" : "")
+                    }
+                    title={(priceChartMode === "candles" || priceValueMode === "pct") ? "Log scale stöds ej för candles/%" : "Log scale"}
+                  >
+                    Log
+                  </button>
+                </div>
+
+                <div className="segmented" aria-label="Range">
+                  {[15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 24 * 60 * 60_000].map((ms) => (
+                    <button
+                      key={ms}
+                      type="button"
+                      onClick={() => setPriceRangeMs(ms)}
+                      className={"segmented-btn " + (priceRangeMs === ms ? "segmented-btn-active" : "")}
+                    >
+                      {ms === 15 * 60_000 ? "15m" : ms === 60 * 60_000 ? "1h" : ms === 4 * 60 * 60_000 ? "4h" : "24h"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {priceChartMode === "candles" ? (
+                <MiniCandleChart
+                  candles={priceCandles}
+                  maxCandles={220}
+                  height={220}
+                />
+              ) : (
+                <MiniTimeSeriesChart
+                  lines={priceLine}
+                  maxPoints={420}
+                  height={220}
+                  colorByDelta
+                  fill={priceChartMode === "area"}
+                  yScale={priceScale}
+                  formatY={priceValueMode === "pct" ? (n) => fmtPct(n, 2) : fmtUsd}
+                />
+              )}
+
+              <div className="text-[10px] text-slate-500 mt-1 flex items-center justify-between gap-2">
+                <span>
+                  Källa: <span className="font-mono">market_prices</span> · {marketIsLive ? "live" : "stale"} {marketAgeLabel}
                 </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-sky-400" /> cash
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" /> invested
-                </span>
+                <span className="font-mono">pts {priceSeries.length}</span>
               </div>
             </div>
-            <MiniTimeSeriesChart
-              lines={equityLines}
-              maxPoints={240}
-            />
-          </div>
 
-          <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Price</div>
-                {priceMeta && (
+            <div className="bg-slate-950/30 border border-slate-700/40 rounded-xl p-2">
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Equity</div>
+                {equityStats && (
                   <div className="text-[10px] text-slate-500 font-mono">
-                    <span>{fmtUsd(priceMeta.price)}</span>
-                    {typeof priceMeta.deltaPct === "number" && typeof priceMeta.delta === "number" && (
-                      <span className={priceMeta.delta >= 0 ? "text-emerald-200" : "text-red-200"}>
-                        {" "}({priceMeta.delta >= 0 ? "+" : ""}{priceMeta.deltaPct.toFixed(2)}%)
-                      </span>
-                    )}
-                    {priceMeta.action ? ` · ${priceMeta.action}` : ""}
-                    {Number.isFinite(priceMeta.conf) ? ` ${(priceMeta.conf * 100).toFixed(0)}%` : ""}
+                    PnL <span className={equityStats.pnlPct >= 0 ? "text-emerald-200" : "text-red-200"}>{fmtPct(equityStats.pnlPct, 2)}</span>
+                    <span className="ml-2">DD <span className="text-amber-200">{fmtPct(-equityStats.drawdownPct, 2)}</span></span>
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-1">
-                <select
-                  value={priceChartSymbol}
-                  onChange={(e) => setPriceChartSymbol(e.target.value)}
-                  aria-label="Price chart symbol"
-                  title="Välj symbol för prisgraf"
-                  className="bg-slate-950/40 border border-slate-700/50 rounded-lg px-2 py-1 text-[11px] text-white"
-                >
-                  {(Object.keys(signalSeriesBySymbol).length > 0
-                    ? Object.keys(signalSeriesBySymbol)
-                    : (state?.symbols || []).map((s) => String(s)))
-                    .filter(Boolean)
-                    .map((sym) => (
-                      <option key={sym} value={sym}>{sym}</option>
-                    ))}
-                </select>
-
-                <select
-                  value={String(priceTimeframeMs)}
-                  onChange={(e) => setPriceTimeframeMs(Number(e.target.value) || 60_000)}
-                  aria-label="Price chart timeframe"
-                  title="Välj timeframe för candles (OHLC)"
-                  className="bg-slate-950/40 border border-slate-700/50 rounded-lg px-2 py-1 text-[11px] text-white"
-                >
-                  <option value={1_000}>1s</option>
-                  <option value={5_000}>5s</option>
-                  <option value={15_000}>15s</option>
-                  <option value={60_000}>1m</option>
-                  <option value={300_000}>5m</option>
-                  <option value={900_000}>15m</option>
-                  <option value={3_600_000}>1h</option>
-                </select>
-
-                <select
-                  value={priceChartMode}
-                  onChange={(e) => setPriceChartMode(e.target.value === "line" ? "line" : "candles")}
-                  aria-label="Price chart mode"
-                  title="Välj visning"
-                  className="bg-slate-950/40 border border-slate-700/50 rounded-lg px-2 py-1 text-[11px] text-white"
-                >
-                  <option value="candles">Candles</option>
-                  <option value="line">Line</option>
-                </select>
-              </div>
-            </div>
-            {priceChartMode === "candles" ? (
-              <MiniCandleChart
-                candles={priceCandles}
-                maxCandles={180}
-              />
-            ) : (
               <MiniTimeSeriesChart
-                lines={priceLine}
-                maxPoints={240}
-                colorByDelta
+                lines={equityLines}
+                maxPoints={320}
+                height={140}
+                showAxis={false}
               />
-            )}
-            <div className="text-[10px] text-slate-500 mt-1">
-              Källa: <span className="font-mono">market_prices</span> via bridge (senaste {priceSeries.length}).
+            </div>
+          </div>
+
+          <div className="bg-slate-950/30 border border-slate-700/40 rounded-xl p-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Watchlist</div>
+              <div className="text-[10px] text-slate-500 font-mono">{watchRows.length}</div>
+            </div>
+            <div className="mt-2 space-y-2 max-h-[420px] overflow-auto pr-1">
+              {watchRows.map((row) => {
+                const selected = row.sym === priceChartSymbol;
+                const dp = row.deltaPct;
+                return (
+                  <button
+                    key={row.sym}
+                    type="button"
+                    onClick={() => setPriceChartSymbol(row.sym)}
+                    className={
+                      "w-full text-left rounded-xl border p-2 transition-colors " +
+                      (selected
+                        ? "bg-slate-900/60 border-cyan-500/40"
+                        : "bg-slate-950/20 border-slate-700/40 hover:bg-slate-900/40")
+                    }
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] text-slate-200 font-semibold tracking-wide">{row.sym}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-[11px] text-slate-200 font-mono">{row.lastPrice != null ? fmtUsd(row.lastPrice) : "—"}</div>
+                        <div className={
+                          "text-[11px] font-mono " +
+                          (dp == null ? "text-slate-500" : dp >= 0 ? "text-emerald-200" : "text-red-200")
+                        }>
+                          {dp == null ? "—" : fmtPct(dp, 2)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-1">
+                      <MiniCandleChart
+                        candles={row.candles}
+                        height={48}
+                        maxCandles={48}
+                        showAxis={false}
+                        interactive={false}
+                      />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
 
         {Object.keys(positions).length > 0 && (
-          <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-2">
+          <div className="bg-slate-950/30 border border-slate-700/40 rounded-xl p-2">
             <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Exposure</div>
             <div className="space-y-1">
               {Object.entries(positions)
                 .map(([sym, p]) => ({ sym, val: Number(p?.value_usd ?? 0), pct: totalUsd > 0 ? (Number(p?.value_usd ?? 0) / totalUsd) * 100 : 0 }))
                 .sort((a, b) => b.val - a.val)
-                .slice(0, 8)
+                .slice(0, 10)
                 .map((row) => (
                   <div key={row.sym} className="grid grid-cols-[72px_1fr_52px] gap-2 items-center text-[11px]">
                     <div className="text-slate-300 font-medium truncate">{row.sym}</div>
                     <svg viewBox="0 0 100 6" width="100%" height="8" preserveAspectRatio="none" className="block">
                       <rect x="0" y="0" width="100" height="6" rx="3" fill="rgba(30,41,59,1)" />
-                      <rect x="0" y="0" width={clamp(row.pct, 0, 100)} height="6" rx="3" fill="rgba(16,185,129,0.7)" />
+                      <rect x="0" y="0" width={clamp(row.pct, 0, 100)} height="6" rx="3" fill="rgba(34,211,238,0.65)" />
                     </svg>
                     <div className="text-slate-400 font-mono text-right">{row.pct.toFixed(1)}%</div>
                   </div>
@@ -1146,7 +1519,7 @@ export default function TradingView() {
       </div>
 
       {Object.keys(positions).length > 0 && (
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
+        <div className="trading-card rounded-xl p-3">
           <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Portfolio</div>
           <div className="space-y-1">
             {Object.entries(positions).map(([sym, p]) => (
@@ -1165,7 +1538,7 @@ export default function TradingView() {
       )}
 
       {recentSignals.length > 0 && (
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
+        <div className="trading-card rounded-xl p-3">
           <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Recent signals</div>
           <div className="space-y-1">
             {recentSignals.map((s, idx) => (
@@ -1228,7 +1601,7 @@ export default function TradingView() {
         </div>
       )}
 
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3 space-y-2">
+      <div className="trading-card rounded-xl p-3 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
             <MessageSquareText className="w-3.5 h-3.5" /> Strategi med Frankenstein
