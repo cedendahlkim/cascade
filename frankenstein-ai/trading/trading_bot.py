@@ -15,6 +15,7 @@ Security:
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import hmac
 import json
@@ -22,11 +23,12 @@ import os
 import signal
 import sys
 import time
+import urllib.parse
 from collections import deque
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Protocol
 
 import numpy as np
 import requests
@@ -311,6 +313,25 @@ class EbbinghausTradeMemory:
         }
 
 
+class ExchangeClient(Protocol):
+    """Minimal exchange contract used by FrankensteinTradingAgent.
+
+    This keeps the bot switchable (Binance/Kraken/...) without rewriting the
+    cognitive logic.
+    """
+
+    paper_mode: bool
+    name: str
+
+    def get_klines(self, symbol: str, interval: str = "1h", limit: int = 100) -> list: ...
+
+    def get_price(self, symbol: str) -> float: ...
+
+    def place_order(self, symbol: str, side: str, quantity: float, price: float) -> dict[str, Any]: ...
+
+    def get_portfolio_value(self) -> dict[str, Any]: ...
+
+
 class BinanceClient:
     def __init__(
         self,
@@ -321,6 +342,7 @@ class BinanceClient:
         allow_live: bool,
         starting_usdt: float = 10_000.0,
     ) -> None:
+        self.name = "binance"
         self.api_key = api_key
         self.api_secret = api_secret
         self.paper_mode = paper_mode
@@ -462,6 +484,241 @@ class BinanceClient:
         }
 
 
+class KrakenClient:
+    """Kraken REST client (public data + optional private order placement).
+
+    Notes:
+    - Paper mode does NOT require API keys (we use public OHLC/Ticker endpoints).
+    - Live trading is gated by TRADING_ALLOW_LIVE=true and requires keys.
+    """
+
+    _SUPPORTED_INTERVAL_MINUTES = {1, 5, 15, 30, 60, 240, 1440, 10080, 21600}
+
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        paper_mode: bool,
+        base_url: str,
+        allow_live: bool,
+        starting_usdt: float = 10_000.0,
+    ) -> None:
+        self.name = "kraken"
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.paper_mode = paper_mode
+        self.base_url = base_url.rstrip("/")
+        self.allow_live = allow_live
+
+        self._paper_balance = {"USDT": float(starting_usdt)}
+        # symbol -> { qty, avg_price, realized_usdt }
+        self._paper_positions: dict[str, dict[str, float]] = {}
+
+    @staticmethod
+    def _normalize_pair(symbol: str) -> str:
+        s = symbol.strip().upper()
+        if s.startswith("BTC"):
+            s = "XBT" + s[3:]
+        return s
+
+    @classmethod
+    def _interval_to_minutes(cls, interval: str) -> int:
+        raw = (interval or "").strip().lower()
+        if not raw:
+            return 60
+
+        # Accept Binance-style strings: 1m/5m/15m/1h/4h/1d
+        unit = raw[-1]
+        if unit in ("m", "h", "d"):
+            try:
+                n = int(raw[:-1])
+            except ValueError:
+                n = 60
+            minutes = n if unit == "m" else (n * 60 if unit == "h" else n * 1440)
+        else:
+            # If already a number, assume minutes.
+            try:
+                minutes = int(raw)
+            except ValueError:
+                minutes = 60
+
+        return minutes if minutes in cls._SUPPORTED_INTERVAL_MINUTES else 60
+
+    def _get_public(self, path: str, params: dict[str, Any] | None = None, timeout: int = 10) -> Any:
+        url = f"{self.base_url}{path}"
+        r = requests.get(url, params=params or {}, timeout=timeout)
+        r.raise_for_status()
+        data = r.json()
+        errors = data.get("error") if isinstance(data, dict) else None
+        if errors:
+            raise RuntimeError(f"Kraken error: {errors}")
+        return data.get("result") if isinstance(data, dict) else data
+
+    def _sign_private(self, url_path: str, data: dict[str, Any]) -> str:
+        # Kraken secret is base64-encoded.
+        postdata = urllib.parse.urlencode(data)
+        encoded = (str(data["nonce"]) + postdata).encode("utf-8")
+        message = url_path.encode("utf-8") + hashlib.sha256(encoded).digest()
+        mac = hmac.new(base64.b64decode(self.api_secret), message, hashlib.sha512)
+        return base64.b64encode(mac.digest()).decode("utf-8")
+
+    def _post_private(self, path: str, data: dict[str, Any], timeout: int = 10) -> Any:
+        if not self.api_key or not self.api_secret:
+            raise RuntimeError("Missing KRAKEN_API_KEY/KRAKEN_API_SECRET")
+        if not self.allow_live:
+            raise RuntimeError("Live trading disabled (set TRADING_ALLOW_LIVE=true to enable)")
+
+        payload = dict(data)
+        payload["nonce"] = int(time.time() * 1000)
+
+        headers = {
+            "API-Key": self.api_key,
+            "API-Sign": self._sign_private(path, payload),
+        }
+
+        url = f"{self.base_url}{path}"
+        r = requests.post(url, data=payload, headers=headers, timeout=timeout)
+        r.raise_for_status()
+        out = r.json()
+        if isinstance(out, dict) and out.get("error"):
+            raise RuntimeError(f"Kraken error: {out.get('error')}")
+        return out
+
+    def get_klines(self, symbol: str, interval: str = "1h", limit: int = 100) -> list:
+        pair = self._normalize_pair(symbol)
+        interval_min = self._interval_to_minutes(interval)
+        result = self._get_public("/0/public/OHLC", {"pair": pair, "interval": interval_min})
+        if not isinstance(result, dict):
+            return []
+
+        key = next((k for k in result.keys() if k != "last"), None)
+        rows = result.get(key) if key else None
+        if not isinstance(rows, list):
+            return []
+
+        out: list[list[Any]] = []
+        for r in rows[-limit:]:
+            try:
+                # [time, open, high, low, close, vwap, volume, count]
+                out.append([
+                    int(float(r[0]) * 1000),
+                    float(r[1]),
+                    float(r[2]),
+                    float(r[3]),
+                    float(r[4]),
+                    float(r[6]),
+                ])
+            except Exception:
+                continue
+        return out
+
+    def get_price(self, symbol: str) -> float:
+        pair = self._normalize_pair(symbol)
+        result = self._get_public("/0/public/Ticker", {"pair": pair})
+        if not isinstance(result, dict) or not result:
+            raise RuntimeError(f"Kraken ticker missing for {pair}")
+
+        key = next(iter(result.keys()))
+        data = result.get(key) or {}
+        last = (data.get("c") or [None])[0]
+        return float(last)
+
+    def place_order(self, symbol: str, side: str, quantity: float, price: float) -> dict[str, Any]:
+        if self.paper_mode:
+            cost = float(quantity) * float(price)
+            status = "REJECTED"
+            realized_usdt = 0.0
+            realized_pct: Optional[float] = None
+            avg_entry: Optional[float] = None
+            if side == "BUY":
+                if self._paper_balance.get("USDT", 0.0) >= cost:
+                    self._paper_balance["USDT"] -= cost
+                    pos = self._paper_positions.get(symbol) or {"qty": 0.0, "avg_price": 0.0, "realized_usdt": 0.0}
+                    old_qty = float(pos.get("qty", 0.0))
+                    old_avg = float(pos.get("avg_price", 0.0))
+                    new_qty = old_qty + float(quantity)
+                    new_avg = ((old_qty * old_avg) + (float(quantity) * float(price))) / (new_qty + 1e-12)
+                    pos["qty"] = new_qty
+                    pos["avg_price"] = new_avg
+                    self._paper_positions[symbol] = pos
+                    avg_entry = new_avg
+                    status = "FILLED"
+                else:
+                    status = "REJECTED (insufficient funds)"
+            elif side == "SELL":
+                pos = self._paper_positions.get(symbol)
+                held = float(pos.get("qty", 0.0)) if pos else 0.0
+                if held >= quantity and pos:
+                    avg_entry = float(pos.get("avg_price", 0.0))
+                    cost_basis = float(quantity) * avg_entry
+                    realized_usdt = float(cost) - cost_basis
+                    realized_pct = (realized_usdt / (cost_basis + 1e-12)) * 100.0
+
+                    pos["qty"] = held - float(quantity)
+                    pos["realized_usdt"] = float(pos.get("realized_usdt", 0.0)) + realized_usdt
+                    if pos["qty"] <= 1e-12:
+                        self._paper_positions.pop(symbol, None)
+                    else:
+                        self._paper_positions[symbol] = pos
+
+                    self._paper_balance["USDT"] += cost
+                    status = "FILLED"
+                else:
+                    status = "REJECTED (no position)"
+            else:
+                status = "REJECTED (unknown side)"
+
+            return {
+                "mode": "paper",
+                "status": status,
+                "symbol": symbol,
+                "side": side,
+                "quantity": float(quantity),
+                "price": float(price),
+                "avg_entry": avg_entry,
+                "realized_usdt": round(realized_usdt, 6),
+                "realized_pct": round(realized_pct, 4) if realized_pct is not None else None,
+            }
+
+        pair = self._normalize_pair(symbol)
+        payload = {
+            "pair": pair,
+            "type": side.lower(),
+            "ordertype": "market",
+            "volume": str(quantity),
+        }
+        return self._post_private("/0/private/AddOrder", payload)
+
+    def get_portfolio_value(self) -> dict[str, Any]:
+        total = float(self._paper_balance.get("USDT", 0.0))
+        positions: dict[str, Any] = {}
+        for sym, pos in self._paper_positions.items():
+            qty = float(pos.get("qty", 0.0))
+            if qty <= 0.0:
+                continue
+            price = self.get_price(sym)
+            avg_entry = float(pos.get("avg_price", 0.0))
+            val = qty * price
+            cost_basis = qty * avg_entry
+            unrealized = val - cost_basis
+            unrealized_pct = (unrealized / (cost_basis + 1e-12)) * 100.0 if cost_basis > 0 else 0.0
+            total += val
+            positions[sym] = {
+                "quantity": round(qty, 8),
+                "avg_entry": round(avg_entry, 8),
+                "price": round(float(price), 8),
+                "value_usd": round(val, 2),
+                "unrealized_usdt": round(unrealized, 6),
+                "unrealized_pct": round(unrealized_pct, 4),
+                "realized_usdt": round(float(pos.get("realized_usdt", 0.0)), 6),
+            }
+        return {
+            "usdt_cash": round(float(self._paper_balance.get("USDT", 0.0)), 2),
+            "positions": positions,
+            "total_value_usd": round(total, 2),
+        }
+
+
 def compute_rsi(closes: list[float], period: int = 14) -> float:
     if len(closes) < period + 1:
         return 50.0
@@ -518,7 +775,7 @@ def compute_features(klines: list) -> dict[str, float]:
 class FrankensteinTradingAgent:
     def __init__(
         self,
-        exchange: BinanceClient,
+        exchange: ExchangeClient,
         symbols: list[str],
         risk_per_trade: float,
         min_confidence: float,
@@ -721,6 +978,7 @@ class FrankensteinTradingAgent:
             "last_tick_at": _utc_now_iso(),
             "tick_count": self.tick_count,
             "order_count": self.order_count,
+            "exchange": getattr(self.exchange, "name", self.exchange.__class__.__name__),
             "symbols": self.symbols,
             "paper_mode": self.exchange.paper_mode,
             "risk_per_trade": self.risk_per_trade,
@@ -766,39 +1024,58 @@ def main() -> int:
     paper_mode = _parse_bool(os.environ.get("TRADING_PAPER_MODE"), True)
     allow_live = _parse_bool(os.environ.get("TRADING_ALLOW_LIVE"), False)
 
-    symbols = [s.strip().upper() for s in os.environ.get("TRADING_SYMBOLS", "BTCUSDT,ETHUSDT").split(",") if s.strip()]
+    exchange_name = (os.environ.get("TRADING_EXCHANGE") or "binance").strip().lower()
+    if exchange_name not in ("binance", "kraken"):
+        exchange_name = "binance"
+
+    default_symbols = "BTCUSDT,ETHUSDT" if exchange_name == "binance" else "XBTUSDT,ETHUSDT"
+    symbols_env = os.environ.get("TRADING_SYMBOLS", default_symbols)
+
+    symbols = [s.strip().upper() for s in symbols_env.split(",") if s.strip()]
     interval_seconds = int(float(os.environ.get("TRADING_INTERVAL_SECONDS", "3600")))
     risk_per_trade = float(os.environ.get("TRADING_RISK_PER_TRADE", "0.02"))
     min_conf = float(os.environ.get("TRADING_MIN_CONFIDENCE", "0.60"))
 
-    base_url = os.environ.get("BINANCE_BASE_URL")
-    if not base_url:
-        # In paper mode we default to public (real) market data; orders remain simulated.
-        base_url = "https://api.binance.com"
-
-    api_key = os.environ.get("BINANCE_API_KEY", "")
-    api_secret = os.environ.get("BINANCE_API_SECRET", "")
+    if exchange_name == "kraken":
+        base_url = os.environ.get("KRAKEN_BASE_URL") or "https://api.kraken.com"
+        api_key = os.environ.get("KRAKEN_API_KEY", "")
+        api_secret = os.environ.get("KRAKEN_API_SECRET", "")
+    else:
+        base_url = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.com"
+        api_key = os.environ.get("BINANCE_API_KEY", "")
+        api_secret = os.environ.get("BINANCE_API_SECRET", "")
 
     _ensure_dirs()
 
     _log("=== Frankenstein Trading Bot starting ===")
-    _log(f"symbols={symbols} paper_mode={paper_mode} interval={interval_seconds}s")
+    _log(f"exchange={exchange_name} symbols={symbols} paper_mode={paper_mode} interval={interval_seconds}s")
 
     _send_bridge_event({
         "type": "trader_start",
+        "exchange": exchange_name,
         "symbols": symbols,
         "paper_mode": paper_mode,
         "interval_seconds": interval_seconds,
         "ts": _utc_now_iso(),
     })
 
-    exchange = BinanceClient(
-        api_key=api_key,
-        api_secret=api_secret,
-        paper_mode=paper_mode,
-        base_url=base_url,
-        allow_live=allow_live,
-    )
+    exchange: ExchangeClient
+    if exchange_name == "kraken":
+        exchange = KrakenClient(
+            api_key=api_key,
+            api_secret=api_secret,
+            paper_mode=paper_mode,
+            base_url=base_url,
+            allow_live=allow_live,
+        )
+    else:
+        exchange = BinanceClient(
+            api_key=api_key,
+            api_secret=api_secret,
+            paper_mode=paper_mode,
+            base_url=base_url,
+            allow_live=allow_live,
+        )
     agent = FrankensteinTradingAgent(exchange, symbols, risk_per_trade, min_conf)
 
     signal.signal(signal.SIGINT, _handle_shutdown)

@@ -1678,6 +1678,8 @@ app.post("/api/trader/start", (req, res) => {
   const symbols = Array.isArray(req.body?.symbols)
     ? req.body.symbols.map((s: any) => String(s).trim()).filter(Boolean)
     : undefined;
+  const exchange = typeof req.body?.exchange === "string" ? String(req.body.exchange).trim().toLowerCase() : undefined;
+  const safeExchange = exchange === "kraken" || exchange === "binance" ? exchange : undefined;
   const paperMode = typeof req.body?.paperMode === "boolean" ? req.body.paperMode : true;
   const intervalSeconds = req.body?.intervalSeconds != null ? Number(req.body.intervalSeconds) : undefined;
   const riskPerTrade = req.body?.riskPerTrade != null ? Number(req.body.riskPerTrade) : undefined;
@@ -1692,6 +1694,7 @@ app.post("/api/trader/start", (req, res) => {
       PYTHONIOENCODING: "utf-8",
       BRIDGE_URL: `http://localhost:${PORT}`,
       TRADING_DATA_DIR: join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data"),
+      ...(safeExchange ? { TRADING_EXCHANGE: safeExchange } : {}),
       ...(symbols && symbols.length > 0 ? { TRADING_SYMBOLS: symbols.join(",") } : {}),
       TRADING_PAPER_MODE: paperMode ? "true" : "false",
       ...(Number.isFinite(intervalSeconds) && intervalSeconds! > 0 ? { TRADING_INTERVAL_SECONDS: String(intervalSeconds) } : {}),

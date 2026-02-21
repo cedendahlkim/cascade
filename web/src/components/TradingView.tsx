@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BRIDGE_URL } from "../config";
 import { io, Socket } from "socket.io-client";
-import { Play, Square, RefreshCw, Brain, Activity, DollarSign, AlertTriangle, Loader2, MessageSquareText } from "lucide-react";
+import { Play, Square, RefreshCw, Brain, Activity, DollarSign, AlertTriangle, Loader2, MessageSquareText, LineChart, Pause, Trash2, TrendingUp } from "lucide-react";
 
 type TraderStatus = {
   running: boolean;
@@ -30,6 +30,7 @@ type TraderState = {
   last_tick_at?: string;
   tick_count?: number;
   order_count?: number;
+  exchange?: string;
   symbols?: string[];
   paper_mode?: boolean;
   risk_per_trade?: number;
@@ -55,6 +56,153 @@ type TraderTradesResponse = {
   line_count: number;
 };
 
+type TradingExchange = "kraken" | "binance";
+
+type EquityPoint = {
+  t: number;
+  total: number;
+  cash: number;
+  invested: number;
+};
+
+type SignalPoint = {
+  t: number;
+  symbol: string;
+  action: string;
+  conf: number;
+  price: number;
+};
+
+type ChartLine = { id: string; color: string; data: Array<{ t: number; y: number }> };
+
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
+
+function downsample<T>(data: T[], maxPoints: number): T[] {
+  if (maxPoints <= 0 || data.length <= maxPoints) return data;
+  const step = Math.ceil(data.length / maxPoints);
+  const out: T[] = [];
+  for (let i = 0; i < data.length; i += step) out.push(data[i]);
+  const last = data[data.length - 1];
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
+}
+
+function fmtUsd(n: number) {
+  const v = Number.isFinite(n) ? n : 0;
+  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(v) >= 1_000) return `$${(v / 1_000).toFixed(1)}k`;
+  return `$${v.toFixed(2)}`;
+}
+
+function MiniTimeSeriesChart(
+  { lines, height = 96, maxPoints = 260 }: { lines: ChartLine[]; height?: number; maxPoints?: number },
+) {
+  const decimated = useMemo(
+    () => lines.map((l) => ({ ...l, data: downsample(l.data, maxPoints) })),
+    [lines, maxPoints],
+  );
+
+  let anyPoints = 0;
+  for (const l of decimated) anyPoints += l.data.length;
+
+  if (anyPoints < 2) {
+    return (
+      <div className="h-24 flex items-center justify-center text-[11px] text-slate-500">
+        Väntar på data…
+      </div>
+    );
+  }
+
+  let tMin = Infinity;
+  let tMax = -Infinity;
+  let yMinRaw = Infinity;
+  let yMaxRaw = -Infinity;
+  for (const l of decimated) {
+    for (const p of l.data) {
+      if (p.t < tMin) tMin = p.t;
+      if (p.t > tMax) tMax = p.t;
+      if (p.y < yMinRaw) yMinRaw = p.y;
+      if (p.y > yMaxRaw) yMaxRaw = p.y;
+    }
+  }
+
+  if (!Number.isFinite(tMin) || !Number.isFinite(tMax) || !Number.isFinite(yMinRaw) || !Number.isFinite(yMaxRaw)) {
+    return (
+      <div className="h-24 flex items-center justify-center text-[11px] text-slate-500">
+        Väntar på data…
+      </div>
+    );
+  }
+
+  const pad = (yMaxRaw - yMinRaw) * 0.08;
+  const yMin = yMinRaw - pad;
+  const yMax = yMaxRaw + pad;
+
+  const toX = (t: number) => {
+    if (tMax === tMin) return 0;
+    return ((t - tMin) / (tMax - tMin)) * 100;
+  };
+  const toY = (y: number) => {
+    if (yMax === yMin) return 50;
+    const v = (y - yMin) / (yMax - yMin);
+    return 60 - v * 60;
+  };
+
+  return (
+    <div className="w-full">
+      <svg viewBox="0 0 100 60" width="100%" height={height} preserveAspectRatio="none" className="block">
+        {/* grid */}
+        {[0, 1, 2, 3].map((i) => (
+          <line key={i} x1={0} x2={100} y1={(60 / 3) * i} y2={(60 / 3) * i} stroke="rgba(148,163,184,0.12)" strokeWidth={0.6} />
+        ))}
+
+        {decimated.map((line) => {
+          const data = line.data;
+          const parts = new Array<string>(data.length);
+          for (let i = 0; i < data.length; i++) {
+            const p = data[i];
+            parts[i] = `${toX(p.t).toFixed(3)},${toY(p.y).toFixed(3)}`;
+          }
+          const pts = parts.join(" ");
+
+          return (
+            <polyline
+              key={line.id}
+              fill="none"
+              stroke={line.color}
+              strokeWidth={1.6}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              points={pts}
+              opacity={0.95}
+            />
+          );
+        })}
+      </svg>
+
+      <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
+        <span>{fmtUsd(yMinRaw)}</span>
+        <span>{fmtUsd(yMaxRaw)}</span>
+      </div>
+    </div>
+  );
+}
+
+function computeDrawdownPct(points: EquityPoint[]) {
+  let peak = -Infinity;
+  let worst = 0;
+  for (const p of points) {
+    peak = Math.max(peak, p.total);
+    if (peak > 0) {
+      const dd = ((peak - p.total) / peak) * 100;
+      worst = Math.max(worst, dd);
+    }
+  }
+  return worst;
+}
+
 const STRATEGY_REQ_PREFIX = "TRADING_STRATEGY_REQUEST:";
 const STRATEGY_REPLY_PREFIX = "TRADING_STRATEGY_REPLY:";
 
@@ -74,14 +222,58 @@ export default function TradingView() {
   const [strategyThinking, setStrategyThinking] = useState(false);
   const [strategyStream, setStrategyStream] = useState("");
 
+  const [exchange, setExchange] = useState<TradingExchange>("kraken");
   const [symbols, setSymbols] = useState("BTCUSDT,ETHUSDT");
   const [paperMode, setPaperMode] = useState(true);
   const [intervalSeconds, setIntervalSeconds] = useState(3600);
   const [riskPerTrade, setRiskPerTrade] = useState(0.02);
   const [minConfidence, setMinConfidence] = useState(0.6);
 
+  // Live charting (front-end only, no extra deps)
+  const [chartPaused, setChartPaused] = useState(false);
+  const chartPausedRef = useRef(false);
+  const [equitySeries, setEquitySeries] = useState<EquityPoint[]>([]);
+  const [signalSeriesBySymbol, setSignalSeriesBySymbol] = useState<Record<string, SignalPoint[]>>({});
+  const [priceChartSymbol, setPriceChartSymbol] = useState<string>("");
+  const lastTickCountRef = useRef<number | null>(null);
+
+  const [lastTickMs, setLastTickMs] = useState<number | null>(null);
+  const [avgTickMs, setAvgTickMs] = useState<number | null>(null);
+  const tickStartAtRef = useRef<number | null>(null);
+  const tickEmaRef = useRef<number | null>(null);
+
   const socketRef = useRef<Socket | null>(null);
   const awaitingStrategyReplyRef = useRef(false);
+
+  useEffect(() => {
+    chartPausedRef.current = chartPaused;
+  }, [chartPaused]);
+
+  const appendEquityPoint = useCallback((t: number, portfolio: any) => {
+    const total = Number(portfolio?.total_value_usd ?? portfolio?.total_value ?? 0);
+    const cash = Number(portfolio?.usdt_cash ?? portfolio?.cash ?? 0);
+    if (!Number.isFinite(total) || total <= 0) return;
+    const safeT = Number.isFinite(t) && t > 0 ? t : Date.now();
+
+    setEquitySeries((prev) => {
+      const last = prev[prev.length - 1];
+      if (last && Math.abs(last.t - safeT) < 900) return prev; // de-dupe within ~1s
+      const invested = Math.max(0, total - (Number.isFinite(cash) ? cash : 0));
+      const next = [...prev, { t: safeT, total, cash: Number.isFinite(cash) ? cash : 0, invested }];
+      return next.length > 600 ? next.slice(-600) : next;
+    });
+  }, []);
+
+  const appendSignalPoint = useCallback((p: SignalPoint) => {
+    setSignalSeriesBySymbol((prev) => {
+      const list = prev[p.symbol] || [];
+      const last = list[list.length - 1];
+      if (last && Math.abs(last.t - p.t) < 900 && Math.abs(last.price - p.price) < 1e-9 && last.action === p.action) return prev;
+      const nextList = [...list, p];
+      const capped = nextList.length > 400 ? nextList.slice(-400) : nextList;
+      return { ...prev, [p.symbol]: capped };
+    });
+  }, []);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -98,10 +290,27 @@ export default function TradingView() {
       if (stRes.ok) {
         const st = await stRes.json();
         setState(st);
+        if (typeof st?.exchange === "string") {
+          const ex = st.exchange.trim().toLowerCase();
+          if (ex === "kraken" || ex === "binance") setExchange(ex);
+        }
         if (Array.isArray(st?.symbols) && st.symbols.length > 0) setSymbols(st.symbols.join(","));
         if (typeof st?.paper_mode === "boolean") setPaperMode(st.paper_mode);
         if (typeof st?.risk_per_trade === "number") setRiskPerTrade(st.risk_per_trade);
         if (typeof st?.min_confidence === "number") setMinConfidence(st.min_confidence);
+
+        if (!chartPausedRef.current) {
+          const tickCount = typeof st?.tick_count === "number" ? st.tick_count : null;
+          if (tickCount != null && tickCount !== lastTickCountRef.current) {
+            lastTickCountRef.current = tickCount;
+            const t = st?.last_tick_at ? Date.parse(st.last_tick_at) : Date.now();
+            appendEquityPoint(t, st?.portfolio);
+          }
+        }
+
+        if (Array.isArray(st?.symbols) && st.symbols.length > 0) {
+          setPriceChartSymbol((prev) => prev || String(st.symbols[0]));
+        }
       }
       if (logRes.ok) {
         const data = await logRes.json();
@@ -129,11 +338,50 @@ export default function TradingView() {
     const socket = io(BRIDGE_URL, { transports: ["websocket", "polling"] });
     socketRef.current = socket;
     socket.on("trader_event", (ev: any) => {
+      if (!ev) return;
       setLive((prev) => {
         const base: TraderLive = prev || { active: true, events: [], last_update: Date.now(), event_count: 0 };
         const nextEvents = [...base.events, ev].slice(-50);
         return { ...base, active: true, events: nextEvents, last_update: Date.now(), event_count: base.event_count + 1 };
       });
+
+      if (chartPausedRef.current) return;
+
+      if (ev?.type === "trader_tick_done" && ev?.portfolio) {
+        const t = ev?.ts ? Date.parse(ev.ts) : Date.now();
+        appendEquityPoint(t, ev.portfolio);
+      }
+
+      if (ev?.type === "trader_tick_start") {
+        const t = ev?.ts ? Date.parse(ev.ts) : Date.now();
+        tickStartAtRef.current = Number.isFinite(t) ? t : Date.now();
+      }
+
+      if (ev?.type === "trader_tick_done") {
+        const end = ev?.ts ? Date.parse(ev.ts) : Date.now();
+        const start = tickStartAtRef.current;
+        if (start != null && Number.isFinite(end) && end >= start) {
+          const ms = end - start;
+          setLastTickMs(ms);
+          const prev = tickEmaRef.current;
+          const ema = prev == null ? ms : prev * 0.8 + ms * 0.2;
+          tickEmaRef.current = ema;
+          setAvgTickMs(ema);
+        }
+      }
+
+      if (ev?.type === "trader_signal" && ev?.signal) {
+        const sig = ev.signal;
+        const symbol = String(ev?.symbol || sig?.symbol || "").trim().toUpperCase();
+        const action = String(sig?.action || "");
+        const price = Number(sig?.price || 0);
+        const conf = Number(sig?.confidence || 0);
+        if (symbol && Number.isFinite(price) && price > 0) {
+          const t = sig?.timestamp ? Date.parse(sig.timestamp) : (ev?.ts ? Date.parse(ev.ts) : Date.now());
+          appendSignalPoint({ t, symbol, action, conf: clamp(conf, 0, 1), price });
+          setPriceChartSymbol((prev) => prev || symbol);
+        }
+      }
     });
 
     socket.on("frank_message", (msg: FrankMessage) => {
@@ -169,6 +417,24 @@ export default function TradingView() {
     return () => { socket.disconnect(); };
   }, []);
 
+  // Seed charts from the live event buffer (when (re)loading the view)
+  useEffect(() => {
+    if (!live?.events || live.events.length === 0) return;
+    setEquitySeries((prev) => {
+      if (prev.length > 0) return prev;
+      const pts: EquityPoint[] = [];
+      for (const ev of live.events) {
+        if (ev?.type !== "trader_tick_done" || !ev?.portfolio) continue;
+        const t = ev?.ts ? Date.parse(ev.ts) : Date.now();
+        const total = Number(ev?.portfolio?.total_value_usd ?? 0);
+        const cash = Number(ev?.portfolio?.usdt_cash ?? 0);
+        if (!Number.isFinite(total) || total <= 0) continue;
+        pts.push({ t, total, cash: Number.isFinite(cash) ? cash : 0, invested: Math.max(0, total - (Number.isFinite(cash) ? cash : 0)) });
+      }
+      return pts.length > 0 ? pts.slice(-600) : prev;
+    });
+  }, [live?.events]);
+
   const sendStrategyMessage = async () => {
     const text = strategyInput.trim();
     if (!text || strategyThinking) return;
@@ -201,6 +467,7 @@ export default function TradingView() {
     setError(null);
     try {
       const payload = {
+        exchange,
         symbols: symbols.split(",").map(s => s.trim()).filter(Boolean),
         paperMode,
         intervalSeconds,
@@ -246,10 +513,57 @@ export default function TradingView() {
   const usdtCash = state?.portfolio?.usdt_cash ?? 0;
   const positions = state?.portfolio?.positions ?? {};
 
+  const equityStats = useMemo(() => {
+    if (equitySeries.length < 2) return null;
+    const start = equitySeries[0].total;
+    const last = equitySeries[equitySeries.length - 1].total;
+    const pnlPct = start > 0 ? ((last - start) / start) * 100 : 0;
+    const drawdownPct = computeDrawdownPct(equitySeries);
+    return { start, last, pnlPct, drawdownPct };
+  }, [equitySeries]);
+
+  const equityLines = useMemo<ChartLine[]>(
+    () => [
+      { id: "total", color: "#34d399", data: equitySeries.map((p) => ({ t: p.t, y: p.total })) },
+      { id: "cash", color: "#60a5fa", data: equitySeries.map((p) => ({ t: p.t, y: p.cash })) },
+      { id: "inv", color: "#f59e0b", data: equitySeries.map((p) => ({ t: p.t, y: p.invested })) },
+    ],
+    [equitySeries],
+  );
+
+  const priceSeries = useMemo(() => {
+    if (!priceChartSymbol) return [];
+    return signalSeriesBySymbol[priceChartSymbol] || [];
+  }, [priceChartSymbol, signalSeriesBySymbol]);
+
+  const priceMeta = useMemo(() => {
+    if (priceSeries.length < 1) return null;
+    const last = priceSeries[priceSeries.length - 1];
+    return {
+      price: last.price,
+      action: last.action,
+      conf: last.conf,
+    };
+  }, [priceSeries]);
+
+  const priceLine = useMemo<ChartLine[]>(
+    () => [{ id: "price", color: "#e2e8f0", data: priceSeries.map((p) => ({ t: p.t, y: p.price })) }],
+    [priceSeries],
+  );
+
   const recentSignals = useMemo(() => {
     const list = state?.recent_signals || [];
     return [...list].slice(-10).reverse();
   }, [state?.recent_signals]);
+
+  const signalCount = useMemo(() => {
+    // Prefer a real counter if present in API; otherwise derive from recent signal list.
+    const anyState: any = state as any;
+    const fromState = typeof anyState?.signal_count === "number" ? anyState.signal_count : null;
+    if (fromState != null) return fromState;
+    const list = state?.recent_signals;
+    return Array.isArray(list) ? list.length : 0;
+  }, [state]);
 
   if (loading) {
     return (
@@ -265,6 +579,7 @@ export default function TradingView() {
         <div className="flex items-center gap-2">
           <Brain className="w-5 h-5 text-emerald-400" />
           <h2 className="text-sm font-semibold text-white">Trading Bot</h2>
+          <span className="text-[10px] bg-slate-800/60 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700/50">{exchange.toUpperCase()}</span>
           {running ? (
             <span className="text-[10px] bg-green-900/60 text-green-300 px-2 py-0.5 rounded-full border border-green-700/50">Kör</span>
           ) : (
@@ -312,6 +627,22 @@ export default function TradingView() {
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3 space-y-2">
         <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Konfiguration</div>
         <div className="grid grid-cols-2 gap-2">
+          <label className="text-[11px] text-slate-300">
+            Exchange
+            <select
+              value={exchange}
+              onChange={(e) => {
+                const ex = e.target.value as TradingExchange;
+                setExchange(ex);
+                // Friendly defaults (users can still edit symbols freely)
+                if (ex === "kraken" && symbols.trim() === "BTCUSDT,ETHUSDT") setSymbols("XBTUSDT,ETHUSDT");
+              }}
+              className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
+            >
+              <option value="kraken">Kraken</option>
+              <option value="binance">Binance</option>
+            </select>
+          </label>
           <label className="text-[11px] text-slate-300">
             Symbols
             <input
@@ -371,16 +702,157 @@ export default function TradingView() {
         </div>
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
           <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
-            <Activity className="w-3.5 h-3.5" /> Events
+            <TrendingUp className="w-3.5 h-3.5" /> Signals
           </div>
-          <div className="text-lg font-bold text-white">{live?.event_count ?? 0}</div>
-          <div className="text-[10px] text-slate-500">Live: {live?.active ? "yes" : "no"}</div>
+          <div className="text-lg font-bold text-white">{signalCount}</div>
+          <div className="text-[10px] text-slate-500">
+            Tick: {state?.tick_count ?? 0}
+            {lastTickMs != null && (
+              <span className="ml-2">
+                {Math.round(lastTickMs)}ms
+                {avgTickMs != null ? ` (avg ${Math.round(avgTickMs)}ms)` : ""}
+              </span>
+            )}
+          </div>
         </div>
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3">
           <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Positions</div>
           <div className="text-lg font-bold text-white">{Object.keys(positions).length}</div>
           <div className="text-[10px] text-slate-500">Last tick: {state?.last_tick_at || "—"}</div>
         </div>
+      </div>
+
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+            <LineChart className="w-3.5 h-3.5" /> Live charts
+            {lastTickMs != null && (
+              <span className="text-[10px] text-slate-500 font-mono">· {Math.round(lastTickMs)}ms</span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setChartPaused((v) => !v)}
+              className={
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border " +
+                (chartPaused
+                  ? "bg-amber-950/30 text-amber-200 border-amber-700/40 hover:bg-amber-950/50"
+                  : "bg-slate-900/40 text-slate-200 border-slate-700/50 hover:bg-slate-900/60")
+              }
+              title={chartPaused ? "Återuppta live-uppdatering" : "Pausa live-uppdatering"}
+            >
+              <Pause className="w-3.5 h-3.5" />
+              {chartPaused ? "Pausad" : "Pausa"}
+            </button>
+            <button
+              onClick={() => {
+                setEquitySeries([]);
+                setSignalSeriesBySymbol({});
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-slate-900/40 text-slate-200 border border-slate-700/50 hover:bg-slate-900/60"
+              title="Rensa chart-historik (endast UI)"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Rensa
+            </button>
+          </div>
+        </div>
+
+        {equityStats && (
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <span className="text-slate-500">Start:</span>
+            <span className="text-slate-200 font-mono">{fmtUsd(equityStats.start)}</span>
+            <span className="text-slate-500">Nu:</span>
+            <span className="text-slate-200 font-mono">{fmtUsd(equityStats.last)}</span>
+            <span className="text-slate-500">PnL:</span>
+            <span className={equityStats.pnlPct >= 0 ? "text-emerald-200 font-mono" : "text-red-200 font-mono"}>
+              {equityStats.pnlPct >= 0 ? "+" : ""}{equityStats.pnlPct.toFixed(2)}%
+            </span>
+            <span className="text-slate-500">Max DD:</span>
+            <span className="text-amber-200 font-mono">{equityStats.drawdownPct.toFixed(2)}%</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-2">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Equity</div>
+              <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" /> total
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-sky-400" /> cash
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" /> invested
+                </span>
+              </div>
+            </div>
+            <MiniTimeSeriesChart
+              lines={equityLines}
+              maxPoints={240}
+            />
+          </div>
+
+          <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Price</div>
+                {priceMeta && (
+                  <div className="text-[10px] text-slate-500 font-mono">
+                    {fmtUsd(priceMeta.price)}
+                    {priceMeta.action ? ` · ${priceMeta.action}` : ""}
+                    {Number.isFinite(priceMeta.conf) ? ` ${(priceMeta.conf * 100).toFixed(0)}%` : ""}
+                  </div>
+                )}
+              </div>
+              <select
+                value={priceChartSymbol}
+                onChange={(e) => setPriceChartSymbol(e.target.value)}
+                aria-label="Price chart symbol"
+                title="Välj symbol för prisgraf"
+                className="bg-slate-950/40 border border-slate-700/50 rounded-lg px-2 py-1 text-[11px] text-white"
+              >
+                {(Object.keys(signalSeriesBySymbol).length > 0
+                  ? Object.keys(signalSeriesBySymbol)
+                  : (state?.symbols || []).map((s) => String(s)))
+                  .filter(Boolean)
+                  .map((sym) => (
+                    <option key={sym} value={sym}>{sym}</option>
+                  ))}
+              </select>
+            </div>
+            <MiniTimeSeriesChart
+              lines={priceLine}
+              maxPoints={240}
+            />
+            <div className="text-[10px] text-slate-500 mt-1">
+              Källa: live <span className="font-mono">trader_signal</span> events (senaste {priceSeries.length}).
+            </div>
+          </div>
+        </div>
+
+        {Object.keys(positions).length > 0 && (
+          <div className="bg-slate-900/40 border border-slate-700/40 rounded-xl p-2">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Exposure</div>
+            <div className="space-y-1">
+              {Object.entries(positions)
+                .map(([sym, p]) => ({ sym, val: Number(p?.value_usd ?? 0), pct: totalUsd > 0 ? (Number(p?.value_usd ?? 0) / totalUsd) * 100 : 0 }))
+                .sort((a, b) => b.val - a.val)
+                .slice(0, 8)
+                .map((row) => (
+                  <div key={row.sym} className="grid grid-cols-[72px_1fr_52px] gap-2 items-center text-[11px]">
+                    <div className="text-slate-300 font-medium truncate">{row.sym}</div>
+                    <svg viewBox="0 0 100 6" width="100%" height="8" preserveAspectRatio="none" className="block">
+                      <rect x="0" y="0" width="100" height="6" rx="3" fill="rgba(30,41,59,1)" />
+                      <rect x="0" y="0" width={clamp(row.pct, 0, 100)} height="6" rx="3" fill="rgba(16,185,129,0.7)" />
+                    </svg>
+                    <div className="text-slate-400 font-mono text-right">{row.pct.toFixed(1)}%</div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {Object.keys(positions).length > 0 && (

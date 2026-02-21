@@ -548,6 +548,26 @@ npm run agent -- --bridge http://<bridge-ip>:3031 --name "Gaming PC"
 | `RATE_LIMIT_MAX` | `30` | Max requests per minute |
 | `ALLOWED_ORIGINS` | `*` | CORS allowed origins |
 
+### Trading Bot (Frankenstein)
+
+Trading bot settings are read from environment variables and from `frankenstein-ai/.env.local` (see `frankenstein-ai/.env.local.example`).
+
+| Variable | Default | Description |
+|---|---|---|
+| `TRADING_EXCHANGE` | `binance` | Exchange backend: `binance` or `kraken` |
+| `TRADING_PAPER_MODE` | `true` | Paper trading (simulated orders) |
+| `TRADING_ALLOW_LIVE` | `false` | Safety gate for real orders |
+| `TRADING_SYMBOLS` | depends | Comma-separated symbols/pairs. Kraken often uses `XBT` for Bitcoin (e.g. `XBTUSDT`) |
+| `TRADING_INTERVAL_SECONDS` | `3600` | Tick interval in seconds |
+| `TRADING_RISK_PER_TRADE` | `0.02` | Risk allocation (fraction of portfolio) |
+| `TRADING_MIN_CONFIDENCE` | `0.60` | Minimum confidence to place orders |
+| `KRAKEN_API_KEY` | — | Kraken API key (only required for live trading) |
+| `KRAKEN_API_SECRET` | — | Kraken API secret (only required for live trading) |
+| `KRAKEN_BASE_URL` | `https://api.kraken.com` | Kraken REST API base URL |
+| `BINANCE_API_KEY` | — | Binance API key (only required for live trading) |
+| `BINANCE_API_SECRET` | — | Binance API secret (only required for live trading) |
+| `BINANCE_BASE_URL` | `https://api.binance.com` | Binance REST API base URL |
+
 ### Runtime quality
 
 - Bridge performs startup env validation (fails fast on invalid/incomplete runtime config).
