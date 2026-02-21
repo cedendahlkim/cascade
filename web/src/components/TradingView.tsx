@@ -93,6 +93,7 @@ function toCandles(points: Array<{ t: number; price: number }>, bucketMs: number
 
   const out: Candle[] = [];
   let cur: Candle | null = null;
+  let lastClose: number | null = null;
 
   for (const p of points) {
     const t = Number.isFinite(p.t) ? p.t : Date.now();
@@ -102,13 +103,17 @@ function toCandles(points: Array<{ t: number; price: number }>, bucketMs: number
     const bucket = Math.floor(t / bucketMs) * bucketMs;
 
     if (!cur || cur.t !== bucket) {
-      cur = { t: bucket, open: price, high: price, low: price, close: price };
+      // If we only get ~1 price tick per bucket, using prev close as open makes candles show movement.
+      const open: number = lastClose != null && Number.isFinite(lastClose) ? lastClose : price;
+      cur = { t: bucket, open, high: Math.max(open, price), low: Math.min(open, price), close: price };
       out.push(cur);
     } else {
       cur.high = Math.max(cur.high, price);
       cur.low = Math.min(cur.low, price);
       cur.close = price;
     }
+
+    lastClose = cur.close;
   }
 
   return out;
@@ -410,6 +415,8 @@ export default function TradingView() {
   const tickStartAtRef = useRef<number | null>(null);
   const tickEmaRef = useRef<number | null>(null);
 
+  const [socketEpoch, setSocketEpoch] = useState(0);
+
   const socketRef = useRef<Socket | null>(null);
   const awaitingStrategyReplyRef = useRef(false);
 
@@ -505,6 +512,11 @@ export default function TradingView() {
   useEffect(() => {
     const socket = io(BRIDGE_URL, { transports: ["websocket", "polling"] });
     socketRef.current = socket;
+
+    socket.on("connect", () => {
+      setSocketEpoch((n) => n + 1);
+    });
+
     socket.on("trader_event", (ev: any) => {
       if (!ev) return;
       setLive((prev) => {
@@ -552,6 +564,25 @@ export default function TradingView() {
       }
     });
 
+    socket.on("market_prices", (data: any) => {
+      if (!data || chartPausedRef.current) return;
+      const exchange = String(data?.exchange || "").toLowerCase();
+      if (exchange && exchange !== "kraken" && exchange !== "binance") return;
+
+      const t = data?.ts ? Date.parse(String(data.ts)) : Date.now();
+      const safeT = Number.isFinite(t) ? t : Date.now();
+      const prices = data?.prices && typeof data.prices === "object" ? data.prices : null;
+      if (!prices) return;
+
+      for (const [sym, v] of Object.entries(prices)) {
+        const symbol = String(sym || "").trim().toUpperCase();
+        const price = Number(v);
+        if (!symbol || !Number.isFinite(price) || price <= 0) continue;
+        appendSignalPoint({ t: safeT, symbol, action: "", conf: 0, price });
+        setPriceChartSymbol((prev) => prev || symbol);
+      }
+    });
+
     socket.on("frank_message", (msg: FrankMessage) => {
       // Collect only messages explicitly tagged for strategy chat.
       const text = msg?.content || "";
@@ -584,6 +615,34 @@ export default function TradingView() {
 
     return () => { socket.disconnect(); };
   }, []);
+
+  const marketPollMs = useMemo(() => {
+    if (!Number.isFinite(priceTimeframeMs)) return 1000;
+    if (priceTimeframeMs <= 15_000) return 1000;
+    if (priceTimeframeMs <= 60_000) return 2000;
+    return 5000;
+  }, [priceTimeframeMs]);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    const symList = symbols
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean)
+      .slice(0, 12);
+
+    socket.emit("market_subscribe", {
+      exchange,
+      symbols: symList,
+      intervalMs: marketPollMs,
+    });
+
+    return () => {
+      socket.emit("market_unsubscribe");
+    };
+  }, [socketEpoch, exchange, symbols, marketPollMs]);
 
   // Seed charts from the live event buffer (when (re)loading the view)
   useEffect(() => {
@@ -1058,7 +1117,7 @@ export default function TradingView() {
               />
             )}
             <div className="text-[10px] text-slate-500 mt-1">
-              Källa: live <span className="font-mono">trader_signal</span> events (senaste {priceSeries.length}).
+              Källa: <span className="font-mono">market_prices</span> via bridge (senaste {priceSeries.length}).
             </div>
           </div>
         </div>

@@ -1595,6 +1595,167 @@ const traderLiveState: {
   last_update: number;
 } = { active: false, events: [], last_update: 0 };
 
+// --- Market data (public ticker) streaming ---
+type MarketExchange = "kraken" | "binance";
+type MarketSubscription = {
+  exchange: MarketExchange;
+  symbols: string[];
+  intervalMs: number;
+};
+
+const marketSubs = new Map<string, MarketSubscription>(); // socket.id -> subscription
+let marketTimer: NodeJS.Timeout | null = null;
+let marketTimerMs = 0;
+let marketInFlight = false;
+
+function normalizeSymbol(sym: string) {
+  return String(sym || "").trim().toUpperCase().replace(/[\s\-_/]/g, "");
+}
+
+function toKrakenPair(sym: string) {
+  const s = normalizeSymbol(sym);
+  // Kraken commonly uses XBT instead of BTC.
+  if (s.startsWith("BTC")) return `XBT${s.slice(3)}`;
+  return s;
+}
+
+async function fetchBinancePrices(symbols: string[]): Promise<Record<string, number>> {
+  const uniq = Array.from(new Set(symbols.map(normalizeSymbol))).filter(Boolean);
+  if (uniq.length === 0) return {};
+
+  const base = process.env.BINANCE_BASE_URL || "https://api.binance.com";
+  const url = uniq.length === 1
+    ? `${base}/api/v3/ticker/price?symbol=${encodeURIComponent(uniq[0])}`
+    : `${base}/api/v3/ticker/price?symbols=${encodeURIComponent(JSON.stringify(uniq))}`;
+
+  const res = await fetch(url, { method: "GET", signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) return {};
+  const data: any = await res.json().catch(() => null);
+
+  const out: Record<string, number> = {};
+  const list = Array.isArray(data) ? data : (data ? [data] : []);
+  for (const row of list) {
+    const sym = normalizeSymbol(row?.symbol);
+    const price = Number(row?.price);
+    if (!sym || !Number.isFinite(price) || price <= 0) continue;
+    out[sym] = price;
+  }
+  return out;
+}
+
+async function fetchKrakenPrices(symbols: string[]): Promise<Record<string, number>> {
+  const uniqSymbols = Array.from(new Set(symbols.map(normalizeSymbol))).filter(Boolean);
+  if (uniqSymbols.length === 0) return {};
+
+  const pairMap = new Map<string, string>(); // requestedPair -> originalSymbol
+  const pairs = Array.from(new Set(uniqSymbols.map((s) => {
+    const p = toKrakenPair(s);
+    if (!pairMap.has(p)) pairMap.set(p, s);
+    return p;
+  })));
+
+  const base = process.env.KRAKEN_BASE_URL || "https://api.kraken.com";
+  const url = `${base}/0/public/Ticker?pair=${encodeURIComponent(pairs.join(","))}`;
+  const res = await fetch(url, { method: "GET", signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) return {};
+
+  const data: any = await res.json().catch(() => null);
+  const result = data?.result && typeof data.result === "object" ? data.result : null;
+  if (!result) return {};
+
+  const out: Record<string, number> = {};
+  for (const [key, val] of Object.entries(result)) {
+    const k = normalizeSymbol(key);
+    // Prefer close (last trade) price.
+    const c0 = (val as any)?.c?.[0];
+    const a0 = (val as any)?.a?.[0];
+    const price = Number(c0 ?? a0);
+    if (!Number.isFinite(price) || price <= 0) continue;
+
+    const orig = pairMap.get(k) || pairMap.get(k.replace(/^XBT/, "BTC"));
+    if (orig) out[orig] = price;
+  }
+
+  // Fallback: if Kraken returned keys exactly as requested, but we didn't match due to formatting
+  for (const [pair, orig] of pairMap.entries()) {
+    if (out[orig] != null) continue;
+    const hit = (result as any)[pair] || (result as any)[pair.toUpperCase()] || null;
+    const price = Number(hit?.c?.[0] ?? hit?.a?.[0]);
+    if (!Number.isFinite(price) || price <= 0) continue;
+    out[orig] = price;
+  }
+
+  return out;
+}
+
+function ensureMarketTimer() {
+  const subs = Array.from(marketSubs.values());
+  const desired = subs.length > 0
+    ? Math.max(500, Math.min(...subs.map((s) => (Number.isFinite(s.intervalMs) ? s.intervalMs : 1000))))
+    : 0;
+
+  if (!desired) {
+    if (marketTimer) clearInterval(marketTimer);
+    marketTimer = null;
+    marketTimerMs = 0;
+    return;
+  }
+
+  if (marketTimer && marketTimerMs === desired) return;
+  if (marketTimer) clearInterval(marketTimer);
+  marketTimerMs = desired;
+
+  marketTimer = setInterval(() => {
+    if (marketInFlight) return;
+    marketInFlight = true;
+
+    const byExchange: Record<MarketExchange, Set<string>> = {
+      kraken: new Set<string>(),
+      binance: new Set<string>(),
+    };
+    for (const sub of marketSubs.values()) {
+      const ex: MarketExchange = sub.exchange;
+      for (const sym of sub.symbols) byExchange[ex].add(normalizeSymbol(sym));
+    }
+
+    const ts = new Date().toISOString();
+
+    (async () => {
+      const krakenSyms = Array.from(byExchange.kraken);
+      const binanceSyms = Array.from(byExchange.binance);
+
+      const [krakenPrices, binancePrices] = await Promise.all([
+        krakenSyms.length > 0 ? fetchKrakenPrices(krakenSyms) : Promise.resolve({}),
+        binanceSyms.length > 0 ? fetchBinancePrices(binanceSyms) : Promise.resolve({}),
+      ]);
+
+      const sendToSocket = (socketId: string, exchange: MarketExchange, all: Record<string, number>) => {
+        const sub = marketSubs.get(socketId);
+        if (!sub || sub.exchange !== exchange) return;
+
+        const prices: Record<string, number> = {};
+        for (const sym of sub.symbols) {
+          const s = normalizeSymbol(sym);
+          const p = all[s];
+          if (!Number.isFinite(p) || p <= 0) continue;
+          prices[s] = p;
+        }
+        if (Object.keys(prices).length === 0) return;
+        io.to(socketId).emit("market_prices", { exchange, ts, prices });
+      };
+
+      for (const socketId of marketSubs.keys()) {
+        sendToSocket(socketId, "kraken", krakenPrices);
+        sendToSocket(socketId, "binance", binancePrices);
+      }
+    })().catch((err) => {
+      console.error("[market] ticker fetch failed:", err instanceof Error ? err.message : String(err));
+    }).finally(() => {
+      marketInFlight = false;
+    });
+  }, desired);
+}
+
 function tailLines(path: string, maxLines: number): string[] {
   try {
     if (!existsSync(path)) return [];
@@ -3557,6 +3718,29 @@ io.on("connection", (socket) => {
   socket.emit("computers", listComputers());
   socket.emit("schedules", listSchedules());
 
+  // Market data: clients subscribe to ticker stream for red/green candles.
+  socket.on("market_subscribe", (data: { exchange?: string; symbols?: any; intervalMs?: any }) => {
+    try {
+      const ex = String(data?.exchange || "").trim().toLowerCase();
+      const exchange: MarketExchange = ex === "binance" ? "binance" : "kraken";
+      const rawSymbols = Array.isArray(data?.symbols) ? data.symbols : [];
+      const symbols = rawSymbols.map((s: any) => normalizeSymbol(String(s))).filter(Boolean).slice(0, 20);
+      const intervalMs = Number(data?.intervalMs);
+      const safeIntervalMs = Number.isFinite(intervalMs) ? Math.max(500, Math.min(60_000, intervalMs)) : 1000;
+
+      marketSubs.set(socket.id, { exchange, symbols, intervalMs: safeIntervalMs });
+      ensureMarketTimer();
+      socket.emit("market_subscribed", { ok: true, exchange, symbols, intervalMs: safeIntervalMs });
+    } catch (err) {
+      socket.emit("market_subscribed", { ok: false, error: String(err) });
+    }
+  });
+
+  socket.on("market_unsubscribe", () => {
+    marketSubs.delete(socket.id);
+    ensureMarketTimer();
+  });
+
   // Client sends a chat message
   socket.on("message", (data: { content: string }) => {
     const msg: Message = {
@@ -3881,6 +4065,10 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     connectedClients--;
+
+    // Clean up market subscriptions for this socket.
+    marketSubs.delete(socket.id);
+    ensureMarketTimer();
 
     // Check if this was a computer agent
     const comp = findComputerBySocket(socket.id);
