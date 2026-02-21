@@ -14,7 +14,7 @@ html, body, #root {
 
 /* === Trading UI surface === */
 .trading-surface {
-  /* Deep “terminal” gradient + subtle cyan/emerald aura */
+  /* Deep terminal gradient + subtle cyan/emerald aura */
   background:
     radial-gradient(900px circle at 15% 10%, rgba(34, 211, 238, 0.12), transparent 52%),
     radial-gradient(900px circle at 85% 15%, rgba(16, 185, 129, 0.10), transparent 55%),
