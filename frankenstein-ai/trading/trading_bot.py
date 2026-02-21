@@ -787,15 +787,42 @@ class FrankensteinTradingAgent:
         symbols: list[str],
         risk_per_trade: float,
         min_confidence: float,
+        kline_interval: str = "1h",
+        max_positions: int = 2,
+        cooldown_seconds: int = 0,
+        take_profit_pct: float = 0.0,
+        stop_loss_pct: float = 0.0,
+        trailing_stop_pct: float = 0.0,
+        aggression: float = 0.5,
     ) -> None:
         self.exchange = exchange
         self.symbols = symbols
         self.risk_per_trade = float(risk_per_trade)
         self.min_confidence = float(min_confidence)
 
+        self.kline_interval = (kline_interval or "1h").strip()
+        self.max_positions = max(1, int(max_positions))
+        self.cooldown_seconds = max(0, int(cooldown_seconds))
+        self.take_profit_pct = max(0.0, float(take_profit_pct))
+        self.stop_loss_pct = max(0.0, float(stop_loss_pct))
+        self.trailing_stop_pct = max(0.0, float(trailing_stop_pct))
+        self.aggression = float(np.clip(float(aggression), 0.0, 1.0))
+
         self.hdc = HDCMarketEncoder()
         self.aif = ActiveInferenceDecider()
         self.memory = EbbinghausTradeMemory()
+
+        # Per-symbol runtime guards
+        self._last_trade_epoch: dict[str, float] = {}
+        self._trail_peak: dict[str, float] = {}
+
+        # Aggression dials (0..1). Higher aggression => easier to enter trades.
+        # We set instance attributes that override the class-level defaults.
+        trend_span = 0.08 - (self.aggression * 0.04)  # 0.08 -> 0.04
+        self.aif.TREND_BULL_EDGE = 0.5 + trend_span * 0.5
+        self.aif.TREND_BEAR_EDGE = 0.5 - trend_span * 0.5
+        self.aif.TRADE_STATE_PROB_EDGE = 0.56 - (self.aggression * 0.08)  # 0.56 -> 0.48
+        self._pattern_sim_edge = 0.62 - (self.aggression * 0.06)  # 0.62 -> 0.56
 
         self.recent_signals: deque[TradeSignal] = deque(maxlen=50)
 
@@ -902,18 +929,61 @@ class FrankensteinTradingAgent:
         return round(float(quantity), 6)
 
     def analyze(self, symbol: str) -> TradeSignal:
-        klines = self.exchange.get_klines(symbol, "1h", 100)
+        klines = self.exchange.get_klines(symbol, self.kline_interval, 100)
         if not klines:
             return TradeSignal(symbol=symbol, action="HOLD", confidence=0.0, quantity=0.0, price=0.0, reason="No market data")
 
         features = compute_features(klines)
         price = float(klines[-1][4])
 
+        portfolio = self.exchange.get_portfolio_value()
+        positions = portfolio.get("positions") if isinstance(portfolio, dict) else None
+        pos = positions.get(symbol) if isinstance(positions, dict) else None
+        held_qty = float(pos.get("quantity", 0.0)) if isinstance(pos, dict) else 0.0
+        avg_entry: Optional[float] = float(pos.get("avg_entry")) if isinstance(pos, dict) and pos.get("avg_entry") is not None else None
+
         hv = self.hdc.encode(features)
         pattern, pattern_sim = self.hdc.best_match(hv)
 
         posterior = self.aif.infer_state(features)
         action_raw, conf_raw = self.aif.decide(posterior, self.risk_per_trade)
+
+        now_epoch = time.time()
+        cooldown_remaining = 0.0
+        if self.cooldown_seconds > 0:
+            last_trade = float(self._last_trade_epoch.get(symbol, 0.0) or 0.0)
+            cooldown_remaining = max(0.0, (last_trade + float(self.cooldown_seconds)) - now_epoch)
+
+        open_positions = 0
+        if isinstance(positions, dict):
+            for p in positions.values():
+                try:
+                    if float(p.get("quantity", 0.0)) > 0:
+                        open_positions += 1
+                except Exception:
+                    continue
+
+        # --- Exit rules (TP/SL/trailing) ---
+        exit_override: Optional[str] = None
+        if held_qty > 0 and avg_entry is not None and avg_entry > 0:
+            pnl_pct = ((float(price) - float(avg_entry)) / (float(avg_entry) + 1e-12)) * 100.0
+            # Track peak for trailing stop
+            peak = float(self._trail_peak.get(symbol, float(avg_entry)))
+            if float(price) > peak:
+                peak = float(price)
+                self._trail_peak[symbol] = peak
+
+            if self.take_profit_pct > 0 and pnl_pct >= self.take_profit_pct:
+                action_raw, conf_raw = "SELL", max(conf_raw, 0.85)
+                exit_override = "take_profit"
+            elif self.stop_loss_pct > 0 and pnl_pct <= -self.stop_loss_pct:
+                action_raw, conf_raw = "SELL", max(conf_raw, 0.92)
+                exit_override = "stop_loss"
+            elif self.trailing_stop_pct > 0:
+                stop_price = peak * (1.0 - (self.trailing_stop_pct / 100.0))
+                if float(price) <= stop_price:
+                    action_raw, conf_raw = "SELL", max(conf_raw, 0.88)
+                    exit_override = "trailing_stop"
 
         # If AIF is indecisive (HOLD), allow strong HDC pattern hits to propose a direction.
         # This is deliberately conservative: requires a decent pattern similarity AND that
@@ -924,11 +994,11 @@ class FrankensteinTradingAgent:
         if action_raw == "HOLD":
             bull_p = float(posterior.get("bull", 0.0))
             bear_p = float(posterior.get("bear", 0.0))
-            if pattern == "bull_breakout" and pattern_sim >= 0.62 and bull_p >= (bear_p - 0.05):
+            if pattern == "bull_breakout" and pattern_sim >= self._pattern_sim_edge and bull_p >= (bear_p - 0.05):
                 action_candidate = "BUY"
                 conf_candidate = max(conf_candidate, 0.35 + 0.65 * float(pattern_sim))
                 pattern_override = "bull_breakout"
-            elif pattern == "bear_breakdown" and pattern_sim >= 0.62 and bear_p >= (bull_p - 0.05):
+            elif pattern == "bear_breakdown" and pattern_sim >= self._pattern_sim_edge and bear_p >= (bull_p - 0.05):
                 action_candidate = "SELL"
                 conf_candidate = max(conf_candidate, 0.35 + 0.65 * float(pattern_sim))
                 pattern_override = "bear_breakdown"
@@ -944,10 +1014,15 @@ class FrankensteinTradingAgent:
             action_final = "HOLD"
             blocked_by_confidence = True
 
-        portfolio = self.exchange.get_portfolio_value()
-        positions = portfolio.get("positions") if isinstance(portfolio, dict) else None
-        pos = positions.get(symbol) if isinstance(positions, dict) else None
-        held_qty = float(pos.get("quantity", 0.0)) if isinstance(pos, dict) else 0.0
+        blocked_by_cooldown = False
+        if action_final in ("BUY", "SELL") and cooldown_remaining > 0:
+            action_final = "HOLD"
+            blocked_by_cooldown = True
+
+        blocked_by_max_positions = False
+        if action_final == "BUY" and open_positions >= self.max_positions:
+            action_final = "HOLD"
+            blocked_by_max_positions = True
 
         blocked_by_position = False
         if action_final == "BUY" and held_qty > 0:
@@ -968,15 +1043,26 @@ class FrankensteinTradingAgent:
             "action_raw": action_raw,
             "action_candidate": action_candidate,
             "pattern_override": pattern_override,
+            "exit_override": exit_override,
             "confidence_raw": conf_raw,
             "confidence_candidate": conf_candidate,
             "confidence_blended": blended,
             "success_rate": success_rate,
             "min_confidence": self.min_confidence,
             "risk_per_trade": self.risk_per_trade,
+            "kline_interval": self.kline_interval,
+            "max_positions": self.max_positions,
+            "cooldown_seconds": self.cooldown_seconds,
+            "cooldown_remaining_seconds": round(float(cooldown_remaining), 3),
+            "take_profit_pct": self.take_profit_pct,
+            "stop_loss_pct": self.stop_loss_pct,
+            "trailing_stop_pct": self.trailing_stop_pct,
+            "aggression": self.aggression,
             "portfolio_total_value_usd": total_value,
             "held_qty": held_qty,
             "blocked_by_confidence": blocked_by_confidence,
+            "blocked_by_cooldown": blocked_by_cooldown,
+            "blocked_by_max_positions": blocked_by_max_positions,
             "blocked_by_position": blocked_by_position,
             "position_size_usd": position_size_usd,
         }
@@ -1027,6 +1113,18 @@ class FrankensteinTradingAgent:
                     self.order_count += 1
                     _send_bridge_event({"type": "trader_order", "symbol": symbol, "order": order, "ts": _utc_now_iso()})
 
+                    # Cooldown + trailing bookkeeping (only when an order actually fills)
+                    try:
+                        if str(order.get("status", "")).startswith("FILLED"):
+                            self._last_trade_epoch[symbol] = time.time()
+                            side = str(order.get("side") or order.get("type") or "").upper()
+                            if side == "BUY":
+                                self._trail_peak[symbol] = float(sig.price)
+                            elif side == "SELL":
+                                self._trail_peak.pop(symbol, None)
+                    except Exception:
+                        pass
+
                     # Update memory outcome for closed positions (paper mode SELL)
                     try:
                         if order.get("status") == "FILLED" and order.get("side") == "SELL" and order.get("realized_pct") is not None:
@@ -1056,6 +1154,13 @@ class FrankensteinTradingAgent:
             "paper_mode": self.exchange.paper_mode,
             "risk_per_trade": self.risk_per_trade,
             "min_confidence": self.min_confidence,
+            "kline_interval": self.kline_interval,
+            "max_positions": self.max_positions,
+            "cooldown_seconds": self.cooldown_seconds,
+            "take_profit_pct": self.take_profit_pct,
+            "stop_loss_pct": self.stop_loss_pct,
+            "trailing_stop_pct": self.trailing_stop_pct,
+            "aggression": self.aggression,
             "portfolio": portfolio,
             "recent_signals": [asdict(s) for s in list(self.recent_signals)[-20:]],
             "memory": self.memory.stats(),
@@ -1109,6 +1214,14 @@ def main() -> int:
     risk_per_trade = float(os.environ.get("TRADING_RISK_PER_TRADE", "0.02"))
     min_conf = float(os.environ.get("TRADING_MIN_CONFIDENCE", "0.60"))
 
+    kline_interval = (os.environ.get("TRADING_KLINE_INTERVAL") or "1h").strip()
+    max_positions = int(float(os.environ.get("TRADING_MAX_POSITIONS", "2")))
+    cooldown_seconds = int(float(os.environ.get("TRADING_COOLDOWN_SECONDS", "0")))
+    take_profit_pct = float(os.environ.get("TRADING_TAKE_PROFIT_PCT", "0"))
+    stop_loss_pct = float(os.environ.get("TRADING_STOP_LOSS_PCT", "0"))
+    trailing_stop_pct = float(os.environ.get("TRADING_TRAILING_STOP_PCT", "0"))
+    aggression = float(os.environ.get("TRADING_AGGRESSION", "0.5"))
+
     if exchange_name == "kraken":
         base_url = os.environ.get("KRAKEN_BASE_URL") or "https://api.kraken.com"
         api_key = os.environ.get("KRAKEN_API_KEY", "")
@@ -1149,7 +1262,19 @@ def main() -> int:
             base_url=base_url,
             allow_live=allow_live,
         )
-    agent = FrankensteinTradingAgent(exchange, symbols, risk_per_trade, min_conf)
+    agent = FrankensteinTradingAgent(
+        exchange,
+        symbols,
+        risk_per_trade,
+        min_conf,
+        kline_interval=kline_interval,
+        max_positions=max_positions,
+        cooldown_seconds=cooldown_seconds,
+        take_profit_pct=take_profit_pct,
+        stop_loss_pct=stop_loss_pct,
+        trailing_stop_pct=trailing_stop_pct,
+        aggression=aggression,
+    )
 
     signal.signal(signal.SIGINT, _handle_shutdown)
     signal.signal(signal.SIGTERM, _handle_shutdown)

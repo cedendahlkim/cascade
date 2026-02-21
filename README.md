@@ -559,8 +559,15 @@ Trading bot settings are read from environment variables and from `frankenstein-
 | `TRADING_ALLOW_LIVE` | `false` | Safety gate for real orders |
 | `TRADING_SYMBOLS` | depends | Comma-separated symbols/pairs. Kraken often uses `XBT` for Bitcoin (e.g. `XBTUSDT`) |
 | `TRADING_INTERVAL_SECONDS` | `3600` | Tick interval in seconds |
-| `TRADING_RISK_PER_TRADE` | `0.02` | Risk allocation (fraction of portfolio) |
+| `TRADING_RISK_PER_TRADE` | `0.02` | Risk allocation (fraction of portfolio when <= 1.0, otherwise treated as USD) |
 | `TRADING_MIN_CONFIDENCE` | `0.60` | Minimum confidence to place orders |
+| `TRADING_KLINE_INTERVAL` | `1h` | Market data timeframe (e.g. `1m`, `5m`, `15m`, `1h`, `4h`, `1d`) |
+| `TRADING_MAX_POSITIONS` | `2` | Max concurrent open positions (prevents overtrading across many coins) |
+| `TRADING_COOLDOWN_SECONDS` | `0` | Cooldown per symbol after a filled order (seconds) |
+| `TRADING_TAKE_PROFIT_PCT` | `0` | Take profit threshold (percent) for open positions |
+| `TRADING_STOP_LOSS_PCT` | `0` | Stop loss threshold (percent) for open positions |
+| `TRADING_TRAILING_STOP_PCT` | `0` | Trailing stop (percent). Uses peak price since entry |
+| `TRADING_AGGRESSION` | `0.5` | 0..1 entry aggressiveness (0 = chill, 1 = degenerate) |
 | `KRAKEN_API_KEY` | — | Kraken API key (only required for live trading) |
 | `KRAKEN_API_SECRET` | — | Kraken API secret (only required for live trading) |
 | `KRAKEN_BASE_URL` | `https://api.kraken.com` | Kraken REST API base URL |

@@ -35,6 +35,13 @@ type TraderState = {
   paper_mode?: boolean;
   risk_per_trade?: number;
   min_confidence?: number;
+  kline_interval?: string;
+  max_positions?: number;
+  cooldown_seconds?: number;
+  take_profit_pct?: number;
+  stop_loss_pct?: number;
+  trailing_stop_pct?: number;
+  aggression?: number;
   portfolio?: {
     usdt_cash: number;
     positions: Record<string, {
@@ -57,6 +64,13 @@ type TraderTradesResponse = {
 };
 
 type TradingExchange = "kraken" | "binance";
+
+type TraderSymbolsResponse = {
+  exchange: TradingExchange;
+  assets: string[];
+  symbols: string[];
+  max: number;
+};
 
 type PriceChartMode = "candles" | "line" | "area";
 type PriceValueMode = "price" | "pct";
@@ -481,6 +495,18 @@ export default function TradingView() {
   const [riskPerTrade, setRiskPerTrade] = useState(0.02);
   const [minConfidence, setMinConfidence] = useState(0.6);
 
+  const [klineInterval, setKlineInterval] = useState("1h");
+  const [maxPositions, setMaxPositions] = useState(2);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [takeProfitPct, setTakeProfitPct] = useState(0);
+  const [stopLossPct, setStopLossPct] = useState(0);
+  const [trailingStopPct, setTrailingStopPct] = useState(0);
+  const [aggression, setAggression] = useState(0.5);
+
+  const [symbolUniverse, setSymbolUniverse] = useState<string[]>([]);
+  const [symbolQuery, setSymbolQuery] = useState("");
+  const [symbolUniverseError, setSymbolUniverseError] = useState<string | null>(null);
+
   // Live charting (front-end only, no extra deps)
   const [chartPaused, setChartPaused] = useState(false);
   const chartPausedRef = useRef(false);
@@ -530,6 +556,87 @@ export default function TradingView() {
   useEffect(() => {
     configDirtyRef.current = configDirty;
   }, [configDirty]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = `${BRIDGE_URL}/api/trader/symbols?exchange=${encodeURIComponent(exchange)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const j = (await res.json()) as Partial<TraderSymbolsResponse>;
+        const list = Array.isArray(j?.symbols)
+          ? j.symbols.map((s) => String(s).trim().toUpperCase()).filter(Boolean)
+          : [];
+        if (cancelled) return;
+        setSymbolUniverse(list);
+        setSymbolUniverseError(null);
+      } catch (e) {
+        if (cancelled) return;
+        setSymbolUniverse([]);
+        setSymbolUniverseError(String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [exchange]);
+
+  const selectedSymbols = useMemo(() => {
+    return symbols
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+  }, [symbols]);
+
+  const filteredUniverse = useMemo(() => {
+    const q = symbolQuery.trim().toUpperCase();
+    if (!q) return symbolUniverse;
+    return symbolUniverse.filter((s) => s.includes(q));
+  }, [symbolUniverse, symbolQuery]);
+
+  const toggleSymbol = useCallback((sym: string) => {
+    const upper = sym.trim().toUpperCase();
+    if (!upper) return;
+    setConfigDirty(true);
+    setSymbols((prev) => {
+      const list = prev
+        .split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+      const set = new Set(list);
+      if (set.has(upper)) {
+        return list.filter((s) => s !== upper).join(",");
+      }
+      return [...list, upper].slice(0, 20).join(",");
+    });
+  }, []);
+
+  const setAllTopSymbols = useCallback(() => {
+    setConfigDirty(true);
+    setSymbols(symbolUniverse.slice(0, 20).join(","));
+  }, [symbolUniverse]);
+
+  const clearSymbols = useCallback(() => {
+    setConfigDirty(true);
+    setSymbols("");
+  }, []);
+
+  const setRandomSymbols = useCallback((count: number) => {
+    const n = Math.max(1, Math.min(20, Math.floor(count)));
+    if (symbolUniverse.length === 0) return;
+    setConfigDirty(true);
+
+    // Fisher–Yates shuffle (small list => fine)
+    const arr = symbolUniverse.slice(0, 20);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+    setSymbols(arr.slice(0, n).join(","));
+  }, [symbolUniverse]);
 
   const appendEquityPoint = useCallback((t: number, portfolio: any) => {
     const total = Number(portfolio?.total_value_usd ?? portfolio?.total_value ?? 0);
@@ -583,6 +690,14 @@ export default function TradingView() {
           if (typeof st?.paper_mode === "boolean") setPaperMode(st.paper_mode);
           if (typeof st?.risk_per_trade === "number") setRiskPerTrade(st.risk_per_trade);
           if (typeof st?.min_confidence === "number") setMinConfidence(st.min_confidence);
+
+          if (typeof st?.kline_interval === "string" && st.kline_interval.trim()) setKlineInterval(st.kline_interval.trim());
+          if (typeof st?.max_positions === "number") setMaxPositions(st.max_positions);
+          if (typeof st?.cooldown_seconds === "number") setCooldownSeconds(st.cooldown_seconds);
+          if (typeof st?.take_profit_pct === "number") setTakeProfitPct(st.take_profit_pct);
+          if (typeof st?.stop_loss_pct === "number") setStopLossPct(st.stop_loss_pct);
+          if (typeof st?.trailing_stop_pct === "number") setTrailingStopPct(st.trailing_stop_pct);
+          if (typeof st?.aggression === "number") setAggression(st.aggression);
         }
 
         if (!chartPausedRef.current) {
@@ -818,6 +933,13 @@ export default function TradingView() {
         intervalSeconds,
         riskPerTrade,
         minConfidence,
+        klinesInterval: klineInterval,
+        maxPositions,
+        cooldownSeconds,
+        takeProfitPct,
+        stopLossPct,
+        trailingStopPct,
+        aggression,
       };
       const res = await fetch(`${BRIDGE_URL}/api/trader/start`, {
         method: "POST",
@@ -1115,6 +1237,83 @@ export default function TradingView() {
               placeholder="BTCUSDT,ETHUSDT"
             />
           </label>
+
+          <div className="col-span-2 rounded-lg border border-slate-700/40 bg-slate-950/30 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Top 20 coins</div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setRandomSymbols(5)}
+                  disabled={running || symbolUniverse.length === 0}
+                  className="px-2 py-0.5 rounded-md bg-slate-900/50 border border-slate-700/50 text-slate-200 hover:bg-slate-900/70 text-[10px] disabled:opacity-50"
+                  title="Slumpa 5 (casino-mode)"
+                >
+                  🎲 Random 5
+                </button>
+                <button
+                  type="button"
+                  onClick={setAllTopSymbols}
+                  disabled={running || symbolUniverse.length === 0}
+                  className="px-2 py-0.5 rounded-md bg-slate-900/50 border border-slate-700/50 text-slate-200 hover:bg-slate-900/70 text-[10px] disabled:opacity-50"
+                  title="Välj hela top-listan"
+                >
+                  Add all
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSymbols}
+                  disabled={running}
+                  className="px-2 py-0.5 rounded-md bg-slate-900/50 border border-slate-700/50 text-slate-200 hover:bg-slate-900/70 text-[10px] disabled:opacity-50"
+                  title="Rensa symboler"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                value={symbolQuery}
+                onChange={(e) => setSymbolQuery(e.target.value)}
+                disabled={running}
+                className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
+                placeholder="Search (ex: SOL, DOGE, BTC…)"
+              />
+              <div className="text-[10px] text-slate-500 font-mono whitespace-nowrap">
+                {selectedSymbols.length}/20
+              </div>
+            </div>
+
+            {symbolUniverseError && (
+              <div className="mt-1 text-[10px] text-red-300">
+                Universe error: {symbolUniverseError}
+              </div>
+            )}
+
+            <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-1 max-h-28 overflow-auto pr-1">
+              {filteredUniverse.map((sym) => {
+                const active = selectedSymbols.includes(sym);
+                return (
+                  <button
+                    key={sym}
+                    type="button"
+                    onClick={() => toggleSymbol(sym)}
+                    disabled={running}
+                    className={
+                      "px-2 py-1 rounded-lg border text-[11px] font-mono text-left transition-colors " +
+                      (active
+                        ? "bg-emerald-950/40 border-emerald-700/40 text-emerald-200 hover:bg-emerald-950/55"
+                        : "bg-slate-900/30 border-slate-700/40 text-slate-200 hover:bg-slate-900/45")
+                    }
+                    title={active ? "Click to remove" : "Click to add"}
+                  >
+                    {active ? "✓ " : ""}{sym}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <label className="text-[11px] text-slate-300">
             Interval (s)
             <input
@@ -1128,6 +1327,30 @@ export default function TradingView() {
               disabled={running}
               className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
             />
+          </label>
+
+          <label className="text-[11px] text-slate-300">
+            Kline interval
+            <select
+              value={klineInterval}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setKlineInterval(e.target.value);
+              }}
+              disabled={running}
+              className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
+            >
+              {[
+                { v: "1m", label: "1m (casino)" },
+                { v: "5m", label: "5m" },
+                { v: "15m", label: "15m" },
+                { v: "1h", label: "1h" },
+                { v: "4h", label: "4h" },
+                { v: "1d", label: "1d" },
+              ].map((o) => (
+                <option key={o.v} value={o.v}>{o.label}</option>
+              ))}
+            </select>
           </label>
           <label className="text-[11px] text-slate-300">
             Risk per trade
@@ -1164,6 +1387,105 @@ export default function TradingView() {
             />
             <div className="mt-1 text-[10px] text-slate-500">
               Only gates BUY/SELL (HOLD signals can still have confidence).
+            </div>
+          </label>
+
+          <label className="text-[11px] text-slate-300">
+            Max positions
+            <input
+              value={maxPositions}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setMaxPositions(Number(e.target.value));
+              }}
+              type="number"
+              min={1}
+              max={20}
+              disabled={running}
+              className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
+            />
+          </label>
+
+          <label className="text-[11px] text-slate-300">
+            Cooldown (s)
+            <input
+              value={cooldownSeconds}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setCooldownSeconds(Number(e.target.value));
+              }}
+              type="number"
+              min={0}
+              disabled={running}
+              className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
+            />
+          </label>
+
+          <label className="text-[11px] text-slate-300">
+            Take profit (%)
+            <input
+              value={takeProfitPct}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setTakeProfitPct(Number(e.target.value));
+              }}
+              type="number"
+              min={0}
+              step={0.1}
+              disabled={running}
+              className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
+            />
+          </label>
+
+          <label className="text-[11px] text-slate-300">
+            Stop loss (%)
+            <input
+              value={stopLossPct}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setStopLossPct(Number(e.target.value));
+              }}
+              type="number"
+              min={0}
+              step={0.1}
+              disabled={running}
+              className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
+            />
+          </label>
+
+          <label className="text-[11px] text-slate-300">
+            Trailing stop (%)
+            <input
+              value={trailingStopPct}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setTrailingStopPct(Number(e.target.value));
+              }}
+              type="number"
+              min={0}
+              step={0.1}
+              disabled={running}
+              className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
+            />
+          </label>
+
+          <label className="text-[11px] text-slate-300">
+            Aggression
+            <input
+              value={Math.round(aggression * 100)}
+              onChange={(e) => {
+                setConfigDirty(true);
+                setAggression(Number(e.target.value) / 100);
+              }}
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              disabled={running}
+              className="mt-2 w-full"
+            />
+            <div className="mt-1 text-[10px] text-slate-500">
+              {Math.round(aggression * 100)} · Chill → Degenerate
             </div>
           </label>
         </div>

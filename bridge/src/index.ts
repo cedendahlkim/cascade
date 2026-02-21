@@ -1826,6 +1826,63 @@ app.get("/api/frankenstein/train/status", (_req, res) => {
   });
 });
 
+app.get("/api/trader/symbols", (req, res) => {
+  const exchangeRaw = typeof req.query?.exchange === "string" ? String(req.query.exchange).trim().toLowerCase() : "";
+  const exchange = exchangeRaw === "kraken" || exchangeRaw === "binance" ? exchangeRaw : "binance";
+
+  // Curated "top" list (approx top 20 large caps). This is intentionally static to avoid
+  // external dependencies and rate limits. UI can treat this as a fun/casino-like universe.
+  const assetsTop20 = [
+    "BTC",
+    "ETH",
+    "SOL",
+    "BNB",
+    "XRP",
+    "ADA",
+    "DOGE",
+    "AVAX",
+    "DOT",
+    "LINK",
+    "LTC",
+    "BCH",
+    "ATOM",
+    "XLM",
+    "NEAR",
+    "ICP",
+    "FIL",
+    "APT",
+    "OP",
+    "ARB",
+  ];
+
+  // Kraken uses different asset codes for some coins. The trading bot has a partial normalizer
+  // (BTC->XBT), but not for all assets. For now, be conservative: only expose pairs we expect to
+  // commonly exist as <ASSET>USDT.
+  const krakenSafeAssets = new Set([
+    "BTC",
+    "ETH",
+    "SOL",
+    "XRP",
+    "ADA",
+    "DOGE",
+    "AVAX",
+    "DOT",
+    "LINK",
+    "LTC",
+    "BCH",
+    "ATOM",
+    "XLM",
+    "NEAR",
+    "ICP",
+    "FIL",
+  ]);
+
+  const assets = exchange === "kraken" ? assetsTop20.filter((a) => krakenSafeAssets.has(a)) : assetsTop20;
+  const symbols = assets.map((a) => `${a}USDT`);
+
+  res.json({ exchange, assets, symbols, max: symbols.length });
+});
+
 app.post("/api/trader/start", (req, res) => {
   if (traderState.running && traderState.process) {
     return res.status(409).json({ error: "Trader already running", pid: traderState.pid });
@@ -1845,6 +1902,13 @@ app.post("/api/trader/start", (req, res) => {
   const intervalSeconds = req.body?.intervalSeconds != null ? Number(req.body.intervalSeconds) : undefined;
   const riskPerTrade = req.body?.riskPerTrade != null ? Number(req.body.riskPerTrade) : undefined;
   const minConfidence = req.body?.minConfidence != null ? Number(req.body.minConfidence) : undefined;
+  const klinesInterval = typeof req.body?.klinesInterval === "string" ? String(req.body.klinesInterval).trim() : undefined;
+  const maxPositions = req.body?.maxPositions != null ? Number(req.body.maxPositions) : undefined;
+  const cooldownSeconds = req.body?.cooldownSeconds != null ? Number(req.body.cooldownSeconds) : undefined;
+  const takeProfitPct = req.body?.takeProfitPct != null ? Number(req.body.takeProfitPct) : undefined;
+  const stopLossPct = req.body?.stopLossPct != null ? Number(req.body.stopLossPct) : undefined;
+  const trailingStopPct = req.body?.trailingStopPct != null ? Number(req.body.trailingStopPct) : undefined;
+  const aggression = req.body?.aggression != null ? Number(req.body.aggression) : undefined;
 
   const pythonCmd = process.platform === "win32" ? "python" : "python3";
   const proc = spawn(pythonCmd, ["-u", botScript], {
@@ -1861,6 +1925,13 @@ app.post("/api/trader/start", (req, res) => {
       ...(Number.isFinite(intervalSeconds) && intervalSeconds! > 0 ? { TRADING_INTERVAL_SECONDS: String(intervalSeconds) } : {}),
       ...(Number.isFinite(riskPerTrade) && riskPerTrade! > 0 ? { TRADING_RISK_PER_TRADE: String(riskPerTrade) } : {}),
       ...(Number.isFinite(minConfidence) && minConfidence! > 0 ? { TRADING_MIN_CONFIDENCE: String(minConfidence) } : {}),
+      ...(klinesInterval ? { TRADING_KLINE_INTERVAL: klinesInterval } : {}),
+      ...(Number.isFinite(maxPositions) && maxPositions! > 0 ? { TRADING_MAX_POSITIONS: String(maxPositions) } : {}),
+      ...(Number.isFinite(cooldownSeconds) && cooldownSeconds! >= 0 ? { TRADING_COOLDOWN_SECONDS: String(cooldownSeconds) } : {}),
+      ...(Number.isFinite(takeProfitPct) && takeProfitPct! >= 0 ? { TRADING_TAKE_PROFIT_PCT: String(takeProfitPct) } : {}),
+      ...(Number.isFinite(stopLossPct) && stopLossPct! >= 0 ? { TRADING_STOP_LOSS_PCT: String(stopLossPct) } : {}),
+      ...(Number.isFinite(trailingStopPct) && trailingStopPct! >= 0 ? { TRADING_TRAILING_STOP_PCT: String(trailingStopPct) } : {}),
+      ...(Number.isFinite(aggression) && aggression! >= 0 ? { TRADING_AGGRESSION: String(aggression) } : {}),
     },
   });
 
