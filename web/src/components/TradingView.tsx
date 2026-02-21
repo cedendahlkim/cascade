@@ -1143,6 +1143,9 @@ export default function TradingView() {
               disabled={running}
               className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
             />
+            <div className="mt-1 text-[10px] text-slate-500">
+              Tip: 0.02 = 2% of portfolio. Values &gt; 1 are treated as USD (ex: 60 = $60).
+            </div>
           </label>
           <label className="text-[11px] text-slate-300">
             Min confidence
@@ -1159,6 +1162,9 @@ export default function TradingView() {
               disabled={running}
               className="mt-1 w-full bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white"
             />
+            <div className="mt-1 text-[10px] text-slate-500">
+              Only gates BUY/SELL (HOLD signals can still have confidence).
+            </div>
           </label>
         </div>
         <label className="flex items-center gap-2 text-[11px] text-slate-300">

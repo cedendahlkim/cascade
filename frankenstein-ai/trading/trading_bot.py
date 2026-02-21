@@ -209,6 +209,14 @@ class HDCMarketEncoder:
 class ActiveInferenceDecider:
     STATES = ["bull", "bear", "sideways", "volatile"]
 
+    # NOTE: Features are normalized into roughly [0, 1] and trend is centered around 0.5.
+    # The original thresholds (0.65/0.35) almost never triggered BUY/SELL, causing the bot
+    # to get stuck in HOLD even when HDC patterns detected breakouts.
+    TREND_BULL_EDGE = 0.54
+    TREND_BEAR_EDGE = 0.46
+    VOLATILE_EDGE = 0.70
+    TRADE_STATE_PROB_EDGE = 0.52
+
     def __init__(self) -> None:
         self.state_prior = np.array([0.30, 0.30, 0.30, 0.10], dtype=np.float64)
         self.likelihood = np.array(
@@ -224,11 +232,11 @@ class ActiveInferenceDecider:
     def _classify_observation(self, features: dict[str, float]) -> int:
         trend = float(features.get("trend", 0.5))
         volatility = float(features.get("volatility", 0.3))
-        if volatility > 0.7:
+        if volatility >= self.VOLATILE_EDGE:
             return 3
-        if trend > 0.65:
+        if trend >= self.TREND_BULL_EDGE:
             return 0
-        if trend < 0.35:
+        if trend <= self.TREND_BEAR_EDGE:
             return 1
         return 2
 
@@ -249,9 +257,9 @@ class ActiveInferenceDecider:
 
         vol_penalty = vol_p * 0.5
 
-        if bull_p > 0.55 and vol_penalty < 0.2:
+        if bull_p >= self.TRADE_STATE_PROB_EDGE and vol_penalty < 0.2:
             return "BUY", round(bull_p - vol_penalty, 3)
-        if bear_p > 0.55 and vol_penalty < 0.2:
+        if bear_p >= self.TRADE_STATE_PROB_EDGE and vol_penalty < 0.2:
             return "SELL", round(bear_p - vol_penalty, 3)
 
         # HOLD confidence can still be meaningful for monitoring.
@@ -856,13 +864,40 @@ class FrankensteinTradingAgent:
             hv = self.hdc.encode(feat)
             self.hdc.store_pattern(name, hv)
 
-    def _position_size(self, price: float, confidence: float, symbol: str) -> float:
-        portfolio = self.exchange.get_portfolio_value()
-        total_value = float(portfolio.get("total_value_usd", 0.0))
+    def _position_size(self, portfolio: dict[str, Any], price: float, confidence: float, symbol: str, action: str) -> float:
+        """Position sizing with compatibility:
+
+        - If risk_per_trade <= 1.0: treat as fraction of portfolio (docs default 0.02 = 2%).
+        - If risk_per_trade > 1.0: treat as USD (common UI expectation, e.g. 60 = $60).
+
+        Also makes sizing cash/position-aware to avoid spammy rejected orders.
+        """
+
         success_rate = float(self.memory.get_success_rate(symbol))
 
-        base_allocation = total_value * self.risk_per_trade
-        adjusted = base_allocation * float(confidence) * (0.5 + success_rate * 0.5)
+        positions = portfolio.get("positions") if isinstance(portfolio, dict) else None
+        pos = positions.get(symbol) if isinstance(positions, dict) else None
+        held_qty = float(pos.get("quantity", 0.0)) if isinstance(pos, dict) else 0.0
+        cash_usdt = float(portfolio.get("usdt_cash", 0.0)) if isinstance(portfolio, dict) else 0.0
+        total_value = float(portfolio.get("total_value_usd", 0.0)) if isinstance(portfolio, dict) else 0.0
+
+        if action == "SELL":
+            return round(max(0.0, held_qty), 6)
+
+        # BUY sizing
+        if held_qty > 0:
+            return 0.0
+
+        if self.risk_per_trade <= 1.0:
+            base_allocation_usd = total_value * self.risk_per_trade
+        else:
+            base_allocation_usd = self.risk_per_trade
+
+        # Safety caps
+        base_allocation_usd = min(float(base_allocation_usd), float(cash_usdt))
+        base_allocation_usd = min(float(base_allocation_usd), float(total_value) * 0.25)  # avoid over-allocation
+
+        adjusted = float(base_allocation_usd) * float(confidence) * (0.5 + success_rate * 0.5)
         quantity = adjusted / (float(price) + 1e-10)
         return round(float(quantity), 6)
 
@@ -880,17 +915,49 @@ class FrankensteinTradingAgent:
         posterior = self.aif.infer_state(features)
         action_raw, conf_raw = self.aif.decide(posterior, self.risk_per_trade)
 
+        # If AIF is indecisive (HOLD), allow strong HDC pattern hits to propose a direction.
+        # This is deliberately conservative: requires a decent pattern similarity AND that
+        # the posterior isn't strongly contradicting it.
+        pattern_override: Optional[str] = None
+        action_candidate = action_raw
+        conf_candidate = conf_raw
+        if action_raw == "HOLD":
+            bull_p = float(posterior.get("bull", 0.0))
+            bear_p = float(posterior.get("bear", 0.0))
+            if pattern == "bull_breakout" and pattern_sim >= 0.62 and bull_p >= (bear_p - 0.05):
+                action_candidate = "BUY"
+                conf_candidate = max(conf_candidate, 0.35 + 0.65 * float(pattern_sim))
+                pattern_override = "bull_breakout"
+            elif pattern == "bear_breakdown" and pattern_sim >= 0.62 and bear_p >= (bull_p - 0.05):
+                action_candidate = "SELL"
+                conf_candidate = max(conf_candidate, 0.35 + 0.65 * float(pattern_sim))
+                pattern_override = "bear_breakdown"
+
         # Blend confidence with pattern similarity and memory success rate.
         success_rate = float(self.memory.get_success_rate(symbol))
-        blended = float(conf_raw) * (0.6 + pattern_sim * 0.4) * (0.7 + success_rate * 0.3)
+        blended = float(conf_candidate) * (0.6 + pattern_sim * 0.4) * (0.7 + success_rate * 0.3)
         blended = float(np.clip(blended, 0.0, 1.0))
 
-        action_final = action_raw
-        if action_raw in ("BUY", "SELL") and blended < self.min_confidence:
+        action_final = action_candidate
+        blocked_by_confidence = False
+        if action_candidate in ("BUY", "SELL") and blended < self.min_confidence:
             action_final = "HOLD"
+            blocked_by_confidence = True
 
-        qty = self._position_size(price, blended, symbol) if action_final in ("BUY", "SELL") else 0.0
         portfolio = self.exchange.get_portfolio_value()
+        positions = portfolio.get("positions") if isinstance(portfolio, dict) else None
+        pos = positions.get(symbol) if isinstance(positions, dict) else None
+        held_qty = float(pos.get("quantity", 0.0)) if isinstance(pos, dict) else 0.0
+
+        blocked_by_position = False
+        if action_final == "BUY" and held_qty > 0:
+            action_final = "HOLD"
+            blocked_by_position = True
+        if action_final == "SELL" and held_qty <= 0:
+            action_final = "HOLD"
+            blocked_by_position = True
+
+        qty = self._position_size(portfolio, price, blended, symbol, action_final) if action_final in ("BUY", "SELL") else 0.0
         total_value = float(portfolio.get("total_value_usd", 0.0))
         position_size_usd = round(float(qty) * float(price), 6) if qty > 0 else 0.0
 
@@ -899,12 +966,18 @@ class FrankensteinTradingAgent:
             "features": features,
             "posterior": posterior,
             "action_raw": action_raw,
+            "action_candidate": action_candidate,
+            "pattern_override": pattern_override,
             "confidence_raw": conf_raw,
+            "confidence_candidate": conf_candidate,
             "confidence_blended": blended,
             "success_rate": success_rate,
             "min_confidence": self.min_confidence,
             "risk_per_trade": self.risk_per_trade,
             "portfolio_total_value_usd": total_value,
+            "held_qty": held_qty,
+            "blocked_by_confidence": blocked_by_confidence,
+            "blocked_by_position": blocked_by_position,
             "position_size_usd": position_size_usd,
         }
         return TradeSignal(
