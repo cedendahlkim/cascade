@@ -1760,9 +1760,11 @@ app.post("/api/trader/event", (req, res) => {
 });
 
 app.get("/api/trader/live", (_req, res) => {
+  const limit = parseInt((_req.query.limit as string) || "50", 10);
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(200, limit)) : 50;
   res.json({
     active: traderLiveState.active,
-    events: traderLiveState.events.slice(-50),
+    events: traderLiveState.events.slice(-safeLimit),
     last_update: traderLiveState.last_update,
     event_count: traderLiveState.events.length,
   });
@@ -1781,7 +1783,26 @@ app.get("/api/trader/state", (_req, res) => {
 
 app.get("/api/trader/log", (_req, res) => {
   const logPath = join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data", "trader.log");
-  res.json({ lines: tailLines(logPath, 200) });
+  const lines = parseInt((_req.query.lines as string) || "200", 10);
+  const safeLines = Number.isFinite(lines) ? Math.max(1, Math.min(2000, lines)) : 200;
+  res.json({ lines: tailLines(logPath, safeLines) });
+});
+
+app.get("/api/trader/trades", (req, res) => {
+  try {
+    const limit = parseInt((req.query.limit as string) || "200", 10);
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(2000, limit)) : 200;
+    const tradesPath = join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data", "trades.jsonl");
+    const lines = tailLines(tradesPath, safeLimit);
+    const trades = lines
+      .map((l) => {
+        try { return JSON.parse(l); } catch { return null; }
+      })
+      .filter(Boolean);
+    res.json({ trades, line_count: lines.length });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // --- Frankenstein AI Progress ---

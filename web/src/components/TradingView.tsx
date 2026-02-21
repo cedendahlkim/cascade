@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BRIDGE_URL } from "../config";
 import { io, Socket } from "socket.io-client";
-import { Play, Square, RefreshCw, Brain, Activity, DollarSign, AlertTriangle, Loader2 } from "lucide-react";
+import { Play, Square, RefreshCw, Brain, Activity, DollarSign, AlertTriangle, Loader2, MessageSquareText } from "lucide-react";
 
 type TraderStatus = {
   running: boolean;
@@ -17,29 +17,62 @@ type TraderLive = {
   event_count: number;
 };
 
+type FrankMessage = {
+  id: string;
+  role: "user" | "cascade";
+  content: string;
+  type: string;
+  timestamp: string;
+};
+
 type TraderState = {
   running?: boolean;
   last_tick_at?: string;
+  tick_count?: number;
+  order_count?: number;
   symbols?: string[];
   paper_mode?: boolean;
   risk_per_trade?: number;
   min_confidence?: number;
   portfolio?: {
     usdt_cash: number;
-    positions: Record<string, { quantity: number; value_usd: number }>;
+    positions: Record<string, {
+      quantity: number;
+      value_usd: number;
+      avg_entry?: number;
+      price?: number;
+      unrealized_usdt?: number;
+      unrealized_pct?: number;
+      realized_usdt?: number;
+    }>;
     total_value_usd: number;
   };
-  recent_signals?: Array<{ symbol: string; action: string; confidence: number; quantity: number; price: number; timestamp: string; pattern?: string; pattern_similarity?: number }>;
+  recent_signals?: Array<{ symbol: string; action: string; confidence: number; quantity: number; price: number; timestamp: string; pattern?: string; pattern_similarity?: number; details?: any }>;
 };
+
+type TraderTradesResponse = {
+  trades: any[];
+  line_count: number;
+};
+
+const STRATEGY_REQ_PREFIX = "TRADING_STRATEGY_REQUEST:";
+const STRATEGY_REPLY_PREFIX = "TRADING_STRATEGY_REPLY:";
 
 export default function TradingView() {
   const [status, setStatus] = useState<TraderStatus | null>(null);
   const [live, setLive] = useState<TraderLive | null>(null);
   const [state, setState] = useState<TraderState | null>(null);
   const [logLines, setLogLines] = useState<string[]>([]);
+  const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<"start" | "stop" | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Frankenstein strategy chat (subset)
+  const [strategyMessages, setStrategyMessages] = useState<FrankMessage[]>([]);
+  const [strategyInput, setStrategyInput] = useState("");
+  const [strategyThinking, setStrategyThinking] = useState(false);
+  const [strategyStream, setStrategyStream] = useState("");
 
   const [symbols, setSymbols] = useState("BTCUSDT,ETHUSDT");
   const [paperMode, setPaperMode] = useState(true);
@@ -48,14 +81,16 @@ export default function TradingView() {
   const [minConfidence, setMinConfidence] = useState(0.6);
 
   const socketRef = useRef<Socket | null>(null);
+  const awaitingStrategyReplyRef = useRef(false);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [sRes, lRes, stRes, logRes] = await Promise.all([
+      const [sRes, lRes, stRes, logRes, tradesRes] = await Promise.all([
         fetch(`${BRIDGE_URL}/api/trader/status`),
-        fetch(`${BRIDGE_URL}/api/trader/live`),
+        fetch(`${BRIDGE_URL}/api/trader/live?limit=200`),
         fetch(`${BRIDGE_URL}/api/trader/state`),
-        fetch(`${BRIDGE_URL}/api/trader/log`),
+        fetch(`${BRIDGE_URL}/api/trader/log?lines=400`),
+        fetch(`${BRIDGE_URL}/api/trader/trades?limit=400`),
       ]);
 
       if (sRes.ok) setStatus(await sRes.json());
@@ -71,6 +106,11 @@ export default function TradingView() {
       if (logRes.ok) {
         const data = await logRes.json();
         setLogLines(data.lines || []);
+      }
+
+      if (tradesRes.ok) {
+        const data = (await tradesRes.json()) as TraderTradesResponse;
+        setTrades(Array.isArray(data.trades) ? data.trades : []);
       }
     } catch (e) {
       setError(String(e));
@@ -95,8 +135,66 @@ export default function TradingView() {
         return { ...base, active: true, events: nextEvents, last_update: Date.now(), event_count: base.event_count + 1 };
       });
     });
+
+    socket.on("frank_message", (msg: FrankMessage) => {
+      // Collect only messages explicitly tagged for strategy chat.
+      const text = msg?.content || "";
+      const isTaggedUser = msg.role === "user" && text.trim().startsWith(STRATEGY_REQ_PREFIX);
+      const isTaggedReply = msg.role === "cascade" && text.trim().startsWith(STRATEGY_REPLY_PREFIX);
+      if (!isTaggedUser && !isTaggedReply) return;
+
+      setStrategyMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+
+      if (msg.role === "cascade") {
+        setStrategyThinking(false);
+        setStrategyStream("");
+        awaitingStrategyReplyRef.current = false;
+      }
+    });
+
+    socket.on("frank_stream", (data: { content: string }) => {
+      if (!awaitingStrategyReplyRef.current) return;
+      setStrategyStream(data?.content || "");
+    });
+
+    socket.on("frank_status", (s: { type: string }) => {
+      if (!awaitingStrategyReplyRef.current) return;
+      if (s?.type === "thinking") setStrategyThinking(true);
+      if (s?.type === "done") setStrategyThinking(false);
+    });
+
     return () => { socket.disconnect(); };
   }, []);
+
+  const sendStrategyMessage = async () => {
+    const text = strategyInput.trim();
+    if (!text || strategyThinking) return;
+
+    setStrategyInput("");
+    setStrategyThinking(true);
+    setStrategyStream("");
+    awaitingStrategyReplyRef.current = true;
+
+    const snapshotState = state || (await fetch(`${BRIDGE_URL}/api/trader/state`).then((r) => r.json()).catch(() => null));
+    const snapshotLive = live || (await fetch(`${BRIDGE_URL}/api/trader/live?limit=200`).then((r) => r.json()).catch(() => null));
+    const snapshotTrades = trades.length > 0 ? trades : await fetch(`${BRIDGE_URL}/api/trader/trades?limit=200`).then((r) => r.json()).then((d) => d.trades || []).catch(() => []);
+
+    const files = [
+      { name: "trader_state.json", content: JSON.stringify(snapshotState, null, 2).slice(0, 200_000), type: "application/json", size: JSON.stringify(snapshotState).length, encoding: "text" },
+      { name: "trader_live_events.json", content: JSON.stringify(snapshotLive, null, 2).slice(0, 200_000), type: "application/json", size: JSON.stringify(snapshotLive).length, encoding: "text" },
+      { name: "trader_trades.json", content: JSON.stringify(snapshotTrades, null, 2).slice(0, 200_000), type: "application/json", size: JSON.stringify(snapshotTrades).length, encoding: "text" },
+    ];
+
+    const prompt = `${STRATEGY_REQ_PREFIX} ${text}\n\n` +
+      `Du får bifogade trader_state.json + trader_live_events.json + trader_trades.json.\n` +
+      `Analysera signaler/beslut, diskutera strategi, risk, parametrar och förbättringar.\n` +
+      `Svara ALLTID med första raden exakt: ${STRATEGY_REPLY_PREFIX}`;
+
+    socketRef.current?.emit("frank_message", { content: prompt, files });
+  };
 
   const startTrader = async () => {
     setActionBusy("start");
@@ -293,6 +391,10 @@ export default function TradingView() {
               <div key={sym} className="flex items-center justify-between text-[11px]">
                 <span className="text-slate-300 font-medium">{sym}</span>
                 <span className="text-slate-400">qty {p.quantity}</span>
+                <span className="text-slate-500">avg {p.avg_entry ?? "—"}</span>
+                <span className={typeof p.unrealized_pct === "number" && p.unrealized_pct >= 0 ? "text-emerald-300" : "text-red-300"}>
+                  {typeof p.unrealized_pct === "number" ? `${p.unrealized_pct.toFixed(2)}%` : "—"}
+                </span>
                 <span className="text-white">${p.value_usd}</span>
               </div>
             ))}
@@ -325,6 +427,98 @@ export default function TradingView() {
           </pre>
         </div>
       )}
+
+      {Array.isArray(live?.events) && live!.events.length > 0 && (
+        <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3">
+          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Live events (senaste {Math.min(200, live!.events.length)})</div>
+          <div className="space-y-1">
+            {[...live!.events].slice(-60).reverse().map((ev, idx) => (
+              <details key={idx} className="text-[11px]">
+                <summary className="cursor-pointer list-none flex items-center gap-2 text-slate-300">
+                  <span className="text-slate-500 font-mono">{ev?.ts ? new Date(ev.ts).toLocaleTimeString("sv-SE") : "—"}</span>
+                  <span className="text-slate-400">{ev?.type || "event"}</span>
+                  {ev?.symbol && <span className="text-slate-200 font-medium">{ev.symbol}</span>}
+                </summary>
+                <pre className="mt-2 bg-slate-950/50 border border-slate-700/50 rounded-lg p-2 text-[10px] text-slate-300 font-mono whitespace-pre-wrap max-h-64 overflow-auto">{JSON.stringify(ev, null, 2)}</pre>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {trades.length > 0 && (
+        <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3">
+          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Trades / trace (trades.jsonl)</div>
+          <div className="space-y-1">
+            {[...trades].slice(-80).reverse().map((t, idx) => (
+              <details key={idx} className="text-[11px]">
+                <summary className="cursor-pointer list-none flex items-center gap-2 text-slate-300">
+                  <span className="text-slate-500 font-mono">{t?.signal?.timestamp ? new Date(t.signal.timestamp).toLocaleString("sv-SE") : "—"}</span>
+                  <span className="text-slate-400">{t?.type || "record"}</span>
+                  {t?.signal?.symbol && <span className="text-slate-200 font-medium">{t.signal.symbol}</span>}
+                  {t?.signal?.action && <span className={t.signal.action === "BUY" ? "text-emerald-300" : t.signal.action === "SELL" ? "text-red-300" : "text-slate-400"}>{t.signal.action}</span>}
+                  {typeof t?.order?.realized_pct === "number" && <span className={t.order.realized_pct >= 0 ? "text-emerald-300" : "text-red-300"}>{t.order.realized_pct.toFixed(2)}%</span>}
+                </summary>
+                <pre className="mt-2 bg-slate-950/50 border border-slate-700/50 rounded-lg p-2 text-[10px] text-slate-300 font-mono whitespace-pre-wrap max-h-64 overflow-auto">{JSON.stringify(t, null, 2)}</pre>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+            <MessageSquareText className="w-3.5 h-3.5" /> Strategi med Frankenstein
+          </div>
+        </div>
+
+        <div className="space-y-1 max-h-56 overflow-auto">
+          {strategyMessages.length === 0 && (
+            <div className="text-[11px] text-slate-500">Skicka en fråga här så analyserar Frankenstein senaste tick + events + trades.</div>
+          )}
+          {strategyMessages.map((m) => {
+            const content = (m.content || "").replace(STRATEGY_REQ_PREFIX, "").replace(STRATEGY_REPLY_PREFIX, "").trim();
+            return (
+              <div key={m.id} className={m.role === "user" ? "text-[11px] text-slate-200" : "text-[11px] text-emerald-200"}>
+                <span className="text-slate-500 font-mono mr-2">{new Date(m.timestamp).toLocaleTimeString("sv-SE")}</span>
+                <span className="font-semibold mr-2">{m.role === "user" ? "Du" : "Frank"}:</span>
+                <span className="whitespace-pre-wrap">{content}</span>
+              </div>
+            );
+          })}
+          {strategyStream && (
+            <div className="text-[11px] text-emerald-200">
+              <span className="text-slate-500 font-mono mr-2">…</span>
+              <span className="font-semibold mr-2">Frank:</span>
+              <span className="whitespace-pre-wrap">{strategyStream.replace(STRATEGY_REPLY_PREFIX, "").trim()}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            value={strategyInput}
+            onChange={(e) => setStrategyInput(e.target.value)}
+            placeholder="T.ex. 'Varför HOLD på BTC? Vad ändrar vi för att handla mer säkert?'"
+            className="flex-1 bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-2 text-[11px] text-white"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendStrategyMessage();
+            }}
+          />
+          <button
+            onClick={sendStrategyMessage}
+            disabled={strategyThinking || !strategyInput.trim()}
+            className="px-3 py-2 rounded-lg bg-emerald-900/50 hover:bg-emerald-900/70 text-emerald-200 text-[11px] font-medium disabled:opacity-50"
+            title="Skicka (Ctrl+Enter)"
+          >
+            {strategyThinking ? <Loader2 className="w-4 h-4 animate-spin" /> : "Skicka"}
+          </button>
+        </div>
+        <div className="text-[10px] text-slate-500">
+          Skickar med: trader_state.json + live events + trades. Svar visas här, och finns även i 🧟 Frankenstein-chatten.
+        </div>
+      </div>
     </div>
   );
 }

@@ -133,6 +133,7 @@ class TradeSignal:
     reason: str
     pattern: str = "unknown"
     pattern_similarity: float = 0.0
+    details: dict[str, Any] = field(default_factory=dict)
     timestamp: str = field(default_factory=_utc_now_iso)
 
 
@@ -265,6 +266,19 @@ class EbbinghausTradeMemory:
     def remember(self, signal: TradeSignal) -> None:
         self.memories.append(TradeMemory(signal=signal))
 
+    def update_outcome(self, symbol: str, profit_pct: float) -> None:
+        """Attach an outcome to the most recent unresolved memory for the symbol."""
+
+        for mem in reversed(self.memories):
+            if mem.signal.symbol != symbol:
+                continue
+            if mem.outcome is not None:
+                continue
+            mem.outcome = float(profit_pct)
+            # Reinforce good outcomes, weaken bad outcomes (bounded)
+            mem.remembered_strength = 1.0 + max(-0.5, min(1.0, float(profit_pct) / 10.0))
+            break
+
     def apply_decay(self, hours_elapsed: float) -> None:
         if hours_elapsed <= 0:
             return
@@ -314,7 +328,8 @@ class BinanceClient:
         self.allow_live = allow_live
 
         self._paper_balance = {"USDT": float(starting_usdt)}
-        self._paper_positions: dict[str, float] = {}
+        # symbol -> { qty, avg_price, realized_usdt }
+        self._paper_positions: dict[str, dict[str, float]] = {}
 
     def _headers(self) -> dict[str, str]:
         return {"X-MBX-APIKEY": self.api_key} if self.api_key else {}
@@ -354,17 +369,41 @@ class BinanceClient:
         if self.paper_mode:
             cost = float(quantity) * float(price)
             status = "REJECTED"
+            realized_usdt = 0.0
+            realized_pct: Optional[float] = None
+            avg_entry: Optional[float] = None
             if side == "BUY":
                 if self._paper_balance.get("USDT", 0.0) >= cost:
                     self._paper_balance["USDT"] -= cost
-                    self._paper_positions[symbol] = self._paper_positions.get(symbol, 0.0) + float(quantity)
+                    pos = self._paper_positions.get(symbol) or {"qty": 0.0, "avg_price": 0.0, "realized_usdt": 0.0}
+                    old_qty = float(pos.get("qty", 0.0))
+                    old_avg = float(pos.get("avg_price", 0.0))
+                    new_qty = old_qty + float(quantity)
+                    new_avg = ((old_qty * old_avg) + (float(quantity) * float(price))) / (new_qty + 1e-12)
+                    pos["qty"] = new_qty
+                    pos["avg_price"] = new_avg
+                    self._paper_positions[symbol] = pos
+                    avg_entry = new_avg
                     status = "FILLED"
                 else:
                     status = "REJECTED (insufficient funds)"
             elif side == "SELL":
-                held = self._paper_positions.get(symbol, 0.0)
-                if held >= quantity:
-                    self._paper_positions[symbol] = held - float(quantity)
+                pos = self._paper_positions.get(symbol)
+                held = float(pos.get("qty", 0.0)) if pos else 0.0
+                if held >= quantity and pos:
+                    avg_entry = float(pos.get("avg_price", 0.0))
+                    cost_basis = float(quantity) * avg_entry
+                    realized_usdt = float(cost) - cost_basis
+                    realized_pct = (realized_usdt / (cost_basis + 1e-12)) * 100.0
+
+                    pos["qty"] = held - float(quantity)
+                    pos["realized_usdt"] = float(pos.get("realized_usdt", 0.0)) + realized_usdt
+                    if pos["qty"] <= 1e-12:
+                        # Close position
+                        self._paper_positions.pop(symbol, None)
+                    else:
+                        self._paper_positions[symbol] = pos
+
                     self._paper_balance["USDT"] += cost
                     status = "FILLED"
                 else:
@@ -379,6 +418,9 @@ class BinanceClient:
                 "side": side,
                 "quantity": float(quantity),
                 "price": float(price),
+                "avg_entry": avg_entry,
+                "realized_usdt": round(realized_usdt, 6),
+                "realized_pct": round(realized_pct, 4) if realized_pct is not None else None,
             }
 
         # Live trading (spot)
@@ -393,13 +435,26 @@ class BinanceClient:
     def get_portfolio_value(self) -> dict[str, Any]:
         total = float(self._paper_balance.get("USDT", 0.0))
         positions: dict[str, Any] = {}
-        for sym, qty in self._paper_positions.items():
-            if qty <= 0:
+        for sym, pos in self._paper_positions.items():
+            qty = float(pos.get("qty", 0.0))
+            if qty <= 0.0:
                 continue
             price = self.get_price(sym)
+            avg_entry = float(pos.get("avg_price", 0.0))
             val = qty * price
+            cost_basis = qty * avg_entry
+            unrealized = val - cost_basis
+            unrealized_pct = (unrealized / (cost_basis + 1e-12)) * 100.0 if cost_basis > 0 else 0.0
             total += val
-            positions[sym] = {"quantity": round(qty, 8), "value_usd": round(val, 2)}
+            positions[sym] = {
+                "quantity": round(qty, 8),
+                "avg_entry": round(avg_entry, 8),
+                "price": round(float(price), 8),
+                "value_usd": round(val, 2),
+                "unrealized_usdt": round(unrealized, 6),
+                "unrealized_pct": round(unrealized_pct, 4),
+                "realized_usdt": round(float(pos.get("realized_usdt", 0.0)), 6),
+            }
         return {
             "usdt_cash": round(float(self._paper_balance.get("USDT", 0.0)), 2),
             "positions": positions,
@@ -478,6 +533,9 @@ class FrankensteinTradingAgent:
         self.memory = EbbinghausTradeMemory()
 
         self.recent_signals: deque[TradeSignal] = deque(maxlen=50)
+
+        self.tick_count = 0
+        self.order_count = 0
 
         self._seed_hdc_patterns()
 
@@ -563,37 +621,45 @@ class FrankensteinTradingAgent:
         pattern, pattern_sim = self.hdc.best_match(hv)
 
         posterior = self.aif.infer_state(features)
-        action, conf = self.aif.decide(posterior, self.risk_per_trade)
+        action_raw, conf_raw = self.aif.decide(posterior, self.risk_per_trade)
 
         # Blend confidence with pattern similarity and memory success rate.
         success_rate = float(self.memory.get_success_rate(symbol))
-        blended = float(conf) * (0.6 + pattern_sim * 0.4) * (0.7 + success_rate * 0.3)
+        blended = float(conf_raw) * (0.6 + pattern_sim * 0.4) * (0.7 + success_rate * 0.3)
         blended = float(np.clip(blended, 0.0, 1.0))
 
-        if action in ("BUY", "SELL") and blended < self.min_confidence:
-            return TradeSignal(
-                symbol=symbol,
-                action="HOLD",
-                confidence=blended,
-                quantity=0.0,
-                price=price,
-                reason=f"Below min_confidence ({blended:.2f} < {self.min_confidence:.2f})",
-                pattern=pattern,
-                pattern_similarity=pattern_sim,
-            )
+        action_final = action_raw
+        if action_raw in ("BUY", "SELL") and blended < self.min_confidence:
+            action_final = "HOLD"
 
-        qty = self._position_size(price, blended, symbol) if action in ("BUY", "SELL") else 0.0
+        qty = self._position_size(price, blended, symbol) if action_final in ("BUY", "SELL") else 0.0
+        portfolio = self.exchange.get_portfolio_value()
+        total_value = float(portfolio.get("total_value_usd", 0.0))
+        position_size_usd = round(float(qty) * float(price), 6) if qty > 0 else 0.0
 
         reason = f"pattern={pattern} sim={pattern_sim:.2f} posterior={posterior}"
+        details: dict[str, Any] = {
+            "features": features,
+            "posterior": posterior,
+            "action_raw": action_raw,
+            "confidence_raw": conf_raw,
+            "confidence_blended": blended,
+            "success_rate": success_rate,
+            "min_confidence": self.min_confidence,
+            "risk_per_trade": self.risk_per_trade,
+            "portfolio_total_value_usd": total_value,
+            "position_size_usd": position_size_usd,
+        }
         return TradeSignal(
             symbol=symbol,
-            action=action,
+            action=action_final,
             confidence=blended,
             quantity=qty,
             price=price,
             reason=reason,
             pattern=pattern,
             pattern_similarity=pattern_sim,
+            details=details,
         )
 
     def execute(self, signal: TradeSignal) -> dict[str, Any] | None:
@@ -604,6 +670,7 @@ class FrankensteinTradingAgent:
         return self.exchange.place_order(signal.symbol, signal.action, signal.quantity, signal.price)
 
     def tick(self) -> dict[str, Any]:
+        self.tick_count += 1
         signals: list[TradeSignal] = []
         orders: list[dict[str, Any]] = []
 
@@ -612,19 +679,35 @@ class FrankensteinTradingAgent:
                 sig = self.analyze(symbol)
                 signals.append(sig)
                 self.recent_signals.append(sig)
-                self.memory.remember(sig)
+                if sig.action in ("BUY", "SELL"):
+                    self.memory.remember(sig)
 
                 _send_bridge_event({"type": "trader_signal", "symbol": symbol, "signal": asdict(sig), "ts": _utc_now_iso()})
+
+                # Persist every signal for full traceability
+                try:
+                    with open(TRADES_FILE, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"type": "signal", "signal": asdict(sig)}, ensure_ascii=False) + "\n")
+                except Exception:
+                    pass
 
                 order = self.execute(sig)
                 if order is not None:
                     orders.append(order)
+                    self.order_count += 1
                     _send_bridge_event({"type": "trader_order", "symbol": symbol, "order": order, "ts": _utc_now_iso()})
+
+                    # Update memory outcome for closed positions (paper mode SELL)
+                    try:
+                        if order.get("status") == "FILLED" and order.get("side") == "SELL" and order.get("realized_pct") is not None:
+                            self.memory.update_outcome(symbol, float(order.get("realized_pct")))
+                    except Exception:
+                        pass
 
                     # Persist trade record (jsonl)
                     try:
                         with open(TRADES_FILE, "a", encoding="utf-8") as f:
-                            f.write(json.dumps({"signal": asdict(sig), "order": order}, ensure_ascii=False) + "\n")
+                            f.write(json.dumps({"type": "order", "signal": asdict(sig), "order": order}, ensure_ascii=False) + "\n")
                     except Exception:
                         pass
 
@@ -636,6 +719,8 @@ class FrankensteinTradingAgent:
         state = {
             "running": True,
             "last_tick_at": _utc_now_iso(),
+            "tick_count": self.tick_count,
+            "order_count": self.order_count,
             "symbols": self.symbols,
             "paper_mode": self.exchange.paper_mode,
             "risk_per_trade": self.risk_per_trade,

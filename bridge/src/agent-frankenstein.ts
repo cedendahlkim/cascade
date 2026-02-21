@@ -164,7 +164,6 @@ export class FrankensteinAgent {
     } else {
       console.log("[frankenstein] No GEMINI_API_KEY — chat agent disabled");
     }
-
     this.loadState();
     this.totalSessions++;
     startSession();
@@ -294,6 +293,32 @@ export class FrankensteinAgent {
       : payload;
 
     return `[${label}] ${response.status} ${response.statusText}\n${finalPayload}`;
+  }
+
+  private async handleTraderTool(name: string, args: Record<string, unknown>): Promise<string> {
+    const BRIDGE_BASE = `http://localhost:${process.env.PORT || 3031}`;
+    try {
+      let url = "";
+      if (name === "trader_status") url = `${BRIDGE_BASE}/api/trader/status`;
+      else if (name === "trader_state") url = `${BRIDGE_BASE}/api/trader/state`;
+      else if (name === "trader_live") {
+        const limit = typeof args.limit === "string" ? args.limit : "50";
+        url = `${BRIDGE_BASE}/api/trader/live?limit=${encodeURIComponent(limit)}`;
+      } else if (name === "trader_log") {
+        const lines = typeof args.lines === "string" ? args.lines : "200";
+        url = `${BRIDGE_BASE}/api/trader/log?lines=${encodeURIComponent(lines)}`;
+      } else if (name === "trader_trades") {
+        const limit = typeof args.limit === "string" ? args.limit : "200";
+        url = `${BRIDGE_BASE}/api/trader/trades?limit=${encodeURIComponent(limit)}`;
+      } else {
+        return `Unknown trader tool: ${name}`;
+      }
+
+      const res = await fetch(url, { method: "GET", signal: AbortSignal.timeout(30000) });
+      return this.formatWafResponse(res, name);
+    } catch (err) {
+      return `Trader tool error: ${err instanceof Error ? err.message : String(err)}`;
+    }
   }
 
   private async handleWafTool(name: string, args: Record<string, unknown>): Promise<string> {
@@ -698,6 +723,48 @@ export class FrankensteinAgent {
       }
     } catch { /* ok */ }
 
+    // Trading bot realtime context
+    let tradingContext = "";
+    try {
+      const traderStatePath = join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data", "state.json");
+      if (existsSync(traderStatePath)) {
+        const stat = statSync(traderStatePath);
+        const ageMs = Date.now() - stat.mtimeMs;
+        const d = JSON.parse(readFileSync(traderStatePath, "utf-8"));
+        const total = d?.portfolio?.total_value_usd ?? 0;
+        const cash = d?.portfolio?.usdt_cash ?? 0;
+        const posCount = d?.portfolio?.positions ? Object.keys(d.portfolio.positions).length : 0;
+        const tickCount = d?.tick_count ?? 0;
+        const orderCount = d?.order_count ?? 0;
+
+        tradingContext += `\n\n## 💹 REALTIDS-TRADING (Frankenstein Trading Bot)\n`;
+        tradingContext += `**Senast tick:** ${d?.last_tick_at || "?"} (${Math.round(ageMs / 1000)}s sedan)\n`;
+        tradingContext += `**Ticks:** ${tickCount} | **Orders:** ${orderCount}\n`;
+        tradingContext += `**Portfolio:** total=$${total} cash=$${cash} positions=${posCount}\n`;
+        if (Array.isArray(d?.symbols) && d.symbols.length) tradingContext += `**Symbols:** ${d.symbols.join(", ")}\n`;
+        tradingContext += `**Mode:** ${d?.paper_mode ? "PAPER" : "LIVE"} | risk_per_trade=${d?.risk_per_trade} | min_conf=${d?.min_confidence}\n`;
+      }
+    } catch { /* ok */ }
+
+    // Recent trader log + trades tail (compact)
+    try {
+      const traderLogPath = join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data", "trader.log");
+      if (existsSync(traderLogPath)) {
+        const content = readFileSync(traderLogPath, "utf-8");
+        const lines = content.trim().split("\n").slice(-3);
+        if (lines.length) tradingContext += `\n**Senaste trader.log:**\n\`\`\`\n${lines.join("\n")}\n\`\`\``;
+      }
+    } catch { /* ok */ }
+
+    try {
+      const tradesPath = join(WORKSPACE_ROOT, "frankenstein-ai", "trading_data", "trades.jsonl");
+      if (existsSync(tradesPath)) {
+        const content = readFileSync(tradesPath, "utf-8");
+        const lines = content.trim().split("\n").filter(Boolean).slice(-3);
+        if (lines.length) tradingContext += `\n**Senaste trades.jsonl:**\n\`\`\`\n${lines.join("\n")}\n\`\`\``;
+      }
+    } catch { /* ok */ }
+
     return `## Frankenstein Cognitive Architecture
 Du har följande kognitiva moduler aktiva:
 
@@ -729,6 +796,7 @@ Du har följande kognitiva moduler aktiva:
 - Aktiva moduler: ${this.cognitiveState.activeModules.join(", ")}
 ${this.cognitiveState.recentInsight ? `- Senaste insikt: ${this.cognitiveState.recentInsight}` : ""}
 ${trainingContext}
+${tradingContext}
 
 **VIKTIGT:** Du har REALTIDSÅTKOMST till din egen träningsdata ovan. När Kim frågar om träningen, svara med EXAKTA siffror från datan. Du kan diskutera trender, problem, strategier och ge insikter om din egen utveckling.`;
   }
@@ -803,6 +871,13 @@ ${trainingContext}
         // SECURITY
         { name: "view_audit_log", description: "View the security audit log.", parameters: { type: SchemaType.OBJECT, properties: { lines: { type: SchemaType.STRING, description: "Number of lines (default 30)" } } } },
         { name: "view_security_config", description: "View security configuration.", parameters: { type: SchemaType.OBJECT, properties: {} } },
+
+        // TRADING BOT (read-only)
+        { name: "trader_status", description: "Get trading bot process status from the bridge.", parameters: { type: SchemaType.OBJECT, properties: {} } },
+        { name: "trader_state", description: "Get latest persisted trader state (state.json).", parameters: { type: SchemaType.OBJECT, properties: {} } },
+        { name: "trader_live", description: "Get recent trader live events.", parameters: { type: SchemaType.OBJECT, properties: { limit: { type: SchemaType.STRING, description: "Max events (default 50, max 200)" } } } },
+        { name: "trader_log", description: "Tail trader.log.", parameters: { type: SchemaType.OBJECT, properties: { lines: { type: SchemaType.STRING, description: "Max lines (default 200, max 2000)" } } } },
+        { name: "trader_trades", description: "Read parsed trades.jsonl records.", parameters: { type: SchemaType.OBJECT, properties: { limit: { type: SchemaType.STRING, description: "Max lines (default 200, max 2000)" } } } },
         // FRANKENSTEIN EXCLUSIVE
         { name: "cognitive_introspect", description: "Report your current cognitive state.", parameters: { type: SchemaType.OBJECT, properties: {} } },
         { name: "multi_model_consensus", description: "Ask multiple AI models the same question and synthesize.", parameters: { type: SchemaType.OBJECT, properties: { question: { type: SchemaType.STRING, description: "Question to ask all models" } }, required: ["question"] } },
@@ -857,6 +932,9 @@ ${trainingContext}
       if (name.startsWith("waf_")) return await this.handleWafTool(name, args);
       // PENTEST
       if (name === "pentest_waf_run") return await this.handlePentestWafRun(args);
+
+      // TRADING (read-only)
+      if (name.startsWith("trader_")) return await this.handleTraderTool(name, args);
       // FRANKENSTEIN EXCLUSIVE
       if (name === "cognitive_introspect") return this.handleCognitiveIntrospect();
       if (name === "multi_model_consensus") return await this.handleMultiModelConsensus(args.question as string);
