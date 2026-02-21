@@ -1085,12 +1085,15 @@ export default function TradingView() {
       return;
     }
 
+    // Burst runs should tick quickly regardless of the user's normal interval (default is often 3600s).
+    const burstIntervalSeconds = clamp(Math.round(intervalSeconds), 5, 15);
+
     const payload = {
       exchange,
       symbols: resolvedSymbols,
       // Safety: AI execution is ALWAYS paper-only
       paperMode: true,
-      intervalSeconds,
+      intervalSeconds: burstIntervalSeconds,
       riskPerTrade: plan.riskPerTrade ?? riskPerTrade,
       minConfidence: plan.minConfidence ?? minConfidence,
       klinesInterval: plan.klineInterval ?? klineInterval,
