@@ -3,3 +3,13 @@ dist
 .git
 *.log
 .env.local
+
+# Frankenstein training artifacts (very large, runtime-generated)
+frankenstein-ai/training_data
+
+# Python caches
+**/__pycache__
+*.pyc
+
+# Local scratch
+tmp

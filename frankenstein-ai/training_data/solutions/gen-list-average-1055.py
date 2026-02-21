@@ -1,5 +1,0 @@
-# Task: gen-list-average-1055 | Score: 100% | 2026-02-13T20:49:42.339239
-
-n = int(input())
-lst = [int(input()) for _ in range(n)]
-print(round(sum(lst) / len(lst)))

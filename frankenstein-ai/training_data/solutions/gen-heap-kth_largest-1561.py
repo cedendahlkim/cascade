@@ -1,9 +1,0 @@
-# Task: gen-heap-kth_largest-1561 | Score: 100% | 2026-02-13T19:24:29.919745
-
-def solve():
-    nums = list(map(int, input().split()))
-    k = int(input())
-    nums.sort(reverse=True)
-    print(nums[k-1])
-
-solve()

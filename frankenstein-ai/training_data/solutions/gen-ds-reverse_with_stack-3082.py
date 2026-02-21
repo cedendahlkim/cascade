@@ -1,5 +1,0 @@
-# Task: gen-ds-reverse_with_stack-3082 | Score: 100% | 2026-02-13T15:27:34.522910
-
-n = int(input())
-lst = [int(input()) for _ in range(n)]
-print(' '.join(str(x) for x in reversed(lst)))

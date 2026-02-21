@@ -7,3 +7,13 @@ dist/
 bridge/data/
 *.png
 !web/public/icon.svg
+
+# --- Python / Frankenstein generated artifacts ---
+**/__pycache__/
+*.py[cod]
+
+# Training artifacts / local state (should not be versioned)
+frankenstein-ai/training_data/
+
+# Local scratch
+tmp/
