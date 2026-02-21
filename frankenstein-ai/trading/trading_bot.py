@@ -1144,11 +1144,25 @@ class FrankensteinTradingAgent:
                 _send_bridge_event({"type": "trader_error", "symbol": symbol, "error": str(e), "ts": _utc_now_iso()})
 
         portfolio = self.exchange.get_portfolio_value()
+
+        # Optional burst controls (set by bridge when user/AI asks for N orders)
+        try:
+            target_order_count = int(float(os.environ.get("TRADING_TARGET_ORDER_COUNT", "0")))
+        except Exception:
+            target_order_count = 0
+        try:
+            max_runtime_seconds = int(float(os.environ.get("TRADING_MAX_RUNTIME_SECONDS", "0")))
+        except Exception:
+            max_runtime_seconds = 0
+
         state = {
             "running": True,
             "last_tick_at": _utc_now_iso(),
             "tick_count": self.tick_count,
             "order_count": self.order_count,
+            "target_order_count": target_order_count,
+            "target_order_remaining": max(0, target_order_count - self.order_count) if target_order_count > 0 else 0,
+            "max_runtime_seconds": max_runtime_seconds,
             "exchange": getattr(self.exchange, "name", self.exchange.__class__.__name__),
             "symbols": self.symbols,
             "paper_mode": self.exchange.paper_mode,
@@ -1222,6 +1236,16 @@ def main() -> int:
     trailing_stop_pct = float(os.environ.get("TRADING_TRAILING_STOP_PCT", "0"))
     aggression = float(os.environ.get("TRADING_AGGRESSION", "0.5"))
 
+    # Optional burst controls
+    try:
+        target_order_count = int(float(os.environ.get("TRADING_TARGET_ORDER_COUNT", "0")))
+    except Exception:
+        target_order_count = 0
+    try:
+        max_runtime_seconds = int(float(os.environ.get("TRADING_MAX_RUNTIME_SECONDS", "0")))
+    except Exception:
+        max_runtime_seconds = 0
+
     if exchange_name == "kraken":
         base_url = os.environ.get("KRAKEN_BASE_URL") or "https://api.kraken.com"
         api_key = os.environ.get("KRAKEN_API_KEY", "")
@@ -1235,6 +1259,10 @@ def main() -> int:
 
     _log("=== Frankenstein Trading Bot starting ===")
     _log(f"exchange={exchange_name} symbols={symbols} paper_mode={paper_mode} interval={interval_seconds}s")
+    if target_order_count > 0:
+        _log(f"burst: target_order_count={target_order_count}")
+    if max_runtime_seconds > 0:
+        _log(f"burst: max_runtime_seconds={max_runtime_seconds}")
 
     _send_bridge_event({
         "type": "trader_start",
@@ -1280,6 +1308,7 @@ def main() -> int:
     signal.signal(signal.SIGTERM, _handle_shutdown)
 
     last_tick = time.time()
+    started_epoch = time.time()
 
     while not _shutdown:
         try:
@@ -1295,6 +1324,29 @@ def main() -> int:
             last_tick = now
 
             if args.once:
+                break
+
+            if target_order_count > 0 and agent.order_count >= target_order_count:
+                _log(f"burst done: target orders reached ({agent.order_count}/{target_order_count})")
+                _send_bridge_event({
+                    "type": "trader_burst_done",
+                    "reason": "target_orders",
+                    "order_count": agent.order_count,
+                    "target_order_count": target_order_count,
+                    "ts": _utc_now_iso(),
+                })
+                break
+
+            if max_runtime_seconds > 0 and (time.time() - started_epoch) >= max_runtime_seconds:
+                _log(f"burst done: max runtime reached ({max_runtime_seconds}s)")
+                _send_bridge_event({
+                    "type": "trader_burst_done",
+                    "reason": "max_runtime",
+                    "order_count": agent.order_count,
+                    "target_order_count": target_order_count,
+                    "max_runtime_seconds": max_runtime_seconds,
+                    "ts": _utc_now_iso(),
+                })
                 break
 
         except Exception as e:

@@ -1909,6 +1909,8 @@ app.post("/api/trader/start", (req, res) => {
   const stopLossPct = req.body?.stopLossPct != null ? Number(req.body.stopLossPct) : undefined;
   const trailingStopPct = req.body?.trailingStopPct != null ? Number(req.body.trailingStopPct) : undefined;
   const aggression = req.body?.aggression != null ? Number(req.body.aggression) : undefined;
+  const targetOrderCount = req.body?.targetOrderCount != null ? Number(req.body.targetOrderCount) : undefined;
+  const maxRuntimeSeconds = req.body?.maxRuntimeSeconds != null ? Number(req.body.maxRuntimeSeconds) : undefined;
 
   const pythonCmd = process.platform === "win32" ? "python" : "python3";
   const proc = spawn(pythonCmd, ["-u", botScript], {
@@ -1932,6 +1934,8 @@ app.post("/api/trader/start", (req, res) => {
       ...(Number.isFinite(stopLossPct) && stopLossPct! >= 0 ? { TRADING_STOP_LOSS_PCT: String(stopLossPct) } : {}),
       ...(Number.isFinite(trailingStopPct) && trailingStopPct! >= 0 ? { TRADING_TRAILING_STOP_PCT: String(trailingStopPct) } : {}),
       ...(Number.isFinite(aggression) && aggression! >= 0 ? { TRADING_AGGRESSION: String(aggression) } : {}),
+      ...(Number.isFinite(targetOrderCount) && targetOrderCount! > 0 ? { TRADING_TARGET_ORDER_COUNT: String(Math.floor(targetOrderCount!)) } : {}),
+      ...(Number.isFinite(maxRuntimeSeconds) && maxRuntimeSeconds! > 0 ? { TRADING_MAX_RUNTIME_SECONDS: String(Math.floor(maxRuntimeSeconds!)) } : {}),
     },
   });
 

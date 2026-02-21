@@ -30,6 +30,9 @@ type TraderState = {
   last_tick_at?: string;
   tick_count?: number;
   order_count?: number;
+  target_order_count?: number;
+  target_order_remaining?: number;
+  max_runtime_seconds?: number;
   exchange?: string;
   symbols?: string[];
   paper_mode?: boolean;
@@ -64,6 +67,66 @@ type TraderTradesResponse = {
 };
 
 type TradingExchange = "kraken" | "binance";
+
+type TraderBurstPlan = {
+  targetOrderCount: number;
+  maxRuntimeSeconds?: number;
+  symbolMode?: "selected" | "top20_all" | "top20_random";
+  randomCount?: number;
+
+  // Optional overrides (if omitted, current UI config is used)
+  klineInterval?: string;
+  riskPerTrade?: number;
+  minConfidence?: number;
+  maxPositions?: number;
+  cooldownSeconds?: number;
+  takeProfitPct?: number;
+  stopLossPct?: number;
+  trailingStopPct?: number;
+  aggression?: number;
+};
+
+const TRADER_BURST_PREFIX = "TRADER_BURST_JSON:";
+
+function parseTraderBurstPlan(text: string): { plan: TraderBurstPlan; rawJson: string } | { error: string } | null {
+  if (!text) return null;
+  const idx = text.indexOf(TRADER_BURST_PREFIX);
+  if (idx < 0) return null;
+
+  const after = text.slice(idx + TRADER_BURST_PREFIX.length);
+  const fence = after.match(/```json\s*([\s\S]*?)```/i) || after.match(/```\s*([\s\S]*?)```/);
+  const candidate = (fence ? fence[1] : after).trim();
+  const a = candidate.indexOf("{");
+  const b = candidate.lastIndexOf("}");
+  if (a < 0 || b <= a) return { error: "No JSON object found after TRADER_BURST_JSON" };
+
+  const rawJson = candidate.slice(a, b + 1).trim();
+  try {
+    const obj = JSON.parse(rawJson) as Partial<TraderBurstPlan>;
+    const target = Number(obj?.targetOrderCount);
+    if (!Number.isFinite(target) || target <= 0) return { error: "targetOrderCount must be a positive number" };
+
+    const plan: TraderBurstPlan = {
+      targetOrderCount: Math.max(1, Math.min(200, Math.floor(target))),
+      maxRuntimeSeconds: obj?.maxRuntimeSeconds != null ? Math.max(10, Math.min(24 * 3600, Math.floor(Number(obj.maxRuntimeSeconds) || 0))) : undefined,
+      symbolMode: obj?.symbolMode,
+      randomCount: obj?.randomCount != null ? Math.max(1, Math.min(20, Math.floor(Number(obj.randomCount) || 0))) : undefined,
+      klineInterval: typeof obj?.klineInterval === "string" ? obj.klineInterval : undefined,
+      riskPerTrade: obj?.riskPerTrade != null ? Number(obj.riskPerTrade) : undefined,
+      minConfidence: obj?.minConfidence != null ? Number(obj.minConfidence) : undefined,
+      maxPositions: obj?.maxPositions != null ? Number(obj.maxPositions) : undefined,
+      cooldownSeconds: obj?.cooldownSeconds != null ? Number(obj.cooldownSeconds) : undefined,
+      takeProfitPct: obj?.takeProfitPct != null ? Number(obj.takeProfitPct) : undefined,
+      stopLossPct: obj?.stopLossPct != null ? Number(obj.stopLossPct) : undefined,
+      trailingStopPct: obj?.trailingStopPct != null ? Number(obj.trailingStopPct) : undefined,
+      aggression: obj?.aggression != null ? Number(obj.aggression) : undefined,
+    };
+
+    return { plan, rawJson };
+  } catch (e) {
+    return { error: `Invalid JSON in TRADER_BURST_JSON: ${String(e)}` };
+  }
+}
 
 type TraderSymbolsResponse = {
   exchange: TradingExchange;
@@ -479,18 +542,14 @@ export default function TradingView() {
   const [actionBusy, setActionBusy] = useState<"start" | "stop" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Frankenstein strategy chat (subset)
-  const [strategyMessages, setStrategyMessages] = useState<FrankMessage[]>([]);
-  const [strategyInput, setStrategyInput] = useState("");
-  const [strategyThinking, setStrategyThinking] = useState(false);
-  const [strategyStream, setStrategyStream] = useState("");
-
+  // Config (avoid reversion by server polling)
   const [configDirty, setConfigDirty] = useState(false);
   const configDirtyRef = useRef(false);
 
   const [exchange, setExchange] = useState<TradingExchange>("kraken");
   const [symbols, setSymbols] = useState("BTCUSDT,ETHUSDT");
   const [paperMode, setPaperMode] = useState(true);
+
   const [intervalSeconds, setIntervalSeconds] = useState(3600);
   const [riskPerTrade, setRiskPerTrade] = useState(0.02);
   const [minConfidence, setMinConfidence] = useState(0.6);
@@ -534,6 +593,17 @@ export default function TradingView() {
 
   const socketRef = useRef<Socket | null>(null);
   const awaitingStrategyReplyRef = useRef(false);
+
+  // Strategy chat (Frankenstein)
+  const [strategyMessages, setStrategyMessages] = useState<FrankMessage[]>([]);
+  const [strategyInput, setStrategyInput] = useState("");
+  const [strategyThinking, setStrategyThinking] = useState(false);
+  const [strategyStream, setStrategyStream] = useState("");
+
+  // AI execution (paper-only) from strategy replies
+  const [allowAiExecution, setAllowAiExecution] = useState(false);
+  const [pendingBurstPlan, setPendingBurstPlan] = useState<TraderBurstPlan | null>(null);
+  const [pendingBurstPlanError, setPendingBurstPlanError] = useState<string | null>(null);
 
   useEffect(() => {
     chartPausedRef.current = chartPaused;
@@ -829,6 +899,16 @@ export default function TradingView() {
       });
 
       if (msg.role === "cascade") {
+        const parsed = parseTraderBurstPlan(text);
+        if (parsed) {
+          if ("plan" in parsed) {
+            setPendingBurstPlan(parsed.plan);
+            setPendingBurstPlanError(null);
+          } else {
+            setPendingBurstPlan(null);
+            setPendingBurstPlanError(parsed.error);
+          }
+        }
         setStrategyThinking(false);
         setStrategyStream("");
         awaitingStrategyReplyRef.current = false;
@@ -917,30 +997,40 @@ export default function TradingView() {
     const prompt = `${STRATEGY_REQ_PREFIX} ${text}\n\n` +
       `Du får bifogade trader_state.json + trader_live_events.json + trader_trades.json.\n` +
       `Analysera signaler/beslut, diskutera strategi, risk, parametrar och förbättringar.\n` +
-      `Svara ALLTID med första raden exakt: ${STRATEGY_REPLY_PREFIX}`;
+      `Svara ALLTID med första raden exakt: ${STRATEGY_REPLY_PREFIX}\n\n` +
+      `Om användaren ber dig att EXEKVERA (t.ex. 'lägg 20 bra ordrar'), lägg till ett block i slutet:\n` +
+      `${TRADER_BURST_PREFIX}\n` +
+      "```json\n" +
+      `{"targetOrderCount":20,"maxRuntimeSeconds":900,"symbolMode":"top20_random","randomCount":5,"klineInterval":"5m","aggression":0.85}\n` +
+      "```\n" +
+      `Regler: detta körs paper-only. Om något verkar farligt/otydligt: föreslå plan men be om bekräftelse i text.`;
 
     socketRef.current?.emit("frank_message", { content: prompt, files });
   };
 
   const startTrader = async () => {
+    const payload = {
+      exchange,
+      symbols: symbols.split(",").map((s) => s.trim()).filter(Boolean),
+      paperMode,
+      intervalSeconds,
+      riskPerTrade,
+      minConfidence,
+      klinesInterval: klineInterval,
+      maxPositions,
+      cooldownSeconds,
+      takeProfitPct,
+      stopLossPct,
+      trailingStopPct,
+      aggression,
+    };
+    await startTraderWithPayload(payload);
+  };
+
+  const startTraderWithPayload = async (payload: any) => {
     setActionBusy("start");
     setError(null);
     try {
-      const payload = {
-        exchange,
-        symbols: symbols.split(",").map(s => s.trim()).filter(Boolean),
-        paperMode,
-        intervalSeconds,
-        riskPerTrade,
-        minConfidence,
-        klinesInterval: klineInterval,
-        maxPositions,
-        cooldownSeconds,
-        takeProfitPct,
-        stopLossPct,
-        trailingStopPct,
-        aggression,
-      };
       const res = await fetch(`${BRIDGE_URL}/api/trader/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -957,6 +1047,64 @@ export default function TradingView() {
     } finally {
       setActionBusy(null);
     }
+  };
+
+  const executeBurstPlan = async () => {
+    if (!pendingBurstPlan) return;
+    if (running) {
+      setError("Stoppa trader först (burst startar en ny process)");
+      return;
+    }
+    if (!allowAiExecution) {
+      setError("Slå på 'AI execution' först (paper only)");
+      return;
+    }
+
+    const plan = pendingBurstPlan;
+    const mode = plan.symbolMode || "selected";
+    const pickN = plan.randomCount != null ? plan.randomCount : 5;
+
+    let resolvedSymbols: string[] = [];
+    if (mode === "top20_all") {
+      resolvedSymbols = symbolUniverse.slice(0, 20);
+    } else if (mode === "top20_random") {
+      const arr = symbolUniverse.slice(0, 20);
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+      }
+      resolvedSymbols = arr.slice(0, Math.max(1, Math.min(20, pickN)));
+    } else {
+      resolvedSymbols = selectedSymbols;
+    }
+
+    if (resolvedSymbols.length === 0) {
+      setError("No symbols selected. Välj coins först (eller använd top-20 pickern)");
+      return;
+    }
+
+    const payload = {
+      exchange,
+      symbols: resolvedSymbols,
+      // Safety: AI execution is ALWAYS paper-only
+      paperMode: true,
+      intervalSeconds,
+      riskPerTrade: plan.riskPerTrade ?? riskPerTrade,
+      minConfidence: plan.minConfidence ?? minConfidence,
+      klinesInterval: plan.klineInterval ?? klineInterval,
+      maxPositions: plan.maxPositions ?? maxPositions,
+      cooldownSeconds: plan.cooldownSeconds ?? cooldownSeconds,
+      takeProfitPct: plan.takeProfitPct ?? takeProfitPct,
+      stopLossPct: plan.stopLossPct ?? stopLossPct,
+      trailingStopPct: plan.trailingStopPct ?? trailingStopPct,
+      aggression: plan.aggression ?? aggression,
+      targetOrderCount: plan.targetOrderCount,
+      maxRuntimeSeconds: plan.maxRuntimeSeconds ?? 900,
+    };
+
+    await startTraderWithPayload(payload);
   };
 
   const stopTrader = async () => {
@@ -1941,6 +2089,67 @@ export default function TradingView() {
             <MessageSquareText className="w-3.5 h-3.5" /> Strategi med Frankenstein
           </div>
         </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <label className="flex items-center gap-2 text-[11px] text-slate-300">
+            <input
+              type="checkbox"
+              checked={allowAiExecution}
+              onChange={(e) => setAllowAiExecution(e.target.checked)}
+              disabled={running}
+            />
+            AI execution (paper-only)
+          </label>
+          <div className="text-[10px] text-slate-500">AI kan föreslå en burst-plan → du trycker Execute.</div>
+        </div>
+
+        {pendingBurstPlanError && (
+          <div className="text-[11px] text-amber-200 bg-amber-950/25 border border-amber-700/30 rounded-lg px-2 py-1">
+            Burst parse: {pendingBurstPlanError}
+          </div>
+        )}
+
+        {pendingBurstPlan && (
+          <div className="bg-slate-950/40 border border-slate-700/40 rounded-lg p-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Burst plan</div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={executeBurstPlan}
+                  disabled={actionBusy !== null || running || !allowAiExecution}
+                  className="px-2 py-0.5 rounded-md bg-emerald-900/50 border border-emerald-700/40 text-emerald-200 hover:bg-emerald-900/70 text-[10px] disabled:opacity-50"
+                  title="Startar trader med targetOrderCount och stoppar automatiskt"
+                >
+                  Execute
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingBurstPlan(null);
+                    setPendingBurstPlanError(null);
+                  }}
+                  disabled={actionBusy !== null}
+                  className="px-2 py-0.5 rounded-md bg-slate-900/50 border border-slate-700/50 text-slate-200 hover:bg-slate-900/70 text-[10px] disabled:opacity-50"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-1 text-[11px] text-slate-300 font-mono whitespace-pre-wrap">
+              targetOrderCount={pendingBurstPlan.targetOrderCount}
+              {pendingBurstPlan.maxRuntimeSeconds != null ? `  maxRuntimeSeconds=${pendingBurstPlan.maxRuntimeSeconds}` : ""}
+              {pendingBurstPlan.symbolMode ? `  symbolMode=${pendingBurstPlan.symbolMode}` : ""}
+              {pendingBurstPlan.randomCount != null ? `  randomCount=${pendingBurstPlan.randomCount}` : ""}
+              {pendingBurstPlan.klineInterval ? `\nklines=${pendingBurstPlan.klineInterval}` : ""}
+              {pendingBurstPlan.aggression != null ? `  aggression=${pendingBurstPlan.aggression}` : ""}
+            </div>
+            <div className="mt-1 text-[10px] text-slate-500">
+              Obs: "20 ordrar" betyder upp till 20 fyllda BUY/SELL enligt botens signaler. Den kan stoppa tidigare om maxRuntimeSeconds nås.
+            </div>
+          </div>
+        )}
 
         <div className="space-y-1 max-h-56 overflow-auto">
           {strategyMessages.length === 0 && (
