@@ -33,6 +33,7 @@ const WafHardeningView = lazy(() => import("../WafHardeningView"));
 const PentestView = lazy(() => import("../PentestView"));
 const AutopilotView = lazy(() => import("../AutopilotView"));
 const KaliView = lazy(() => import("../KaliView"));
+const OpenClawView = lazy(() => import("../OpenClawView"));
 
 const LazyFallback = () => (
   <div className="flex-1 flex items-center justify-center">
@@ -93,6 +94,7 @@ export default function MoreViewRouter({ activeTab, moreTab, onMoreTabChange, ed
             {moreTab === "waf" && <WafHardeningView />}
             {moreTab === "pentest" && <PentestView />}
             {moreTab === "kali" && <KaliView />}
+            {moreTab === "openclaw" && <OpenClawView />}
             {moreTab === "autopilot" && <AutopilotView />}
             {moreTab === "git" && <GitView />}
             {moreTab === "install" && <InstallView />}

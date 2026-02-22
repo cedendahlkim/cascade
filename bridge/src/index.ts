@@ -2116,6 +2116,165 @@ app.get("/api/trader/orders", (_req, res) => {
   }
 });
 
+// --- OpenClaw Integration ---
+const OPENCLAW_GATEWAY = process.env.OPENCLAW_GATEWAY_URL || "http://localhost:18789";
+const openclawState = {
+  installed: false,
+  gatewayOnline: false,
+  lastCheck: 0,
+  conversations: [] as Array<{ id: string; channel: string; message: string; timestamp: string; role: string }>,
+  skills: [] as Array<{ name: string; description: string; enabled: boolean }>,
+  config: {
+    model: process.env.OPENCLAW_MODEL || "google-generative-ai/gemini-2.0-flash",
+    channels: [] as string[],
+    gatewayUrl: OPENCLAW_GATEWAY,
+  },
+};
+
+// Check OpenClaw gateway status
+async function checkOpenClawGateway(): Promise<boolean> {
+  try {
+    const res = await fetch(`${OPENCLAW_GATEWAY}/api/status`, { signal: AbortSignal.timeout(3000) });
+    if (res.ok) { openclawState.gatewayOnline = true; openclawState.installed = true; return true; }
+  } catch { /* gateway not running */ }
+  // Fallback: check if openclaw CLI is available in kali or host
+  try {
+    const { execSync } = await import("child_process");
+    execSync("which openclaw || openclaw --version", { timeout: 5000, stdio: "pipe" });
+    openclawState.installed = true;
+  } catch { /* not installed */ }
+  openclawState.gatewayOnline = false;
+  openclawState.lastCheck = Date.now();
+  return false;
+}
+
+app.get("/api/openclaw/status", async (_req, res) => {
+  await checkOpenClawGateway();
+  res.json({
+    installed: openclawState.installed,
+    gatewayOnline: openclawState.gatewayOnline,
+    gatewayUrl: OPENCLAW_GATEWAY,
+    model: openclawState.config.model,
+    channels: openclawState.config.channels,
+    conversationCount: openclawState.conversations.length,
+    skillCount: openclawState.skills.length,
+    geminiEnabled: geminiAgent.isEnabled(),
+    lastCheck: openclawState.lastCheck,
+  });
+});
+
+// Send message to OpenClaw (via gateway or fallback to Gemini)
+app.post("/api/openclaw/chat", async (req, res) => {
+  const { message, channel, context } = req.body || {};
+  if (!message) return res.status(400).json({ error: "message required" });
+
+  const timestamp = new Date().toISOString();
+
+  // Store user message
+  openclawState.conversations.push({
+    id: `msg-${Date.now()}`,
+    channel: channel || "webchat",
+    message: String(message),
+    timestamp,
+    role: "user",
+  });
+  if (openclawState.conversations.length > 200) openclawState.conversations = openclawState.conversations.slice(-200);
+
+  // Try OpenClaw gateway first
+  if (openclawState.gatewayOnline) {
+    try {
+      const gwRes = await fetch(`${OPENCLAW_GATEWAY}/api/agent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, channel: channel || "webchat" }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (gwRes.ok) {
+        const data = await gwRes.json() as Record<string, unknown>;
+        const reply = String(data.response || data.content || data.message || "");
+        openclawState.conversations.push({ id: `msg-${Date.now()}`, channel: channel || "webchat", message: reply, timestamp: new Date().toISOString(), role: "assistant" });
+        io.emit("openclaw_message", { role: "assistant", content: reply, channel: channel || "webchat", source: "gateway" });
+        return res.json({ response: reply, source: "gateway" });
+      }
+    } catch { /* gateway failed, fallback */ }
+  }
+
+  // Fallback: use Gemini directly with OpenClaw-style system prompt
+  if (geminiAgent.isEnabled()) {
+    const openclawPrompt = `Du är OpenClaw 🦞 — en autonom AI-assistent integrerad i Gracestack.
+Du använder Google Gemini som din LLM-motor.
+Du kan hjälpa med:
+- Kodning och utveckling
+- Säkerhetsanalys (via Kali Linux-verktyg)
+- Forskning och informationssökning
+- Automatisering och workflows
+- Kommunikation med Frankenstein AI
+
+${context ? `Kontext: ${context}\n` : ""}
+Svara koncist och handlingsorienterat. Använd svenska om användaren skriver svenska.
+
+Användaren: ${message}`;
+
+    try {
+      const reply = await geminiAgent.respond(openclawPrompt);
+      openclawState.conversations.push({ id: `msg-${Date.now()}`, channel: channel || "webchat", message: reply, timestamp: new Date().toISOString(), role: "assistant" });
+      io.emit("openclaw_message", { role: "assistant", content: reply, channel: channel || "webchat", source: "gemini-fallback" });
+      return res.json({ response: reply, source: "gemini-fallback" });
+    } catch (err) {
+      return res.status(500).json({ error: `Gemini error: ${err}` });
+    }
+  }
+
+  res.status(503).json({ error: "Neither OpenClaw gateway nor Gemini API available" });
+});
+
+// Get conversation history
+app.get("/api/openclaw/conversations", (_req, res) => {
+  const limit = Math.min(Number((_req.query as Record<string, string>).limit) || 50, 200);
+  res.json({ conversations: openclawState.conversations.slice(-limit) });
+});
+
+// Skills management
+app.get("/api/openclaw/skills", async (_req, res) => {
+  // Try to get skills from gateway
+  if (openclawState.gatewayOnline) {
+    try {
+      const gwRes = await fetch(`${OPENCLAW_GATEWAY}/api/skills`, { signal: AbortSignal.timeout(3000) });
+      if (gwRes.ok) {
+        const data = await gwRes.json() as Record<string, unknown>;
+        openclawState.skills = (data.skills || []) as typeof openclawState.skills;
+        return res.json({ skills: openclawState.skills, source: "gateway" });
+      }
+    } catch { /* fallback */ }
+  }
+  // Return built-in skills
+  const builtinSkills = [
+    { name: "gemini-chat", description: "Chatta med Gemini AI (Google)", enabled: geminiAgent.isEnabled() },
+    { name: "frankenstein", description: "Frankenstein AI — kognitiv assistent", enabled: true },
+    { name: "kali-tools", description: "Kali Linux säkerhetsverktyg (nmap, nikto, etc.)", enabled: true },
+    { name: "code-editor", description: "Redigera och analysera kod", enabled: true },
+    { name: "web-search", description: "Sök på webben", enabled: true },
+    { name: "file-manager", description: "Hantera filer och mappar", enabled: true },
+    { name: "rag-search", description: "Sök i kunskapsbasen (Archon)", enabled: true },
+    { name: "trading", description: "Trading-bot och marknadsanalys", enabled: true },
+    { name: "vision", description: "Bildanalys med Gemini Vision", enabled: true },
+    { name: "memory", description: "Persistent minne och kontext", enabled: true },
+  ];
+  res.json({ skills: builtinSkills, source: "builtin" });
+});
+
+// OpenClaw config
+app.get("/api/openclaw/config", (_req, res) => {
+  res.json(openclawState.config);
+});
+
+app.post("/api/openclaw/config", (req, res) => {
+  const { model, channels } = req.body || {};
+  if (model) openclawState.config.model = String(model);
+  if (Array.isArray(channels)) openclawState.config.channels = channels.map(String);
+  res.json({ ok: true, config: openclawState.config });
+});
+
 // --- Frankenstein AI Progress ---
 app.get("/api/frankenstein/progress", (_req, res) => {
   try {
