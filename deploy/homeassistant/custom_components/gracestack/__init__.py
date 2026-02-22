@@ -2,6 +2,7 @@
 import logging
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.typing import ConfigType
 
 _LOGGER = logging.getLogger(__name__)
@@ -9,7 +10,6 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = "gracestack"
 CONF_BRIDGE_URL = "bridge_url"
 DEFAULT_BRIDGE_URL = "http://gracestack-bridge:3031"
-PLATFORMS = ["conversation"]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -20,6 +20,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     _LOGGER.info("Gracestack AI integration loaded, bridge: %s", bridge_url)
 
     # Load conversation platform
-    await hass.helpers.discovery.async_load_platform("conversation", DOMAIN, {}, config)
+    hass.async_create_task(
+        async_load_platform(hass, "conversation", DOMAIN, {}, config)
+    )
 
     return True
