@@ -77,6 +77,7 @@ services:
     volumes:
       - ha-config:/config
       - ./deploy/homeassistant/configuration.yaml:/config/configuration.yaml:ro
+      - ./deploy/homeassistant/custom_components:/config/custom_components:ro
     depends_on:
       - bridge
 

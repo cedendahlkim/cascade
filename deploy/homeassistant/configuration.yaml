@@ -20,6 +20,10 @@ http:
 # Enable default integrations
 default_config:
 
+# Gracestack AI conversation agent (Frankenstein + OpenClaw + Gemini)
+gracestack:
+  bridge_url: "http://gracestack-bridge:3031"
+
 # Text-to-speech
 tts:
   - platform: google_translate
