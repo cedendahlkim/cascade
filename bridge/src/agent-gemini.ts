@@ -249,11 +249,8 @@ export class GeminiAgent {
           functionResponses.push({ functionResponse: { name: fc.name, response: { result: toolResult } } } as any);
         }
 
-        // Send tool results back to Gemini
-        await chat.sendMessage(functionResponses);
-
-        // Get the follow-up response
-        const followUp = await chat.sendMessage([]);
+        // Send tool results back to Gemini (returns the model's follow-up)
+        const followUp = await chat.sendMessage(functionResponses);
         const followUpCandidate = followUp.response.candidates?.[0];
         if (followUpCandidate) {
           const moreFunctionCalls = followUpCandidate.content?.parts?.filter(p => "functionCall" in p) || [];
