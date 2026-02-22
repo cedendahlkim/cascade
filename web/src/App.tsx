@@ -59,6 +59,7 @@ import {
 
 const ToolsView = lazy(() => import("./components/ToolsView"));
 const FrankensteinChatView = lazy(() => import("./components/FrankensteinChatView"));
+const OpenClawView = lazy(() => import("./components/OpenClawView"));
 
 const LazyFallback = () => <div className="flex-1 flex items-center justify-center"><div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -184,7 +185,7 @@ const SLASH_COMMANDS = [
   { cmd: "/rag", desc: "Kunskapsbas", action: "Visa RAG-statistik och källor" },
 ] as const;
 
-type Tab = "chat" | "gemini" | "frank" | "arena" | "lab" | "tools" | "settings" | "more";
+type Tab = "chat" | "gemini" | "openclaw" | "frank" | "arena" | "lab" | "tools" | "settings" | "more";
 
 interface ArenaMessage {
   id: string;
@@ -357,7 +358,7 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentStatusEvent | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("chat");
+  const [activeTab, setActiveTab] = useState<Tab>("openclaw");
 
   // L: Mobile hooks
   const { isOnline, wasOffline } = useOfflineStatus();
@@ -656,7 +657,7 @@ export default function App() {
     const dt = Date.now() - touchStartRef.current.time;
     touchStartRef.current = null;
     if (Math.abs(dx) < 80 || Math.abs(dy) > Math.abs(dx) * 0.7 || dt > 400) return;
-    const tabOrder: Tab[] = ["chat", "gemini", "arena", "lab", "tools", "more"];
+    const tabOrder: Tab[] = ["openclaw", "chat", "frank", "arena", "lab", "tools", "more"];
     const idx = tabOrder.indexOf(activeTab);
     if (dx < 0 && idx < tabOrder.length - 1) setActiveTab(tabOrder[idx + 1]);
     if (dx > 0 && idx > 0) setActiveTab(tabOrder[idx - 1]);
@@ -1129,8 +1130,8 @@ export default function App() {
   }, [activeTab, moreTab]);
 
   const tabs: AppTabDefinition<Tab>[] = [
+    { id: "openclaw", label: "OpenClaw", icon: Zap },
     { id: "chat", label: "Claude", icon: Brain },
-    { id: "gemini", label: "Gemini", icon: Zap },
     { id: "frank", label: "Frank", icon: Sparkles },
     { id: "arena", label: "Arena", icon: Swords },
     { id: "lab", label: "Lab", icon: Activity },
@@ -1338,6 +1339,12 @@ export default function App() {
       )}
 
       {/* Tab Content */}
+      {activeTab === "openclaw" && (
+        <Suspense fallback={<LazyFallback />}>
+          <OpenClawView />
+        </Suspense>
+      )}
+
       {activeTab === "chat" && (
         <>
           {/* Chat History Bar */}

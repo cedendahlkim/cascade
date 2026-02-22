@@ -18,7 +18,7 @@ import { ragSearch, ragListSources, ragStats, ragIndexText, ragIndexFile } from 
 import { getPluginToolDefinitions, handlePluginTool } from "./plugin-loader.js";
 
 export type GeminiStreamCallback = (chunk: string) => void;
-export type GeminiStatusCallback = (status: { type: string }) => void;
+export type GeminiStatusCallback = (status: { type: string; tool?: string; input?: string; category?: string }) => void;
 
 export interface GeminiTokenUsage {
   inputTokens: number;
@@ -79,8 +79,22 @@ export class GeminiAgent {
     if (this.streamCallback) this.streamCallback(chunk);
   }
 
-  private emitStatus(type: string): void {
-    if (this.statusCallback) this.statusCallback({ type });
+  private emitStatus(type: string, tool?: string, input?: string): void {
+    const category = tool ? this.categorize(tool) : "thinking";
+    if (this.statusCallback) this.statusCallback({ type, tool, input, category });
+  }
+
+  private categorize(tool: string): string {
+    if (["save_memory", "search_memory", "list_memories"].includes(tool)) return "memory";
+    if (["read_file", "write_file", "list_directory"].includes(tool)) return "filesystem";
+    if (["run_command"].includes(tool)) return "command";
+    if (["web_search", "fetch_url"].includes(tool)) return "web";
+    if (["screenshot_computer", "computer_system_info"].includes(tool)) return "desktop";
+    if (["run_on_computer", "read_remote_file", "write_remote_file"].includes(tool)) return "desktop";
+    if (["rag_search", "rag_list_sources"].includes(tool)) return "knowledge";
+    if (tool.startsWith("waf_")) return "security";
+    if (["list_computers"].includes(tool)) return "system";
+    return "thinking";
   }
 
   private getTools(): FunctionDeclarationsTool[] {
@@ -242,10 +256,10 @@ export class GeminiAgent {
         for (const part of functionCalls) {
           const fc = (part as any).functionCall;
           console.log(`[gemini] Tool call: ${fc.name}`);
-          this.emitStatus("tool_start");
+          this.emitStatus("tool_start", fc.name, JSON.stringify(fc.args || {}).slice(0, 80));
           const toolResult = await this.handleToolCall(fc.name, fc.args || {});
           console.log(`[gemini] Tool ${fc.name}: ${toolResult.slice(0, 100)}`);
-          this.emitStatus("tool_done");
+          this.emitStatus("tool_done", fc.name);
           functionResponses.push({ functionResponse: { name: fc.name, response: { result: toolResult } } } as any);
         }
 
