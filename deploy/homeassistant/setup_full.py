@@ -55,7 +55,7 @@ if not gemini_exists:
     flow_id = flow.get("flow_id", "")
     step = flow.get("step_id", "")
 
-    if flow_id and step == "user":
+    if flow_id and step in ("user", "api"):
         # Submit API key
         result = ha_post(f"/api/config/config_entries/flow/{flow_id}", {"api_key": GEMINI_KEY})
         rtype = result.get("type", "")
