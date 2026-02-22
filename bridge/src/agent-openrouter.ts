@@ -421,16 +421,36 @@ Du har FULL tillgång till servern. Du kan köra ALLA kommandon utan begränsnin
     }
   }
 
+  /** Trim history safely — never break tool call/result pairs */
+  private trimHistory(): void {
+    const MAX = 60;
+    if (this.history.length <= MAX) return;
+
+    // Find a safe cut point: never cut between an assistant tool_calls and its tool results
+    let cutAt = this.history.length - MAX;
+    // Walk forward from cutAt to find a safe boundary (a "user" or standalone "assistant" message)
+    while (cutAt < this.history.length - 2) {
+      const msg = this.history[cutAt];
+      if (msg.role === "user") break;
+      if (msg.role === "assistant" && !msg.tool_calls) break;
+      cutAt++;
+    }
+    this.history = this.history.slice(cutAt);
+  }
+
   async respond(userMessage: string): Promise<string> {
     if (!this.enabled) return "OpenRouter not configured. Set OPENROUTER_API_KEY in bridge/.env";
 
     this.emitStatus("thinking");
 
     this.history.push({ role: "user", content: userMessage });
-    if (this.history.length > 60) this.history = this.history.slice(-60);
+    this.trimHistory();
 
     const modelInfo = FEATURED_MODELS.find(m => m.id === this.currentModel);
     const useTools = modelInfo?.supportsTools !== false;
+
+    // Track how many messages we add during this call so we can roll back on error
+    const historyLenBefore = this.history.length;
 
     try {
       const MAX_TOOL_ROUNDS = 8;
@@ -447,13 +467,9 @@ Du har FULL tillgång till servern. Du kan köra ALLA kommandon utan begränsnin
           max_tokens: 4096,
         };
 
-        if (useTools && round === 0) {
+        if (useTools) {
           body.tools = TOOL_DEFINITIONS;
           body.tool_choice = "auto";
-        }
-        // On subsequent rounds (after tool results), include tools again
-        if (useTools && round > 0) {
-          body.tools = TOOL_DEFINITIONS;
         }
 
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -469,7 +485,7 @@ Du har FULL tillgång till servern. Du kan köra ALLA kommandon utan begränsnin
 
         if (!response.ok) {
           const errText = await response.text();
-          throw new Error(`OpenRouter API error ${response.status}: ${errText.slice(0, 200)}`);
+          throw new Error(`OpenRouter API error ${response.status}: ${errText.slice(0, 300)}`);
         }
 
         // Parse SSE stream
@@ -479,13 +495,15 @@ Du har FULL tillgång till servern. Du kan köra ALLA kommandon utan begränsnin
         let accumulated = "";
         let toolCalls: any[] = [];
         const decoder = new TextDecoder();
+        let sseBuffer = "";
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split("\n");
+          sseBuffer = lines.pop() || ""; // Keep incomplete last line
 
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
@@ -522,7 +540,6 @@ Du har FULL tillgång till servern. Du kan köra ALLA kommandon utan begränsnin
                 this.tokenUsage.outputTokens += parsed.usage.completion_tokens || 0;
                 this.tokenUsage.totalTokens += (parsed.usage.prompt_tokens || 0) + (parsed.usage.completion_tokens || 0);
                 this.tokenUsage.requestCount++;
-                // Estimate cost
                 if (modelInfo) {
                   this.tokenUsage.totalCostUsd +=
                     ((parsed.usage.prompt_tokens || 0) * modelInfo.pricing.prompt +
@@ -533,24 +550,28 @@ Du har FULL tillgång till servern. Du kan köra ALLA kommandon utan begränsnin
           }
         }
 
+        // Filter out any toolCalls with missing id (incomplete streaming)
+        toolCalls = toolCalls.filter(tc => tc && tc.id && tc.function?.name);
+
         // If no tool calls, we're done
         if (toolCalls.length === 0 || !useTools) {
           fullText = accumulated;
           break;
         }
 
-        // Process tool calls
         // Add assistant message with tool_calls to history
-        this.history.push({
+        const assistantMsg: ChatMessage = {
           role: "assistant",
-          content: accumulated || null,
+          content: accumulated || "",
           tool_calls: toolCalls.map(tc => ({
             id: tc.id,
             type: "function",
             function: { name: tc.function.name, arguments: tc.function.arguments },
           })),
-        });
+        };
+        this.history.push(assistantMsg);
 
+        // Execute each tool call and add results
         for (const tc of toolCalls) {
           const fnName = tc.function.name;
           let fnArgs: Record<string, unknown> = {};
@@ -563,16 +584,15 @@ Du har FULL tillgång till servern. Du kan köra ALLA kommandon utan begränsnin
           console.log(`[openrouter] Tool ${fnName}: ${result.slice(0, 100)}`);
           this.emitStatus("tool_done", fnName);
 
-          // Add tool result to history
           this.history.push({
             role: "tool",
-            content: result,
+            content: result.slice(0, 8000), // Cap tool output to avoid context overflow
             tool_call_id: tc.id,
             name: fnName,
           });
         }
 
-        // Continue loop to get model's follow-up response
+        // Reset for next round
         accumulated = "";
       }
 
@@ -583,10 +603,22 @@ Du har FULL tillgång till servern. Du kan köra ALLA kommandon utan begränsnin
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error("[openrouter] Error:", errMsg);
-      this.history.pop(); // Remove failed user message
-      if (errMsg.includes("context") || errMsg.includes("too long")) {
-        this.history = this.history.slice(-10);
+
+      // Roll back history to before this call to avoid corrupt state
+      this.history = this.history.slice(0, historyLenBefore);
+
+      // If context too long, aggressively trim
+      if (errMsg.includes("context") || errMsg.includes("too long") || errMsg.includes("too many")) {
+        this.history = this.history.slice(-6);
+        console.log("[openrouter] Context overflow — trimmed history to last 6 messages");
       }
+
+      // If tool_result/tool_use_id mismatch, clear history entirely
+      if (errMsg.includes("tool_result") || errMsg.includes("tool_use_id") || errMsg.includes("tool_use_i")) {
+        console.log("[openrouter] Tool call history corruption detected — clearing history");
+        this.history = [];
+      }
+
       this.emitStatus("done");
       return `OpenRouter error: ${errMsg}`;
     }
