@@ -14,7 +14,7 @@ function audit(tool: string, input: string, allowed: boolean, reason?: string) {
   auditLog({ timestamp: new Date().toISOString(), tool, input, allowed, reason });
 }
 
-const MAX_OUTPUT = 4000;
+const MAX_OUTPUT = 8000;
 
 export const COMMAND_TOOLS: Anthropic.Tool[] = [
   {
@@ -45,7 +45,7 @@ export function handleCommandTool(name: string, input: Record<string, unknown>):
       const command = input.command as string;
       const rawCwd = (input.cwd as string) || process.env.CASCADE_REMOTE_WORKSPACE || process.cwd();
       const runner = (input.runner as string) === "kali" ? "kali" : "host";
-      const timeoutSec = Math.min((input.timeout as number) || 15, 60);
+      const timeoutSec = Math.min((input.timeout as number) || 30, 300);
 
       const workspaceRoot = process.env.CASCADE_REMOTE_WORKSPACE || process.cwd();
       const cwd = isAbsolute(rawCwd) ? rawCwd : join(workspaceRoot, rawCwd);

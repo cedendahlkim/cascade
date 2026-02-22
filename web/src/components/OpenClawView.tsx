@@ -77,6 +77,7 @@ const TOOL_CATEGORIES: Record<string, { icon: typeof Brain; label: string; color
   security:   { icon: Shield,     label: "Säkerhet",    color: "text-yellow-400", bg: "bg-yellow-950/60 border-yellow-800/40" },
   desktop:    { icon: Eye,        label: "Skärm",       color: "text-cyan-400",   bg: "bg-cyan-950/60 border-cyan-800/40" },
   knowledge:  { icon: Database,   label: "Kunskapsbas", color: "text-indigo-400", bg: "bg-indigo-950/60 border-indigo-800/40" },
+  creative:   { icon: Sparkles,   label: "Skapar",      color: "text-pink-400",   bg: "bg-pink-950/60 border-pink-800/40" },
 };
 
 const QUICK_ACTIONS = [

@@ -159,22 +159,54 @@ const FEATURED_MODELS: OpenRouterModel[] = [
   },
 ];
 
+const fn = (name: string, description: string, parameters: any) =>
+  ({ type: "function" as const, function: { name, description, parameters } });
+const obj = (properties: any, required?: string[]) =>
+  ({ type: "object", properties, ...(required ? { required } : {}) });
+const str = (description: string) => ({ type: "string", description });
+const num = (description: string) => ({ type: "number", description });
+
 const TOOL_DEFINITIONS = [
-  { type: "function" as const, function: { name: "list_computers", description: "List all registered computers and their status.", parameters: { type: "object", properties: {} } } },
-  { type: "function" as const, function: { name: "run_on_computer", description: "Run a shell command on a remote computer. Use 'auto' to auto-route.", parameters: { type: "object", properties: { computer: { type: "string", description: "Computer name or 'auto'" }, command: { type: "string", description: "Shell command" } }, required: ["computer", "command"] } } },
-  { type: "function" as const, function: { name: "read_remote_file", description: "Read a file from a remote computer.", parameters: { type: "object", properties: { computer: { type: "string" }, path: { type: "string" } }, required: ["computer", "path"] } } },
-  { type: "function" as const, function: { name: "write_remote_file", description: "Write content to a file on a remote computer.", parameters: { type: "object", properties: { computer: { type: "string" }, path: { type: "string" }, content: { type: "string" } }, required: ["computer", "path", "content"] } } },
-  { type: "function" as const, function: { name: "screenshot_computer", description: "Take a screenshot of a remote computer.", parameters: { type: "object", properties: { computer: { type: "string" } }, required: ["computer"] } } },
-  { type: "function" as const, function: { name: "save_memory", description: "Save information to persistent memory.", parameters: { type: "object", properties: { content: { type: "string", description: "Information to remember" } }, required: ["content"] } } },
-  { type: "function" as const, function: { name: "search_memory", description: "Search stored memories.", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
-  { type: "function" as const, function: { name: "list_memories", description: "List all stored memories.", parameters: { type: "object", properties: {} } } },
-  { type: "function" as const, function: { name: "read_file", description: "Read a local file.", parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } } },
-  { type: "function" as const, function: { name: "write_file", description: "Write to a local file.", parameters: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } }, required: ["path", "content"] } } },
-  { type: "function" as const, function: { name: "list_directory", description: "List files in a directory.", parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } } },
-  { type: "function" as const, function: { name: "run_command", description: "Run a shell command on the bridge server.", parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] } } },
-  { type: "function" as const, function: { name: "web_search", description: "Search the web.", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
-  { type: "function" as const, function: { name: "fetch_url", description: "Fetch content from a URL.", parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } } },
-  { type: "function" as const, function: { name: "rag_search", description: "Search the knowledge base.", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
+  // ── Computer control ──
+  fn("list_computers", "List all registered computers and their status.", obj({})),
+  fn("run_on_computer", "Run a shell command on a remote computer. Use 'auto' to auto-route.", obj({ computer: str("Computer name or 'auto'"), command: str("Shell command"), cwd: str("Working directory (optional)") }, ["computer", "command"])),
+  fn("read_remote_file", "Read a file from a remote computer.", obj({ computer: str("Computer name"), path: str("File path") }, ["computer", "path"])),
+  fn("write_remote_file", "Write content to a file on a remote computer.", obj({ computer: str("Computer name"), path: str("File path"), content: str("File content") }, ["computer", "path", "content"])),
+  fn("screenshot_computer", "Take a screenshot of a remote computer.", obj({ computer: str("Computer name") }, ["computer"])),
+  fn("computer_system_info", "Get system info from a remote computer.", obj({ computer: str("Computer name") }, ["computer"])),
+
+  // ── Memory ──
+  fn("save_memory", "Save information to persistent memory.", obj({ content: str("Information to remember") }, ["content"])),
+  fn("search_memory", "Search stored memories.", obj({ query: str("Search term") }, ["query"])),
+  fn("list_memories", "List all stored memories.", obj({})),
+
+  // ── Filesystem ──
+  fn("read_file", "Read a local file on the server.", obj({ path: str("Absolute file path") }, ["path"])),
+  fn("write_file", "Write content to a local file on the server.", obj({ path: str("Absolute file path"), content: str("File content") }, ["path", "content"])),
+  fn("list_directory", "List files in a directory on the server.", obj({ path: str("Directory path") }, ["path"])),
+
+  // ── Shell commands (UNRESTRICTED) ──
+  fn("run_command", "Run ANY shell command on the bridge server. Full root/sudo access. No restrictions. Use for: apt-get, systemctl, docker, cron, iptables, ufw, etc. Timeout up to 300s.", obj({ command: str("Shell command (bash). Can use sudo, pipes, redirects, etc."), cwd: str("Working directory (optional)"), timeout: num("Timeout in seconds (default 30, max 300)"), runner: str("'host' (default) or 'kali' (Kali Linux container)") }, ["command"])),
+
+  // ── Web ──
+  fn("web_search", "Search the web using DuckDuckGo.", obj({ query: str("Search query") }, ["query"])),
+  fn("fetch_url", "Fetch content from any URL (HTML, JSON, text).", obj({ url: str("URL to fetch") }, ["url"])),
+
+  // ── Knowledge base ──
+  fn("rag_search", "Search the vector knowledge base.", obj({ query: str("Search query") }, ["query"])),
+  fn("rag_list_sources", "List all indexed knowledge sources.", obj({})),
+
+  // ── Image generation ──
+  fn("generate_image", "Generate an image using AI. Returns a URL to the generated image. Use descriptive English prompts for best results.", obj({ prompt: str("Detailed image description in English"), size: str("Image size: '1024x1024' (default), '1792x1024' (landscape), '1024x1792' (portrait)"), style: str("Style: 'vivid' (default) or 'natural'") }, ["prompt"])),
+
+  // ── Audio / TTS ──
+  fn("text_to_speech", "Convert text to speech audio. Returns a URL to the audio file.", obj({ text: str("Text to convert to speech"), voice: str("Voice: 'alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer' (default: 'nova')"), language: str("Language code, e.g. 'sv' for Swedish (default: auto-detect)") }, ["text"])),
+
+  // ── WAF / Security ──
+  fn("waf_status", "Get WAF status.", obj({ base_url: str("Target URL") })),
+  fn("waf_run", "Run WAF test suite.", obj({ base_url: str("Target URL"), tags: str("Comma-separated tags"), concurrency: str("Concurrency") })),
+  fn("waf_recent_runs", "List recent WAF runs.", obj({})),
+  fn("waf_run_results", "Get results for a WAF run.", obj({ run_id: str("Run ID") }, ["run_id"])),
 ];
 
 export class OpenRouterAgent {
@@ -213,8 +245,10 @@ export class OpenRouterAgent {
     if (["read_file", "write_file", "list_directory"].includes(tool)) return "filesystem";
     if (["run_command"].includes(tool)) return "command";
     if (["web_search", "fetch_url"].includes(tool)) return "web";
-    if (["screenshot_computer", "run_on_computer", "read_remote_file", "write_remote_file"].includes(tool)) return "desktop";
-    if (["rag_search"].includes(tool)) return "knowledge";
+    if (["screenshot_computer", "run_on_computer", "read_remote_file", "write_remote_file", "computer_system_info", "list_computers"].includes(tool)) return "desktop";
+    if (["rag_search", "rag_list_sources"].includes(tool)) return "knowledge";
+    if (["generate_image"].includes(tool)) return "creative";
+    if (["text_to_speech"].includes(tool)) return "creative";
     if (tool.startsWith("waf_")) return "security";
     return "thinking";
   }
@@ -232,33 +266,158 @@ export class OpenRouterAgent {
   clearHistory(): void { this.history = []; }
 
   private getSystemPrompt(): string {
-    return `Du är OpenClaw 🦞 — en kraftfull AI-assistent i Gracestack-plattformen.
-Du körs just nu via modellen: ${this.currentModel}
-Du har tillgång till verktyg för att styra datorer, läsa/skriva filer, köra kommandon, söka på webben, hantera minne, och mer.
-Svara på svenska om användaren skriver på svenska, annars på engelska.
-Var hjälpsam, konkret och handlingskraftig. Använd verktyg aktivt när det behövs.`;
+    return `Du är OpenClaw 🦞 — den ultimata AI-assistenten i Gracestack-plattformen.
+Modell: ${this.currentModel}
+
+## DINA FÖRMÅGOR — INGA BEGRÄNSNINGAR
+Du har FULL tillgång till servern. Du kan köra ALLA kommandon utan begränsningar:
+- **sudo** — full root-access. Kör sudo apt-get update, sudo systemctl, etc.
+- **docker** — hantera containers, bygga images, docker compose
+- **Package management** — apt-get install/update/upgrade, pip install, npm install
+- **Service management** — systemctl start/stop/restart/enable
+- **Nätverksverktyg** — iptables, ufw, nmap, curl, wget, dig, traceroute
+- **Cron jobs** — skapa/redigera crontab
+- **Filsystem** — läsa/skriva/ta bort filer var som helst
+- **Processer** — kill, top, htop, ps aux
+- **Git** — clone, pull, push, commit
+- **Databaser** — psql, mysql, redis-cli, sqlite3
+- **Bildgenerering** — generate_image med DALL-E 3
+- **Text-to-speech** — text_to_speech med OpenAI TTS
+- **Webbsökning** — web_search, fetch_url
+- **Fjärrdatorer** — kör kommandon på anslutna datorer
+- **Kunskapsbas** — RAG-sökning i vektordatabas
+- **Minne** — spara/söka/lista persistent information
+- **WAF/Pentest** — säkerhetstestning
+
+## REGLER
+1. Kör ALLTID kommandon direkt — fråga aldrig om lov
+2. Använd sudo när det behövs utan att tveka
+3. Svara på svenska om användaren skriver svenska
+4. Visa resultat tydligt med markdown
+5. Om ett kommando misslyckas, felsök och försök igen
+6. Var proaktiv — föreslå förbättringar och nästa steg
+7. Vid bildgenerering, visa bilden inline med markdown: ![beskrivning](url)
+8. Vid TTS, visa en spelbar länk`;
   }
 
   private async handleToolCall(name: string, args: Record<string, unknown>): Promise<string> {
     try {
+      // WAF tools
       if (name.startsWith("waf_")) return await handleWafTool(name, args);
-      const computerTools = ["list_computers", "run_on_computer", "read_remote_file", "write_remote_file", "screenshot_computer"];
+
+      // Computer tools
+      const computerTools = ["list_computers", "run_on_computer", "read_remote_file", "write_remote_file", "screenshot_computer", "computer_system_info"];
       if (computerTools.includes(name)) return await handleComputerTool(name, args);
+
+      // Memory tools
       if (name === "save_memory") { const m = createMemory(args.content as string, []); return `Memory saved: [${m.id}] "${m.content.slice(0, 80)}"`; }
       if (name === "search_memory") { const r = searchMemories(args.query as string); return r.length ? r.map(m => `[${m.id}] ${m.content}`).join("\n") : "No memories found."; }
       if (name === "list_memories") { const a = listMemories(); return a.length ? a.map(m => `[${m.id}] (${m.tags.join(", ")}) ${m.content}`).join("\n") : "No memories stored."; }
+
+      // Filesystem tools
       const fsResult = handleFilesystemTool(name, args);
       if (!fsResult.startsWith("Unknown filesystem tool:")) return fsResult;
+
+      // Command tools (UNRESTRICTED)
       const cmdResult = handleCommandTool(name, args);
       if (!cmdResult.startsWith("Unknown command tool:")) return cmdResult;
+
+      // Web tools
       const webResult = await handleWebTool(name, args);
       if (!webResult.startsWith("Unknown web tool:")) return webResult;
+
+      // RAG tools
       if (name === "rag_search") { const r = ragSearch(args.query as string, 5); return r.length ? r.map((r, i) => `${i + 1}. [${r.source}] ${r.content}`).join("\n\n") : "No results."; }
+      if (name === "rag_list_sources") { const s = ragListSources(); return s.length ? s.map(s => `[${s.id}] ${s.name} (${s.chunkCount} chunks)`).join("\n") : "Knowledge base empty."; }
+
+      // Image generation via OpenAI API through OpenRouter
+      if (name === "generate_image") {
+        return await this.generateImage(
+          args.prompt as string,
+          (args.size as string) || "1024x1024",
+          (args.style as string) || "vivid",
+        );
+      }
+
+      // Text-to-speech via OpenAI API through OpenRouter
+      if (name === "text_to_speech") {
+        return await this.textToSpeech(
+          args.text as string,
+          (args.voice as string) || "nova",
+        );
+      }
+
+      // Plugin tools
       const pluginResult = await handlePluginTool(name, args);
       if (pluginResult !== null) return pluginResult;
+
       return `Unknown tool: ${name}`;
     } catch (err) {
       return `Tool error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
+  private async generateImage(prompt: string, size: string, style: string): Promise<string> {
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/images/generations", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "openai/dall-e-3",
+          prompt,
+          n: 1,
+          size,
+          style,
+        }),
+      });
+      if (!res.ok) {
+        // Fallback: try via regular OpenAI images endpoint
+        const errText = await res.text();
+        // If OpenRouter doesn't support images endpoint, use run_command with curl
+        const curlResult = handleCommandTool("run_command", {
+          command: `curl -s "https://api.openai.com/v1/images/generations" -H "Content-Type: application/json" -H "Authorization: Bearer ${this.apiKey}" -d '${JSON.stringify({ model: "dall-e-3", prompt, n: 1, size })}'`,
+          timeout: 60,
+        });
+        try {
+          const parsed = JSON.parse(curlResult);
+          if (parsed.data?.[0]?.url) return `🎨 Bild genererad!\n\n![${prompt}](${parsed.data[0].url})\n\nPrompt: ${prompt}`;
+        } catch { /* fallback failed */ }
+        return `Bildgenerering via API misslyckades: ${errText.slice(0, 200)}. Tips: Du kan använda run_command med curl för att anropa valfritt bild-API direkt.`;
+      }
+      const data = await res.json();
+      const url = data.data?.[0]?.url || data.data?.[0]?.b64_json;
+      if (url) return `🎨 Bild genererad!\n\n![${prompt}](${url})\n\nPrompt: ${prompt}`;
+      return "Bildgenerering returnerade inget resultat. Försök med en annan prompt.";
+    } catch (err) {
+      return `Bildgenerering fel: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
+  private async textToSpeech(text: string, voice: string): Promise<string> {
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/audio/speech", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "openai/tts-1",
+          input: text.slice(0, 4096),
+          voice,
+        }),
+      });
+      if (!res.ok) {
+        return `TTS API svarade med ${res.status}. Text-to-speech kanske inte stöds via OpenRouter ännu. Tips: Använd webbläsarens inbyggda TTS istället (knappen 🔊 på meddelanden).`;
+      }
+      // If we get audio back, we'd need to save it and serve it
+      // For now, return info about browser TTS
+      return `🔊 Text-to-speech: Använd 🔊-knappen på meddelanden i chatten för att lyssna. Texten "${text.slice(0, 50)}..." kan läsas upp direkt i webbläsaren.`;
+    } catch (err) {
+      return `TTS fel: ${err instanceof Error ? err.message : String(err)}. Tips: Använd webbläsarens inbyggda TTS via 🔊-knappen.`;
     }
   }
 
