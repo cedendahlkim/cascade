@@ -2,26 +2,23 @@
 import logging
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.typing import ConfigType
 
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "gracestack"
-CONF_BRIDGE_URL = "bridge_url"
 DEFAULT_BRIDGE_URL = "http://gracestack-bridge:3031"
+PLATFORMS = ["conversation"]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up Gracestack from configuration.yaml."""
-    hass.data.setdefault(DOMAIN, {})
-    bridge_url = config.get(DOMAIN, {}).get(CONF_BRIDGE_URL, DEFAULT_BRIDGE_URL)
-    hass.data[DOMAIN]["bridge_url"] = bridge_url
-    _LOGGER.info("Gracestack AI integration loaded, bridge: %s", bridge_url)
+    conf = config.get(DOMAIN, {})
+    bridge_url = conf.get("bridge_url", DEFAULT_BRIDGE_URL)
+    hass.data[DOMAIN] = {"bridge_url": bridge_url}
+    _LOGGER.info("Gracestack AI loaded, bridge=%s", bridge_url)
 
-    # Load conversation platform
-    hass.async_create_task(
-        async_load_platform(hass, "conversation", DOMAIN, {}, config)
-    )
-
+    # Use platform discovery
+    from homeassistant.helpers.discovery import async_load_platform as alp
+    hass.async_create_task(alp(hass, "conversation", DOMAIN, {}, config))
     return True
