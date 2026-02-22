@@ -2400,6 +2400,99 @@ app.post("/api/homeassistant/voice", async (req, res) => {
   res.json(result.data);
 });
 
+// --- OpenAI-compatible API (for Home Assistant OpenAI Conversation integration) ---
+app.get("/v1/models", (_req, res) => {
+  res.json({
+    object: "list",
+    data: [
+      { id: "gemini-2.0-flash", object: "model", created: 1700000000, owned_by: "gracestack" },
+      { id: "frankenstein", object: "model", created: 1700000000, owned_by: "gracestack" },
+    ],
+  });
+});
+
+app.post("/v1/chat/completions", async (req, res) => {
+  const { messages, model, stream } = req.body || {};
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: { message: "messages required", type: "invalid_request_error" } });
+  }
+
+  // Extract the last user message
+  const lastUserMsg = [...messages].reverse().find((m: { role: string }) => m.role === "user");
+  const userText = lastUserMsg?.content || "";
+  const systemMsg = messages.find((m: { role: string }) => m.role === "system");
+  const systemText = systemMsg?.content || "";
+
+  // Build context from conversation history
+  const context = [
+    systemText ? `System: ${systemText}` : "",
+    "Home Assistant voice assistant integration via Gracestack AI.",
+    "Respond naturally and concisely. Use Swedish if the user writes in Swedish.",
+  ].filter(Boolean).join("\n");
+
+  try {
+    // Use OpenClaw/Gemini via the existing chat endpoint logic
+    const openclawPrompt = `Du är Frankenstein AI 🧟 — en intelligent assistent integrerad i Gracestack och Home Assistant.
+Du använder Google Gemini som din LLM-motor.
+Du kan hjälpa med:
+- Smarta hem-kontroll och information
+- Allmänna frågor och konversation
+- Kodning och utveckling
+- Säkerhetsanalys
+- Forskning och informationssökning
+
+${context}
+
+Användaren: ${userText}`;
+
+    const reply = await geminiAgent.respond(openclawPrompt);
+
+    const responseId = `chatcmpl-${Date.now()}`;
+    const created = Math.floor(Date.now() / 1000);
+
+    if (stream) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      // Send the full response as a single chunk (Gemini doesn't stream here)
+      const chunk = {
+        id: responseId,
+        object: "chat.completion.chunk",
+        created,
+        model: model || "gemini-2.0-flash",
+        choices: [{ index: 0, delta: { role: "assistant", content: reply }, finish_reason: null }],
+      };
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      const doneChunk = {
+        id: responseId,
+        object: "chat.completion.chunk",
+        created,
+        model: model || "gemini-2.0-flash",
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+      };
+      res.write(`data: ${JSON.stringify(doneChunk)}\n\n`);
+      res.write("data: [DONE]\n\n");
+      return res.end();
+    }
+
+    return res.json({
+      id: responseId,
+      object: "chat.completion",
+      created,
+      model: model || "gemini-2.0-flash",
+      choices: [{
+        index: 0,
+        message: { role: "assistant", content: reply },
+        finish_reason: "stop",
+      }],
+      usage: { prompt_tokens: userText.length, completion_tokens: reply.length, total_tokens: userText.length + reply.length },
+    });
+  } catch (err) {
+    return res.status(500).json({ error: { message: `Gemini error: ${err}`, type: "server_error" } });
+  }
+});
+
 // --- Frankenstein AI Progress ---
 app.get("/api/frankenstein/progress", (_req, res) => {
   try {
