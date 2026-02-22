@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
 Full automated setup of Home Assistant with Gracestack AI conversation agent.
-Uses websocket API to:
-1. Install HACS (if not present)
-2. Add Extended OpenAI Conversation integration pointing to bridge
-3. Set it as the default conversation agent
-4. Configure Google Cast integration for Nest speakers
+Uses websocket API to add Google Generative AI Conversation (Gemini)
+and set it as the default conversation agent in the Assist pipeline.
 """
 import json
 import sys
@@ -17,156 +14,148 @@ except ImportError:
     os.system("pip3 install --break-system-packages websocket-client 2>/dev/null")
     import websocket
 
-BASE = "http://localhost:8123"
 WS_BASE = "ws://localhost:8123"
-BRIDGE_URL = "http://gracestack-bridge:3031"
 TOKEN = ""
+GEMINI_KEY = ""
 
-# Read token
+# Read tokens from bridge/.env
 try:
     with open("/home/kim/cascade-remote/bridge/.env") as f:
         for line in f:
+            line = line.strip()
             if line.startswith("HOME_ASSISTANT_TOKEN="):
-                TOKEN = line.strip().split("=", 1)[1]
-                break
+                TOKEN = line.split("=", 1)[1]
+            elif line.startswith("GEMINI_API_KEY="):
+                GEMINI_KEY = line.split("=", 1)[1]
 except Exception:
     pass
 
 if not TOKEN:
-    print("ERROR: No HOME_ASSISTANT_TOKEN found")
-    sys.exit(1)
+    print("ERROR: No HOME_ASSISTANT_TOKEN"); sys.exit(1)
+if not GEMINI_KEY:
+    print("ERROR: No GEMINI_API_KEY"); sys.exit(1)
 
-# Connect websocket
+# Connect
 ws = websocket.create_connection(WS_BASE + "/api/websocket", timeout=15)
 msg = json.loads(ws.recv())
-assert msg["type"] == "auth_required"
 ws.send(json.dumps({"type": "auth", "access_token": TOKEN}))
 msg = json.loads(ws.recv())
 assert msg["type"] == "auth_ok", f"Auth failed: {msg}"
-print("Authenticated")
+print("OK: Authenticated")
 
 msg_id = 1
-def ws_call(msg_type, **kwargs):
+def call(msg_type, **kwargs):
     global msg_id
     payload = {"id": msg_id, "type": msg_type}
     payload.update(kwargs)
     ws.send(json.dumps(payload))
     resp = json.loads(ws.recv())
     msg_id += 1
+    if not resp.get("success", True):
+        print(f"  WS error: {resp.get('error', {})}")
     return resp
 
-# 1. List integrations
-print("\n=== Current integrations ===")
-result = ws_call("config_entries/get")
-entries = result.get("result", []) if result.get("success") else []
-domains = set()
+# 1. Check existing entries
+print("\n--- Config entries ---")
+r = call("config_entries/get")
+entries = r.get("result", [])
+gemini_exists = any(e.get("domain") == "google_generative_ai_conversation" for e in entries)
+cast_exists = any(e.get("domain") == "cast" for e in entries)
 for e in entries:
-    d = e.get("domain", "")
-    domains.add(d)
-    if d in ("openai_conversation", "google_generative_ai_conversation", "extended_openai_conversation"):
-        print(f"  Found: {e.get('title', d)} (domain={d}, id={e.get('entry_id', '?')})")
+    print(f"  {e.get('domain')}: {e.get('title', '?')} [{e.get('state', '?')}]")
 
-# 2. Try to add Google Generative AI Conversation (uses Gemini directly, no OpenAI key needed)
-if "google_generative_ai_conversation" not in domains:
-    print("\n=== Adding Google Generative AI Conversation ===")
-    result = ws_call("config_entries/flow/create", handler="google_generative_ai_conversation")
-    flow = result.get("result", {})
+# 2. Add Google Generative AI Conversation
+if not gemini_exists:
+    print("\n--- Adding Gemini Conversation ---")
+    r = call("config_entries/flow/create", handler="google_generative_ai_conversation")
+    flow = r.get("result", {})
+    print(f"  Full flow response: {json.dumps(flow)}")
     flow_id = flow.get("flow_id", "")
-    step_id = flow.get("step_id", "")
-    print(f"Flow: step={step_id}, flow_id={flow_id}")
+    step = flow.get("step_id", "")
     
-    if flow_id and step_id == "user":
-        # Read Gemini API key from bridge/.env
-        gemini_key = ""
-        try:
-            with open("/home/kim/cascade-remote/bridge/.env") as f:
-                for line in f:
-                    if line.startswith("GEMINI_API_KEY="):
-                        gemini_key = line.strip().split("=", 1)[1]
-                        break
-        except Exception:
-            pass
-        
-        if gemini_key:
-            result = ws_call("config_entries/flow/handle", flow_id=flow_id, user_input={
-                "api_key": gemini_key,
-            })
-            rtype = result.get("result", {}).get("type", "")
-            print(f"Result type: {rtype}")
-            if rtype == "create_entry":
-                entry = result["result"].get("result", {})
-                print(f"Created: {entry.get('title', '?')} (id={entry.get('entry_id', '?')})")
-            elif rtype == "abort":
-                reason = result.get("result", {}).get("reason", "?")
-                print(f"Aborted: {reason}")
-            else:
-                print(f"Unexpected: {json.dumps(result.get('result', {}), indent=2)}")
+    if not flow_id:
+        print("  ERROR: No flow_id returned. Checking if handler exists...")
+        # Try listing available handlers
+        r2 = call("config_entries/flow/handlers", type="config")
+        handlers = r2.get("result", [])
+        gemini_handlers = [h for h in handlers if "gemini" in str(h).lower() or "google_gen" in str(h).lower()]
+        print(f"  Matching handlers: {gemini_handlers}")
+        if not gemini_handlers:
+            print(f"  Available handlers (first 20): {handlers[:20]}")
+    elif step == "user":
+        print(f"  Submitting API key to flow {flow_id}...")
+        r = call("config_entries/flow/handle", flow_id=flow_id, user_input={"api_key": GEMINI_KEY})
+        result = r.get("result", {})
+        print(f"  Result: type={result.get('type', '?')}")
+        if result.get("type") == "create_entry":
+            entry = result.get("result", {})
+            print(f"  CREATED: {entry.get('title', '?')} (id={entry.get('entry_id', '?')})")
+        elif result.get("type") == "form":
+            print(f"  Next step: {result.get('step_id', '?')}")
+            print(f"  Schema: {json.dumps(result.get('data_schema', []))}")
         else:
-            print("No GEMINI_API_KEY found in bridge/.env, skipping")
-            # Abort the flow
-            ws_call("config_entries/flow/abort", flow_id=flow_id)
+            print(f"  Full result: {json.dumps(result)}")
+    else:
+        print(f"  Unexpected step: {step}")
+        print(f"  Full: {json.dumps(flow)}")
 else:
-    print("\n=== Google Generative AI Conversation already configured ===")
+    print("\n--- Gemini Conversation already exists ---")
 
-# 3. Try to add Google Cast (for Nest speakers)
-if "cast" not in domains:
-    print("\n=== Adding Google Cast integration ===")
-    result = ws_call("config_entries/flow/create", handler="cast")
-    flow = result.get("result", {})
+# 3. Add Google Cast
+if not cast_exists:
+    print("\n--- Adding Google Cast ---")
+    r = call("config_entries/flow/create", handler="cast")
+    flow = r.get("result", {})
     flow_id = flow.get("flow_id", "")
-    step_id = flow.get("step_id", "")
-    print(f"Flow: step={step_id}, flow_id={flow_id}")
-    
-    if flow_id and step_id == "confirm":
-        result = ws_call("config_entries/flow/handle", flow_id=flow_id, user_input={})
-        rtype = result.get("result", {}).get("type", "")
-        print(f"Result: {rtype}")
-        if rtype == "create_entry":
-            print("Google Cast added!")
-    elif flow_id:
-        # Try to handle whatever step
-        result = ws_call("config_entries/flow/handle", flow_id=flow_id, user_input={})
-        print(f"Result: {result.get('result', {}).get('type', '?')}")
+    step = flow.get("step_id", "")
+    print(f"  Flow: step={step}")
+    if flow_id:
+        r = call("config_entries/flow/handle", flow_id=flow_id, user_input={})
+        print(f"  Result: {r.get('result', {}).get('type', '?')}")
 else:
-    print("\n=== Google Cast already configured ===")
+    print("\n--- Google Cast already exists ---")
 
 # 4. List conversation agents
-print("\n=== Conversation agents ===")
-result = ws_call("conversation/agent/list")
-if result.get("success"):
-    agents = result.get("result", {}).get("agents", result.get("result", []))
-    if isinstance(agents, list):
-        for a in agents:
-            print(f"  - {a.get('name', '?')} (id={a.get('id', '?')})")
-    elif isinstance(agents, dict):
-        for k, v in agents.items():
-            print(f"  - {k}: {v}")
-else:
-    print(f"Error: {result}")
+print("\n--- Conversation agents ---")
+r = call("conversation/agent/list")
+agents = r.get("result", {})
+print(f"  Raw: {json.dumps(agents)}")
 
-# 5. Set default conversation agent to Gemini if available
-print("\n=== Setting default conversation agent ===")
-result = ws_call("config_entries/get")
-entries = result.get("result", []) if result.get("success") else []
-gemini_entry = None
-for e in entries:
-    if e.get("domain") == "google_generative_ai_conversation":
-        gemini_entry = e
-        break
+# 5. List and update assist pipelines
+print("\n--- Assist pipelines ---")
+r = call("assist_pipeline/pipeline/list")
+pipelines_data = r.get("result", {})
+pipelines = pipelines_data.get("pipelines", [])
+preferred = pipelines_data.get("preferred_pipeline", "")
+print(f"  Preferred: {preferred}")
+for p in pipelines:
+    print(f"  {p.get('name', '?')} (id={p.get('id', '?')}, agent={p.get('conversation_engine', '?')}, lang={p.get('conversation_language', '?')})")
 
-if gemini_entry:
-    entry_id = gemini_entry.get("entry_id", "")
-    print(f"Found Gemini conversation entry: {entry_id}")
-    # The conversation agent ID is typically the config entry ID
-    # We need to set it as the default assist pipeline agent
-    # This requires updating the assist pipeline
-    result = ws_call("assist_pipeline/pipeline/list")
-    pipelines = result.get("result", {}).get("pipelines", [])
-    print(f"Found {len(pipelines)} assist pipelines")
-    for p in pipelines:
-        print(f"  Pipeline: {p.get('name', '?')} (id={p.get('id', '?')}, agent={p.get('conversation_engine', '?')})")
-else:
-    print("No Gemini conversation entry found")
+# 6. If Gemini agent exists, set it as conversation engine in the preferred pipeline
+r = call("config_entries/get")
+entries = r.get("result", [])
+gemini_entry = next((e for e in entries if e.get("domain") == "google_generative_ai_conversation"), None)
+
+if gemini_entry and pipelines:
+    agent_id = gemini_entry.get("entry_id", "")
+    pipeline = next((p for p in pipelines if p.get("id") == preferred), pipelines[0])
+    pid = pipeline.get("id", "")
+    print(f"\n--- Updating pipeline {pid} to use Gemini agent {agent_id} ---")
+    r = call("assist_pipeline/pipeline/update",
+        pipeline_id=pid,
+        conversation_engine=agent_id,
+        conversation_language="sv",
+        language="sv",
+        name=pipeline.get("name", "Home"),
+        stt_engine=pipeline.get("stt_engine"),
+        stt_language=pipeline.get("stt_language"),
+        tts_engine=pipeline.get("tts_engine"),
+        tts_language=pipeline.get("tts_language"),
+        tts_voice=pipeline.get("tts_voice"),
+        wake_word_entity=pipeline.get("wake_word_entity"),
+        wake_word_id=pipeline.get("wake_word_id"),
+    )
+    print(f"  Update result: {json.dumps(r.get('result', r.get('error', {})))}")
 
 ws.close()
-print("\n=== Done ===")
+print("\n=== DONE ===")
