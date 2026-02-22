@@ -316,6 +316,20 @@ function archiveCurrentFrankSession() {
   saveFrankSessions();
 }
 
+// --- OpenClaw tool categorization helper ---
+function categorizeToolForOpenClaw(tool: string): string {
+  if (["save_memory", "search_memory", "list_memories"].includes(tool)) return "memory";
+  if (["read_file", "write_file", "list_directory"].includes(tool)) return "filesystem";
+  if (["run_command"].includes(tool)) return "command";
+  if (["web_search", "fetch_url"].includes(tool)) return "web";
+  if (["screenshot_computer", "run_on_computer", "read_remote_file", "write_remote_file", "computer_system_info", "list_computers"].includes(tool)) return "desktop";
+  if (["rag_search", "rag_list_sources"].includes(tool)) return "knowledge";
+  if (["generate_image"].includes(tool)) return "creative";
+  if (["text_to_speech"].includes(tool)) return "creative";
+  if (tool.startsWith("waf_")) return "security";
+  return "thinking";
+}
+
 // --- Swarm Intelligence (ABA-Mycelium Hybrid) ---
 const swarm = createSwarmOrchestrator({
   claude: agent.isEnabled() ? (p: string) => agent.respondPlain(p) : undefined,
@@ -4486,6 +4500,61 @@ io.on("connection", (socket) => {
     if (data.model) {
       openRouterAgent.setModel(data.model);
       io.emit("openrouter_model", data.model);
+    }
+  });
+
+  // --- OpenClaw → Frankenstein engine ---
+  socket.on("openclaw_frank_message", async (data: { content: string }) => {
+    const msg: Message = {
+      id: uuidv4(),
+      role: "user",
+      content: data.content,
+      type: "message",
+      timestamp: new Date().toISOString(),
+    };
+    openRouterMessages.push(msg);
+    io.emit("openrouter_message", msg);
+
+    if (frankAgent.isEnabled()) {
+      frankAgent.onStream((chunk) => io.emit("openrouter_stream", chunk));
+      frankAgent.onStatus((status) => io.emit("openrouter_status", { ...status, category: status.tool ? categorizeToolForOpenClaw(status.tool) : "thinking" }));
+
+      frankAgent.respond(data.content).then((reply) => {
+        const aiMsg: Message = {
+          id: uuidv4(),
+          role: "cascade",
+          content: reply,
+          type: "message",
+          timestamp: new Date().toISOString(),
+        };
+        openRouterMessages.push(aiMsg);
+        io.emit("openrouter_message", aiMsg);
+        io.emit("openrouter_tokens", frankAgent.getTokenUsage());
+        io.emit("openclaw_cognitive", frankAgent.getCognitiveState());
+        io.emit("openclaw_wellbeing", frankAgent.getWellbeing());
+        console.log(`[openclaw/frank] Replied: "${reply.slice(0, 80)}..."`);
+      }).catch((err) => {
+        console.error("[openclaw/frank] Failed:", err);
+        const errMsg: Message = {
+          id: uuidv4(),
+          role: "cascade",
+          content: `❌ Frankenstein error: ${err instanceof Error ? err.message : String(err)}`,
+          type: "message",
+          timestamp: new Date().toISOString(),
+        };
+        openRouterMessages.push(errMsg);
+        io.emit("openrouter_message", errMsg);
+      });
+    } else {
+      const errMsg: Message = {
+        id: uuidv4(),
+        role: "cascade",
+        content: "Frankenstein AI inte konfigurerad. Sätt GEMINI_API_KEY i bridge/.env",
+        type: "message",
+        timestamp: new Date().toISOString(),
+      };
+      openRouterMessages.push(errMsg);
+      io.emit("openrouter_message", errMsg);
     }
   });
 
