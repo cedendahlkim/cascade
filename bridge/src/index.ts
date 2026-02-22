@@ -19,6 +19,7 @@ import { spawn } from "child_process";
 import archiver from "archiver";
 import { Agent, getToolCategory } from "./agent.js";
 import { GeminiAgent } from "./agent-gemini.js";
+import { OpenRouterAgent } from "./agent-openrouter.js";
 import { getSecurityConfig, getAuditLog } from "./security.js";
 import { listMemories, createMemory, updateMemory, deleteMemory } from "./memory.js";
 import { ragListSources, ragStats, ragIndexText, ragIndexFile, ragIndexDirectory, ragDeleteSource, ragIndexPdf, ragIndexUrl, ragSearchSemantic, ragHybridSearch, ragEmbedAllChunks, ragStartAutoReindex, ragStopAutoReindex, ragGetAutoReindexStatus } from "./rag.js";
@@ -226,6 +227,7 @@ let connectedClients = 0;
 const sessionToken = uuidv4();
 const agent = new Agent();
 const geminiAgent = new GeminiAgent({ name: "Gemini", role: "kritiker" });
+const openRouterAgent = new OpenRouterAgent();
 const geminiInnovator = new GeminiAgent({
   name: "Gemini-Innovatör",
   role: "innovatör",
@@ -450,6 +452,14 @@ geminiAgent.onStatus((status) => {
 });
 geminiAgent.onStream((chunk) => {
   io.emit("gemini_stream", chunk);
+});
+
+// Wire OpenRouter agent events to Socket.IO
+openRouterAgent.onStatus((status) => {
+  io.emit("openrouter_status", status);
+});
+openRouterAgent.onStream((chunk) => {
+  io.emit("openrouter_stream", chunk);
 });
 
 // Wire orchestrator events to Socket.IO
@@ -1560,6 +1570,47 @@ app.delete("/api/gemini/messages", (_req, res) => {
 
 app.get("/api/gemini/tokens", (_req, res) => {
   res.json(geminiAgent.getTokenUsage());
+});
+
+// --- OpenRouter API (Multi-model gateway) ---
+const openRouterMessages: Message[] = [];
+
+app.get("/api/openrouter/status", async (_req, res) => {
+  const credits = await openRouterAgent.getCredits();
+  res.json({
+    enabled: openRouterAgent.isEnabled(),
+    model: openRouterAgent.getModel(),
+    tokens: openRouterAgent.getTokenUsage(),
+    credits,
+  });
+});
+
+app.get("/api/openrouter/models", (_req, res) => {
+  res.json({ models: openRouterAgent.getModels(), current: openRouterAgent.getModel() });
+});
+
+app.post("/api/openrouter/model", (req, res) => {
+  const { model } = req.body;
+  if (!model) return res.status(400).json({ error: "model required" });
+  openRouterAgent.setModel(model);
+  io.emit("openrouter_model", model);
+  res.json({ ok: true, model });
+});
+
+app.get("/api/openrouter/messages", (req, res) => {
+  const limit = parseInt(req.query.limit as string, 10) || 50;
+  res.json(openRouterMessages.slice(-limit));
+});
+
+app.delete("/api/openrouter/messages", (_req, res) => {
+  openRouterMessages.length = 0;
+  openRouterAgent.clearHistory();
+  io.emit("openrouter_history", []);
+  res.json({ ok: true });
+});
+
+app.get("/api/openrouter/tokens", (_req, res) => {
+  res.json(openRouterAgent.getTokenUsage());
 });
 
 // --- RAG API (Weaviate + BM25 fallback) ---
@@ -4237,6 +4288,9 @@ io.on("connection", (socket) => {
   socket.emit("history", recent);
   socket.emit("gemini_history", geminiMessages.slice(-50));
   socket.emit("gemini_enabled", geminiAgent.isEnabled());
+  socket.emit("openrouter_history", openRouterMessages.slice(-50));
+  socket.emit("openrouter_model", openRouterAgent.getModel());
+  socket.emit("openrouter_enabled", openRouterAgent.isEnabled());
   socket.emit("arena_history", arenaMessages.slice(-100));
   socket.emit("arena_running", arenaRunning);
   socket.emit("computers", listComputers());
@@ -4373,6 +4427,65 @@ io.on("connection", (socket) => {
       };
       geminiMessages.push(errMsg);
       io.emit("gemini_message", errMsg);
+    }
+  });
+
+  // --- OpenRouter Chat Socket Events ---
+  socket.on("openrouter_message", (data: { content: string; model?: string }) => {
+    if (data.model) openRouterAgent.setModel(data.model);
+
+    const msg: Message = {
+      id: uuidv4(),
+      role: "user",
+      content: data.content,
+      type: "message",
+      timestamp: new Date().toISOString(),
+    };
+    openRouterMessages.push(msg);
+    io.emit("openrouter_message", msg);
+
+    if (openRouterAgent.isEnabled()) {
+      openRouterAgent.respond(data.content).then((reply) => {
+        const aiMsg: Message = {
+          id: uuidv4(),
+          role: "cascade",
+          content: reply,
+          type: "message",
+          timestamp: new Date().toISOString(),
+        };
+        openRouterMessages.push(aiMsg);
+        io.emit("openrouter_message", aiMsg);
+        io.emit("openrouter_tokens", openRouterAgent.getTokenUsage());
+        console.log(`[openrouter/${openRouterAgent.getModel()}] Replied: "${reply.slice(0, 80)}..."`);
+      }).catch((err) => {
+        console.error("[openrouter] Failed to respond:", err);
+        const errMsg: Message = {
+          id: uuidv4(),
+          role: "cascade",
+          content: `❌ OpenRouter error: ${err instanceof Error ? err.message : String(err)}`,
+          type: "message",
+          timestamp: new Date().toISOString(),
+        };
+        openRouterMessages.push(errMsg);
+        io.emit("openrouter_message", errMsg);
+      });
+    } else {
+      const errMsg: Message = {
+        id: uuidv4(),
+        role: "cascade",
+        content: "OpenRouter är inte konfigurerad. Sätt OPENROUTER_API_KEY i bridge/.env",
+        type: "message",
+        timestamp: new Date().toISOString(),
+      };
+      openRouterMessages.push(errMsg);
+      io.emit("openrouter_message", errMsg);
+    }
+  });
+
+  socket.on("openrouter_set_model", (data: { model: string }) => {
+    if (data.model) {
+      openRouterAgent.setModel(data.model);
+      io.emit("openrouter_model", data.model);
     }
   });
 

@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
-  Send, Loader2, RefreshCw, Zap, Brain, Shield, Globe, Terminal,
-  MessageSquare, Settings, ChevronDown, ChevronUp, Copy, Check,
-  Wifi, WifiOff, Code, Search, Eye, Database, TrendingUp,
-  FileText, Bot, Sparkles, Activity, Server, Lock, Image,
-  Mic, MicOff, Camera, Plus, Trash2, X, PanelLeftOpen,
-  FolderSearch, Wrench, ArrowRight, Volume2,
+  Send, Loader2, Zap, Brain, Globe, Terminal,
+  Copy, Check, Code, Search, Eye, Database,
+  Sparkles, Image, ChevronDown,
+  Mic, MicOff, Camera, Plus, X, PanelLeftOpen,
+  FolderSearch, Volume2, Shield, DollarSign,
+  Cpu, ChevronUp,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -20,8 +20,8 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
-  images?: string[]; // base64 data URIs
-  toolCalls?: { name: string; result?: string }[];
+  model?: string;
+  images?: string[];
 }
 
 interface ToolStatus {
@@ -31,38 +31,63 @@ interface ToolStatus {
   category?: string;
 }
 
+interface ModelDef {
+  id: string;
+  name: string;
+  provider: string;
+  icon: string;
+  description: string;
+  contextLength: number;
+  pricing: { prompt: number; completion: number };
+  supportsTools: boolean;
+  color: string;
+}
+
 interface Conversation {
   id: string;
   title: string;
   updatedAt: number;
   messageCount: number;
   preview: string;
+  model?: string;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
 const REMARK_PLUGINS = [remarkGfm];
 
+const MODELS: ModelDef[] = [
+  { id: "anthropic/claude-sonnet-4", name: "Claude Sonnet 4", provider: "Anthropic", icon: "🏛️", description: "Bäst på kod och resonering", contextLength: 200000, pricing: { prompt: 3, completion: 15 }, supportsTools: true, color: "from-orange-500 to-amber-500" },
+  { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", icon: "🟢", description: "Snabb multimodal", contextLength: 128000, pricing: { prompt: 2.5, completion: 10 }, supportsTools: true, color: "from-green-500 to-emerald-500" },
+  { id: "openai/o3-mini", name: "o3-mini", provider: "OpenAI", icon: "🧠", description: "Djup resonering", contextLength: 200000, pricing: { prompt: 1.1, completion: 4.4 }, supportsTools: true, color: "from-blue-500 to-indigo-500" },
+  { id: "google/gemini-2.5-pro-preview", name: "Gemini 2.5 Pro", provider: "Google", icon: "💎", description: "1M context, stark på allt", contextLength: 1000000, pricing: { prompt: 1.25, completion: 10 }, supportsTools: true, color: "from-blue-400 to-purple-500" },
+  { id: "deepseek/deepseek-r1", name: "DeepSeek R1", provider: "DeepSeek", icon: "🐋", description: "Billig resoneringsmodell", contextLength: 64000, pricing: { prompt: 0.55, completion: 2.19 }, supportsTools: false, color: "from-cyan-500 to-blue-500" },
+  { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick", provider: "Meta", icon: "🦙", description: "Extremt billig, 1M context", contextLength: 1000000, pricing: { prompt: 0.2, completion: 0.6 }, supportsTools: true, color: "from-violet-500 to-purple-500" },
+  { id: "mistralai/mistral-large-2411", name: "Mistral Large", provider: "Mistral", icon: "🌊", description: "Europas bästa — flerspråkig", contextLength: 128000, pricing: { prompt: 2, completion: 6 }, supportsTools: true, color: "from-orange-400 to-red-500" },
+  { id: "qwen/qwen-2.5-coder-32b-instruct", name: "Qwen Coder 32B", provider: "Alibaba", icon: "🐉", description: "Bästa öppna kodmodellen", contextLength: 32768, pricing: { prompt: 0.07, completion: 0.16 }, supportsTools: true, color: "from-red-500 to-pink-500" },
+  { id: "x-ai/grok-3-mini-beta", name: "Grok 3 Mini", provider: "xAI", icon: "⚡", description: "Snabb resonering", contextLength: 131072, pricing: { prompt: 0.3, completion: 0.5 }, supportsTools: true, color: "from-sky-400 to-blue-500" },
+  { id: "perplexity/sonar-deep-research", name: "Sonar Research", provider: "Perplexity", icon: "🔍", description: "Djup webbforskning med källor", contextLength: 128000, pricing: { prompt: 2, completion: 8 }, supportsTools: false, color: "from-teal-500 to-cyan-500" },
+];
+
 const TOOL_CATEGORIES: Record<string, { icon: typeof Brain; label: string; color: string; bg: string }> = {
-  thinking:   { icon: Brain,       label: "Tänker",        color: "text-purple-400", bg: "bg-purple-950/60 border-purple-800/40" },
-  memory:     { icon: Sparkles,    label: "Minne",         color: "text-amber-400",  bg: "bg-amber-950/60 border-amber-800/40" },
-  filesystem: { icon: FolderSearch, label: "Filer",        color: "text-blue-400",   bg: "bg-blue-950/60 border-blue-800/40" },
-  command:    { icon: Terminal,    label: "Kommando",      color: "text-emerald-400", bg: "bg-emerald-950/60 border-emerald-800/40" },
-  web:        { icon: Globe,       label: "Webb",          color: "text-green-400",  bg: "bg-green-950/60 border-green-800/40" },
-  security:   { icon: Shield,     label: "Säkerhet",      color: "text-yellow-400", bg: "bg-yellow-950/60 border-yellow-800/40" },
-  desktop:    { icon: Eye,        label: "Skärm",         color: "text-cyan-400",   bg: "bg-cyan-950/60 border-cyan-800/40" },
-  knowledge:  { icon: Database,   label: "Kunskapsbas",   color: "text-indigo-400", bg: "bg-indigo-950/60 border-indigo-800/40" },
-  search:     { icon: Search,     label: "Söker",         color: "text-pink-400",   bg: "bg-pink-950/60 border-pink-800/40" },
+  thinking:   { icon: Brain,       label: "Tänker",      color: "text-purple-400", bg: "bg-purple-950/60 border-purple-800/40" },
+  memory:     { icon: Sparkles,    label: "Minne",       color: "text-amber-400",  bg: "bg-amber-950/60 border-amber-800/40" },
+  filesystem: { icon: FolderSearch, label: "Filer",      color: "text-blue-400",   bg: "bg-blue-950/60 border-blue-800/40" },
+  command:    { icon: Terminal,    label: "Kommando",    color: "text-emerald-400", bg: "bg-emerald-950/60 border-emerald-800/40" },
+  web:        { icon: Globe,       label: "Webb",        color: "text-green-400",  bg: "bg-green-950/60 border-green-800/40" },
+  security:   { icon: Shield,     label: "Säkerhet",    color: "text-yellow-400", bg: "bg-yellow-950/60 border-yellow-800/40" },
+  desktop:    { icon: Eye,        label: "Skärm",       color: "text-cyan-400",   bg: "bg-cyan-950/60 border-cyan-800/40" },
+  knowledge:  { icon: Database,   label: "Kunskapsbas", color: "text-indigo-400", bg: "bg-indigo-950/60 border-indigo-800/40" },
 };
 
 const QUICK_ACTIONS = [
-  { icon: Camera,     label: "Screenshot",  msg: "Ta en screenshot och beskriv vad du ser",     color: "text-cyan-400 bg-cyan-950/40 border-cyan-800/30" },
-  { icon: Terminal,   label: "System",      msg: "Visa systeminfo: CPU, RAM, disk, nätverk",    color: "text-emerald-400 bg-emerald-950/40 border-emerald-800/30" },
-  { icon: Shield,     label: "Säkerhet",    msg: "Kör en snabb säkerhetsskanning",              color: "text-yellow-400 bg-yellow-950/40 border-yellow-800/30" },
-  { icon: Search,     label: "Sök",         msg: "",                                             color: "text-pink-400 bg-pink-950/40 border-pink-800/30" },
-  { icon: Brain,      label: "Minnen",      msg: "Lista alla sparade minnen",                   color: "text-purple-400 bg-purple-950/40 border-purple-800/30" },
-  { icon: Code,       label: "Kod",         msg: "",                                             color: "text-blue-400 bg-blue-950/40 border-blue-800/30" },
-  { icon: FolderSearch, label: "Filer",     msg: "Lista filerna i projektets rot-mapp",          color: "text-indigo-400 bg-indigo-950/40 border-indigo-800/30" },
-  { icon: Globe,      label: "Webb",        msg: "",                                             color: "text-green-400 bg-green-950/40 border-green-800/30" },
+  { icon: Camera,   label: "Screenshot",  msg: "Ta en screenshot och beskriv vad du ser" },
+  { icon: Terminal, label: "System",      msg: "Visa systeminfo: CPU, RAM, disk, nätverk" },
+  { icon: Shield,   label: "Säkerhet",    msg: "Kör en snabb säkerhetsskanning" },
+  { icon: Brain,    label: "Minnen",      msg: "Lista alla sparade minnen" },
+  { icon: Code,     label: "Kod",         msg: "" },
+  { icon: Search,   label: "Sök",         msg: "" },
+  { icon: FolderSearch, label: "Filer",   msg: "Lista filerna i projektets rot-mapp" },
+  { icon: Globe,    label: "Webb",        msg: "" },
 ];
 
 const SUGGESTIONS = [
@@ -97,21 +122,8 @@ const fullCode: Record<string, any> = {
     if (match) {
       return (
         <div className="relative group">
-          <button
-            onClick={() => navigator.clipboard.writeText(code)}
-            className="absolute right-2 top-2 p-1 rounded bg-slate-700/80 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs"
-            title="Kopiera"
-          >
-            <Copy className="w-3 h-3" />
-          </button>
-          <SyntaxHighlighter
-            style={oneDark}
-            language={match[1]}
-            PreTag="div"
-            customStyle={{ margin: 0, borderRadius: "0.5rem", fontSize: "0.75rem" }}
-          >
-            {code}
-          </SyntaxHighlighter>
+          <button onClick={() => navigator.clipboard.writeText(code)} className="absolute right-2 top-2 p-1 rounded bg-slate-700/80 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="Kopiera"><Copy className="w-3 h-3" /></button>
+          <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div" customStyle={{ margin: 0, borderRadius: "0.5rem", fontSize: "0.75rem" }}>{code}</SyntaxHighlighter>
         </div>
       );
     }
@@ -121,15 +133,17 @@ const fullCode: Record<string, any> = {
 
 function cleanStreamingText(text: string): string {
   const fences = text.match(/^```/gm);
-  if (fences && fences.length % 2 !== 0) {
-    const lastFence = text.lastIndexOf("```");
-    return text.slice(0, lastFence);
-  }
+  if (fences && fences.length % 2 !== 0) return text.slice(0, text.lastIndexOf("```"));
   return text;
 }
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatCtx(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
+  return `${(n / 1_000).toFixed(0)}k`;
 }
 
 // ─── Component ───────────────────────────────────────────────────────
@@ -140,16 +154,18 @@ export default function OpenClawView() {
   const [streamText, setStreamText] = useState<string | null>(null);
   const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null);
   const [connected, setConnected] = useState(false);
+  const [currentModel, setCurrentModel] = useState(MODELS[0].id);
+  const [showModelPicker, setShowModelPicker] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     try { return JSON.parse(localStorage.getItem("oc_conversations") || "[]"); } catch { return []; }
   });
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
-  const [tokens, setTokens] = useState({ inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0 });
+  const [tokens, setTokens] = useState({ inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0, totalCostUsd: 0 });
   const [copied, setCopied] = useState<string | null>(null);
-  const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [isListening, setIsListening] = useState(false);
+  const [orEnabled, setOrEnabled] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -157,15 +173,10 @@ export default function OpenClawView() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Persist conversations
-  useEffect(() => {
-    localStorage.setItem("oc_conversations", JSON.stringify(conversations));
-  }, [conversations]);
+  const activeModel = useMemo(() => MODELS.find(m => m.id === currentModel) || MODELS[0], [currentModel]);
 
-  // Auto-scroll
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamText, isThinking]);
+  useEffect(() => { localStorage.setItem("oc_conversations", JSON.stringify(conversations)); }, [conversations]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamText, isThinking]);
 
   // Socket connection
   useEffect(() => {
@@ -175,8 +186,10 @@ export default function OpenClawView() {
     socket.on("connect", () => setConnected(true));
     socket.on("disconnect", () => setConnected(false));
 
-    // Gemini events (OpenClaw uses the Gemini agent)
-    socket.on("gemini_history", (history: any[]) => {
+    socket.on("openrouter_enabled", (enabled: boolean) => setOrEnabled(enabled));
+    socket.on("openrouter_model", (model: string) => setCurrentModel(model));
+
+    socket.on("openrouter_history", (history: any[]) => {
       setMessages(history.map(m => ({
         id: m.id,
         role: m.role === "user" ? "user" : "assistant",
@@ -185,7 +198,7 @@ export default function OpenClawView() {
       })));
     });
 
-    socket.on("gemini_message", (msg: any) => {
+    socket.on("openrouter_message", (msg: any) => {
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
         return [...prev, {
@@ -200,17 +213,12 @@ export default function OpenClawView() {
       setToolStatus(null);
     });
 
-    socket.on("gemini_stream", (chunk: string) => {
-      setStreamText(chunk);
-    });
+    socket.on("openrouter_stream", (chunk: string) => setStreamText(chunk));
 
-    socket.on("gemini_status", (status: ToolStatus) => {
+    socket.on("openrouter_status", (status: ToolStatus) => {
       if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
       if (status.type === "done") {
-        statusTimeoutRef.current = setTimeout(() => {
-          setToolStatus(null);
-          setIsThinking(false);
-        }, 500);
+        statusTimeoutRef.current = setTimeout(() => { setToolStatus(null); setIsThinking(false); }, 500);
       } else if (status.type === "thinking") {
         setIsThinking(true);
         setToolStatus(status);
@@ -219,13 +227,9 @@ export default function OpenClawView() {
       }
     });
 
-    socket.on("gemini_tokens", (t: typeof tokens) => setTokens(t));
-    socket.on("gemini_enabled", () => {});
+    socket.on("openrouter_tokens", (t: any) => setTokens(t));
 
-    return () => {
-      socket.disconnect();
-      if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
-    };
+    return () => { socket.disconnect(); if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current); };
   }, []);
 
   const formattedTokens = useMemo(() => {
@@ -241,19 +245,26 @@ export default function OpenClawView() {
     if (!msg || !socketRef.current?.connected) return;
 
     if (msg === "/clear") {
-      fetch(`${BRIDGE_URL}/api/gemini/messages`, { method: "DELETE" });
+      fetch(`${BRIDGE_URL}/api/openrouter/messages`, { method: "DELETE" });
       setMessages([]);
       setStreamText(null);
       setInput("");
       return;
     }
 
-    socketRef.current.emit("gemini_message", { content: msg });
+    socketRef.current.emit("openrouter_message", { content: msg, model: currentModel });
     setStreamText(null);
     setIsThinking(true);
     if (!text) setInput("");
     setShowQuickActions(false);
-  }, [input]);
+    setShowModelPicker(false);
+  }, [input, currentModel]);
+
+  const switchModel = useCallback((modelId: string) => {
+    setCurrentModel(modelId);
+    socketRef.current?.emit("openrouter_set_model", { model: modelId });
+    setShowModelPicker(false);
+  }, []);
 
   const copyText = useCallback((text: string, id: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
@@ -262,102 +273,55 @@ export default function OpenClawView() {
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   }, [sendMessage]);
 
-  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    Array.from(files).forEach(file => {
-      if (!file.type.startsWith("image/")) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        setPendingImages(prev => [...prev, reader.result as string]);
-      };
-      reader.readAsDataURL(file);
-    });
-    e.target.value = "";
-  }, []);
-
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items;
-    for (const item of items) {
-      if (item.type.startsWith("image/")) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (!file) continue;
-        const reader = new FileReader();
-        reader.onload = () => {
-          setPendingImages(prev => [...prev, reader.result as string]);
-        };
-        reader.readAsDataURL(file);
-      }
-    }
-  }, []);
-
-  // Voice input
   const toggleVoice = useCallback(() => {
     if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) return;
-    if (isListening) {
-      setIsListening(false);
-      return;
-    }
-    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    const recognition = new SpeechRecognition();
+    if (isListening) { setIsListening(false); return; }
+    const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    const recognition = new SR();
     recognition.lang = "sv-SE";
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(prev => prev + transcript);
-      setIsListening(false);
-    };
+    recognition.onresult = (event: any) => { setInput(prev => prev + event.results[0][0].transcript); setIsListening(false); };
     recognition.onerror = () => setIsListening(false);
     recognition.onend = () => setIsListening(false);
     recognition.start();
     setIsListening(true);
   }, [isListening]);
 
-  // Conversation management
   const saveConversation = useCallback(() => {
     if (messages.length === 0) return;
     const now = Date.now();
     const firstUser = messages.find(m => m.role === "user");
     const title = firstUser ? firstUser.content.slice(0, 50) + (firstUser.content.length > 50 ? "..." : "") : "Ny chatt";
     const preview = messages[messages.length - 1].content.slice(0, 80);
-
     if (activeConvId) {
-      setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, updatedAt: now, messageCount: messages.length, preview, title: c.title === "Ny chatt" ? title : c.title } : c));
+      setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, updatedAt: now, messageCount: messages.length, preview } : c));
     } else {
       const id = `oc_${now}_${Math.random().toString(36).slice(2, 6)}`;
-      setConversations(prev => [{ id, title, updatedAt: now, messageCount: messages.length, preview }, ...prev]);
+      setConversations(prev => [{ id, title, updatedAt: now, messageCount: messages.length, preview, model: currentModel }, ...prev]);
       setActiveConvId(id);
     }
-  }, [messages, activeConvId]);
+  }, [messages, activeConvId, currentModel]);
 
   const startNewChat = useCallback(() => {
     saveConversation();
-    fetch(`${BRIDGE_URL}/api/gemini/messages`, { method: "DELETE" }).catch(() => {});
+    fetch(`${BRIDGE_URL}/api/openrouter/messages`, { method: "DELETE" }).catch(() => {});
     setMessages([]);
     setStreamText(null);
     setActiveConvId(null);
     setShowHistory(false);
   }, [saveConversation]);
 
-  // Auto-save
   useEffect(() => {
     if (messages.length === 0) return;
     const t = setTimeout(() => saveConversation(), 5000);
     return () => clearTimeout(t);
   }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Tool status indicator ───────────────────────────────────────
-  const toolCfg = toolStatus
-    ? (TOOL_CATEGORIES[toolStatus.category || "thinking"] || TOOL_CATEGORIES.thinking)
-    : null;
+  const toolCfg = toolStatus ? (TOOL_CATEGORIES[toolStatus.category || "thinking"] || TOOL_CATEGORIES.thinking) : null;
 
   // ─── Render ──────────────────────────────────────────────────────
   return (
@@ -377,35 +341,79 @@ export default function OpenClawView() {
               <h2 className="text-sm font-bold bg-gradient-to-r from-orange-400 via-red-400 to-pink-400 bg-clip-text text-transparent">
                 OpenClaw
               </h2>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-500">Gemini 2.5 Pro</span>
-                {tokens.totalTokens > 0 && (
-                  <>
-                    <span className="text-[10px] text-slate-700">•</span>
-                    <span className="text-[10px] text-amber-500/70">{formattedTokens} tokens</span>
-                  </>
-                )}
-              </div>
+              {/* Model selector button */}
+              <button
+                onClick={() => setShowModelPicker(!showModelPicker)}
+                className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-orange-400 transition-colors"
+              >
+                <span>{activeModel.icon}</span>
+                <span>{activeModel.name}</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${showModelPicker ? "rotate-180" : ""}`} />
+              </button>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="p-2 rounded-xl text-slate-500 hover:text-orange-400 hover:bg-orange-950/30 transition-all"
-              title="Historik"
-            >
+            {tokens.totalCostUsd > 0 && (
+              <div className="flex items-center gap-0.5 text-[10px] text-emerald-500/70 mr-1">
+                <DollarSign className="w-3 h-3" />
+                <span>{tokens.totalCostUsd.toFixed(4)}</span>
+              </div>
+            )}
+            {tokens.totalTokens > 0 && (
+              <span className="text-[10px] text-amber-500/50 mr-1">{formattedTokens} tok</span>
+            )}
+            <button onClick={() => setShowHistory(!showHistory)} className="p-2 rounded-xl text-slate-500 hover:text-orange-400 hover:bg-orange-950/30 transition-all" title="Historik">
               <PanelLeftOpen className="w-4 h-4" />
             </button>
-            <button
-              onClick={startNewChat}
-              className="p-2 rounded-xl text-slate-500 hover:text-orange-400 hover:bg-orange-950/30 transition-all"
-              title="Ny chatt"
-            >
+            <button onClick={startNewChat} className="p-2 rounded-xl text-slate-500 hover:text-orange-400 hover:bg-orange-950/30 transition-all" title="Ny chatt">
               <Plus className="w-4 h-4" />
             </button>
           </div>
         </div>
       </div>
+
+      {/* ── Model Picker ── */}
+      {showModelPicker && (
+        <div className="shrink-0 border-b border-slate-800/50 bg-slate-950/95 backdrop-blur-xl max-h-[50vh] overflow-y-auto">
+          <div className="px-3 py-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-300">Välj modell</span>
+              <span className="text-[10px] text-slate-600">via OpenRouter — alla modeller, en nyckel</span>
+            </div>
+            <div className="space-y-1">
+              {MODELS.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => switchModel(m.id)}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all ${
+                    currentModel === m.id
+                      ? "bg-gradient-to-r from-orange-950/40 to-red-950/30 border-orange-700/40"
+                      : "bg-slate-800/30 border-slate-700/20 hover:border-slate-600/40 hover:bg-slate-800/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-lg">{m.icon}</span>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-white">{m.name}</span>
+                          <span className="text-[9px] text-slate-600">{m.provider}</span>
+                          {m.supportsTools && <span title="Tool calling"><Cpu className="w-2.5 h-2.5 text-slate-600" /></span>}
+                        </div>
+                        <span className="text-[10px] text-slate-500">{m.description}</span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 ml-2">
+                      <div className="text-[9px] text-slate-600">{formatCtx(m.contextLength)} ctx</div>
+                      <div className="text-[9px] text-emerald-600">${m.pricing.prompt}/{m.pricing.completion}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── History sidebar ── */}
       {showHistory && (
@@ -419,14 +427,10 @@ export default function OpenClawView() {
               {conversations.length === 0 ? (
                 <p className="text-xs text-slate-600 text-center py-8">Inga sparade chattar</p>
               ) : conversations.map(c => (
-                <button
-                  key={c.id}
-                  className={`w-full text-left px-4 py-2.5 hover:bg-slate-800/50 transition-colors border-b border-slate-800/20 ${activeConvId === c.id ? "bg-orange-950/20 border-l-2 border-l-orange-500" : ""}`}
-                  onClick={() => { setActiveConvId(c.id); setShowHistory(false); }}
-                >
+                <button key={c.id} className={`w-full text-left px-4 py-2.5 hover:bg-slate-800/50 transition-colors border-b border-slate-800/20 ${activeConvId === c.id ? "bg-orange-950/20 border-l-2 border-l-orange-500" : ""}`} onClick={() => { setActiveConvId(c.id); setShowHistory(false); }}>
                   <div className="text-xs text-slate-300 truncate">{c.title}</div>
                   <div className="text-[10px] text-slate-600 mt-0.5 truncate">{c.preview}</div>
-                  <div className="text-[9px] text-slate-700 mt-0.5">{c.messageCount} meddelanden</div>
+                  <div className="text-[9px] text-slate-700 mt-0.5">{c.messageCount} meddelanden{c.model ? ` • ${MODELS.find(m => m.id === c.model)?.name || c.model}` : ""}</div>
                 </button>
               ))}
             </div>
@@ -439,7 +443,6 @@ export default function OpenClawView() {
       <div className="flex-1 overflow-y-auto px-3 py-4 space-y-3">
         {messages.length === 0 && !isThinking && (
           <div className="flex flex-col items-center justify-center h-full px-4">
-            {/* Hero */}
             <div className="relative mb-6">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-500/20 via-red-500/15 to-pink-500/20 border border-orange-500/20 flex items-center justify-center shadow-lg shadow-orange-500/5">
                 <span className="text-4xl">🦞</span>
@@ -448,22 +451,34 @@ export default function OpenClawView() {
                 <Zap className="w-3.5 h-3.5 text-white" />
               </div>
             </div>
-            <h2 className="text-xl font-bold bg-gradient-to-r from-orange-300 via-red-300 to-pink-300 bg-clip-text text-transparent mb-1">
-              OpenClaw AI
-            </h2>
-            <p className="text-xs text-slate-500 mb-1">Driven av Gemini 2.5 Pro</p>
-            <p className="text-[11px] text-slate-600 text-center max-w-xs mb-8">
-              Din personliga AI-assistent med full kontroll över datorer, filer, minne, webb, säkerhet och mer.
+            <h2 className="text-xl font-bold bg-gradient-to-r from-orange-300 via-red-300 to-pink-300 bg-clip-text text-transparent mb-1">OpenClaw AI</h2>
+            <p className="text-xs text-slate-500 mb-1">10 modeller • Alla leverantörer • En chatt</p>
+            <p className="text-[11px] text-slate-600 text-center max-w-xs mb-6">
+              Byt modell när som helst. Claude för kod, GPT-4o för snabbhet, Gemini för stora context, DeepSeek för resonering.
             </p>
+
+            {/* Model chips */}
+            <div className="flex flex-wrap gap-1.5 justify-center mb-6 max-w-sm">
+              {MODELS.slice(0, 6).map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => switchModel(m.id)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] transition-all ${
+                    currentModel === m.id
+                      ? "bg-orange-950/40 border-orange-700/40 text-orange-300"
+                      : "bg-slate-800/40 border-slate-700/30 text-slate-400 hover:border-slate-600/50"
+                  }`}
+                >
+                  <span>{m.icon}</span>
+                  <span>{m.name.split(" ").slice(0, 2).join(" ")}</span>
+                </button>
+              ))}
+            </div>
 
             {/* Suggestions */}
             <div className="w-full max-w-sm space-y-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s.text}
-                  onClick={() => sendMessage(s.text)}
-                  className="w-full text-left px-4 py-3 rounded-xl bg-slate-800/40 border border-slate-700/30 hover:border-orange-700/30 hover:bg-orange-950/20 transition-all group"
-                >
+              {SUGGESTIONS.map(s => (
+                <button key={s.text} onClick={() => sendMessage(s.text)} className="w-full text-left px-4 py-3 rounded-xl bg-slate-800/40 border border-slate-700/30 hover:border-orange-700/30 hover:bg-orange-950/20 transition-all group">
                   <span className="mr-2.5">{s.icon}</span>
                   <span className="text-sm text-slate-300 group-hover:text-white transition-colors">{s.text}</span>
                 </button>
@@ -473,69 +488,39 @@ export default function OpenClawView() {
         )}
 
         {/* Message list */}
-        {messages.map((msg) => (
+        {messages.map(msg => (
           <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[88%] rounded-2xl px-4 py-2.5 group ${
               msg.role === "user"
                 ? "bg-gradient-to-br from-orange-600/80 to-red-600/60 text-white shadow-lg shadow-orange-500/10"
                 : "bg-slate-800/70 text-slate-100 border border-slate-700/30"
             }`}>
-              {/* Header */}
               <div className="flex items-center gap-1.5 mb-1">
                 {msg.role === "assistant" ? (
                   <>
-                    <span className="text-xs">🦞</span>
-                    <span className="text-[10px] text-orange-400/80 font-medium">OpenClaw</span>
+                    <span className="text-xs">{activeModel.icon}</span>
+                    <span className="text-[10px] text-orange-400/80 font-medium">{activeModel.name}</span>
                   </>
                 ) : (
                   <span className="text-[10px] text-white/60">Du</span>
                 )}
                 <span className="text-[10px] opacity-40 ml-auto">{formatTime(msg.timestamp)}</span>
               </div>
-
-              {/* Images */}
-              {msg.images && msg.images.length > 0 && (
-                <div className="flex gap-2 mb-2 flex-wrap">
-                  {msg.images.map((img, i) => (
-                    <img key={i} src={img} alt="" className="max-w-[200px] max-h-[150px] rounded-lg border border-slate-600/30" />
-                  ))}
-                </div>
-              )}
-
-              {/* Content */}
               <div className={`text-sm break-words prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-2 ${
                 msg.role === "user" ? "prose-code:text-orange-200" : "prose-code:text-orange-300"
               } prose-code:bg-transparent prose-a:text-blue-400`}>
                 {msg.role === "user" ? (
                   <p className="whitespace-pre-wrap">{msg.content}</p>
                 ) : (
-                  <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={fullCode}>
-                    {msg.content}
-                  </ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={fullCode}>{msg.content}</ReactMarkdown>
                 )}
               </div>
-
-              {/* Actions */}
               {msg.role === "assistant" && (
                 <div className="flex items-center gap-1.5 mt-1.5 -mb-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => copyText(msg.content, msg.id)}
-                    className="p-0.5 rounded text-slate-500 hover:text-white transition-colors"
-                    title="Kopiera"
-                  >
+                  <button onClick={() => copyText(msg.content, msg.id)} className="p-0.5 rounded text-slate-500 hover:text-white transition-colors" title="Kopiera">
                     {copied === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                   </button>
-                  <button
-                    onClick={() => {
-                      if ("speechSynthesis" in window) {
-                        const u = new SpeechSynthesisUtterance(msg.content.slice(0, 500));
-                        u.lang = "sv-SE";
-                        speechSynthesis.speak(u);
-                      }
-                    }}
-                    className="p-0.5 rounded text-slate-500 hover:text-white transition-colors"
-                    title="Läs upp"
-                  >
+                  <button onClick={() => { if ("speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(msg.content.slice(0, 500)); u.lang = "sv-SE"; speechSynthesis.speak(u); } }} className="p-0.5 rounded text-slate-500 hover:text-white transition-colors" title="Läs upp">
                     <Volume2 className="w-3 h-3" />
                   </button>
                 </div>
@@ -549,14 +534,12 @@ export default function OpenClawView() {
           <div className="flex justify-start">
             <div className="max-w-[88%] bg-slate-800/70 rounded-2xl px-4 py-2.5 text-slate-100 border border-slate-700/30">
               <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-xs">🦞</span>
-                <span className="text-[10px] text-orange-400/80 font-medium">OpenClaw</span>
+                <span className="text-xs">{activeModel.icon}</span>
+                <span className="text-[10px] text-orange-400/80 font-medium">{activeModel.name}</span>
               </div>
               {streamText ? (
                 <div className="text-sm break-words prose prose-invert prose-sm max-w-none prose-p:my-1 prose-code:text-orange-300">
-                  <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={streamingCode}>
-                    {cleanStreamingText(streamText)}
-                  </ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={streamingCode}>{cleanStreamingText(streamText)}</ReactMarkdown>
                   <span className="inline-block w-2 h-4 bg-orange-400 animate-pulse ml-0.5 rounded-sm" />
                 </div>
               ) : (
@@ -571,7 +554,6 @@ export default function OpenClawView() {
             </div>
           </div>
         )}
-
         <div ref={chatEndRef} />
       </div>
 
@@ -583,12 +565,8 @@ export default function OpenClawView() {
             <Icon className={`w-4 h-4 ${toolCfg.color} animate-pulse`} />
             <div className="flex-1 min-w-0">
               <span className={`text-xs font-medium ${toolCfg.color}`}>{toolCfg.label}</span>
-              {toolStatus.tool && (
-                <span className="text-[10px] text-slate-500 ml-2">{toolStatus.tool.replace(/_/g, " ")}</span>
-              )}
-              {toolStatus.input && (
-                <div className="text-[10px] text-slate-600 truncate mt-0.5 font-mono">{toolStatus.input.slice(0, 60)}</div>
-              )}
+              {toolStatus.tool && <span className="text-[10px] text-slate-500 ml-2">{toolStatus.tool.replace(/_/g, " ")}</span>}
+              {toolStatus.input && <div className="text-[10px] text-slate-600 truncate mt-0.5 font-mono">{toolStatus.input.slice(0, 60)}</div>}
             </div>
             <div className={`w-2 h-2 rounded-full ${toolCfg.color.replace("text-", "bg-")} animate-pulse`} />
           </div>
@@ -601,19 +579,10 @@ export default function OpenClawView() {
           {QUICK_ACTIONS.map(qa => {
             const QaIcon = qa.icon;
             return (
-              <button
-                key={qa.label}
-                onClick={() => {
-                  if (qa.msg) {
-                    sendMessage(qa.msg);
-                  } else {
-                    setInput(qa.label === "Sök" ? "Sök på nätet efter: " : qa.label === "Kod" ? "Skriv kod: " : "Hämta: ");
-                    inputRef.current?.focus();
-                  }
-                  setShowQuickActions(false);
-                }}
-                className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border transition-all active:scale-95 ${qa.color}`}
-              >
+              <button key={qa.label} onClick={() => {
+                if (qa.msg) { sendMessage(qa.msg); } else { setInput(qa.label === "Sök" ? "Sök på nätet efter: " : qa.label === "Kod" ? "Skriv kod: " : "Hämta: "); inputRef.current?.focus(); }
+                setShowQuickActions(false);
+              }} className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border border-slate-700/30 bg-slate-800/40 text-slate-400 hover:text-orange-400 hover:border-orange-700/30 transition-all active:scale-95">
                 <QaIcon className="w-4 h-4" />
                 <span className="text-[10px] font-medium">{qa.label}</span>
               </button>
@@ -622,93 +591,28 @@ export default function OpenClawView() {
         </div>
       )}
 
-      {/* ── Pending images preview ── */}
-      {pendingImages.length > 0 && (
-        <div className="shrink-0 mx-3 mb-2 flex gap-2 flex-wrap">
-          {pendingImages.map((img, i) => (
-            <div key={i} className="relative">
-              <img src={img} alt="" className="w-16 h-16 object-cover rounded-lg border border-orange-700/30" />
-              <button
-                onClick={() => setPendingImages(prev => prev.filter((_, j) => j !== i))}
-                className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center"
-              >
-                <X className="w-2.5 h-2.5 text-white" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* ── Input ── */}
       <div className="shrink-0 px-3 pb-2 pt-2 bg-gradient-to-t from-slate-950 to-transparent">
         <div className="flex items-end gap-2">
-          {/* Voice */}
-          <button
-            onClick={toggleVoice}
-            className={`p-3 rounded-2xl border transition-all shrink-0 ${
-              isListening
-                ? "bg-red-600/20 border-red-600/40 text-red-400 animate-pulse"
-                : "bg-slate-800/60 border-slate-700/40 text-slate-400 hover:text-orange-400"
-            }`}
-            title={isListening ? "Stoppa" : "Röstinmatning"}
-          >
+          <button onClick={toggleVoice} className={`p-3 rounded-2xl border transition-all shrink-0 ${isListening ? "bg-red-600/20 border-red-600/40 text-red-400 animate-pulse" : "bg-slate-800/60 border-slate-700/40 text-slate-400 hover:text-orange-400"}`} title={isListening ? "Stoppa" : "Röstinmatning"}>
             {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </button>
-
-          {/* Quick actions toggle */}
-          <button
-            onClick={() => setShowQuickActions(!showQuickActions)}
-            className={`p-3 rounded-2xl border transition-all shrink-0 ${
-              showQuickActions
-                ? "bg-orange-950/40 border-orange-700/40 text-orange-400"
-                : "bg-slate-800/60 border-slate-700/40 text-slate-400 hover:text-orange-400"
-            }`}
-            title="Snabbåtgärder"
-          >
+          <button onClick={() => setShowQuickActions(!showQuickActions)} className={`p-3 rounded-2xl border transition-all shrink-0 ${showQuickActions ? "bg-orange-950/40 border-orange-700/40 text-orange-400" : "bg-slate-800/60 border-slate-700/40 text-slate-400 hover:text-orange-400"}`} title="Snabbåtgärder">
             {showQuickActions ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
           </button>
-
-          {/* Text input */}
           <div className="flex-1 relative">
             <textarea
               ref={inputRef}
               value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                e.target.style.height = "auto";
-                e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-              }}
+              onChange={(e) => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
               onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              placeholder={connected ? "Fråga OpenClaw vad som helst..." : "Ansluter..."}
+              placeholder={connected ? `Fråga ${activeModel.name}...` : "Ansluter..."}
               disabled={!connected}
               rows={1}
-              className="w-full bg-slate-800/60 text-white rounded-2xl px-4 py-3 pr-10 text-base border border-slate-700/40 focus:outline-none focus:border-orange-500/50 disabled:opacity-50 placeholder:text-slate-600 resize-none overflow-hidden leading-normal"
-            />
-            {/* Image upload button inside input */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute right-3 bottom-3 p-1 text-slate-600 hover:text-orange-400 transition-colors"
-              title="Bifoga bild"
-            >
-              <Image className="w-4 h-4" />
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={handleImageUpload}
+              className="w-full bg-slate-800/60 text-white rounded-2xl px-4 py-3 text-base border border-slate-700/40 focus:outline-none focus:border-orange-500/50 disabled:opacity-50 placeholder:text-slate-600 resize-none overflow-hidden leading-normal"
             />
           </div>
-
-          {/* Send */}
-          <button
-            onClick={() => sendMessage()}
-            disabled={!connected || (!input.trim() && pendingImages.length === 0)}
-            className="p-3.5 bg-gradient-to-br from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 active:from-orange-700 active:to-red-700 disabled:from-slate-700 disabled:to-slate-700 disabled:opacity-50 text-white rounded-2xl transition-all shadow-lg shadow-orange-500/20 disabled:shadow-none shrink-0"
-          >
+          <button onClick={() => sendMessage()} disabled={!connected || !input.trim()} className="p-3.5 bg-gradient-to-br from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 active:from-orange-700 active:to-red-700 disabled:from-slate-700 disabled:to-slate-700 disabled:opacity-50 text-white rounded-2xl transition-all shadow-lg shadow-orange-500/20 disabled:shadow-none shrink-0">
             {isThinking ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
           </button>
         </div>
