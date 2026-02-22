@@ -27,6 +27,7 @@ export const MORE_TAB_ITEMS = [
   { id: "pentest", label: "🧨 Pentest" },
   { id: "kali", label: "💀 Kali Linux" },
   { id: "openclaw", label: "🦞 OpenClaw" },
+  { id: "homeassistant", label: "🏠 Home Assistant" },
   { id: "editor", label: "💻 Editor" },
   { id: "git", label: "🔀 Git" },
   { id: "install", label: "📦 Installera" },

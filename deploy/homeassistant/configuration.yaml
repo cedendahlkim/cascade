@@ -1,0 +1,81 @@
+# Home Assistant Configuration for Gracestack
+# Integrated with OpenClaw/Frankenstein AI
+
+homeassistant:
+  name: Gracestack Home
+  unit_system: metric
+  time_zone: Europe/Stockholm
+  language: sv
+  country: SE
+  currency: SEK
+
+# HTTP config — runs behind nginx reverse proxy
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 10.0.0.0/8
+
+# Enable default integrations
+default_config:
+
+# Text-to-speech
+tts:
+  - platform: google_translate
+    language: sv
+
+# REST commands to call Gracestack Bridge
+rest_command:
+  frankenstein_chat:
+    url: "http://gracestack-bridge:3031/api/openclaw/chat"
+    method: POST
+    headers:
+      Content-Type: application/json
+    payload: '{"message": "{{ message }}", "channel": "homeassistant", "context": "{{ context | default('''') }}"}'
+    content_type: application/json
+
+  frankenstein_analyze:
+    url: "http://gracestack-bridge:3031/api/openclaw/chat"
+    method: POST
+    headers:
+      Content-Type: application/json
+    payload: '{"message": "Analysera detta smarta hem-event: {{ event }}", "channel": "homeassistant"}'
+    content_type: application/json
+
+# Conversation agent — OpenClaw/Frankenstein via REST
+conversation:
+
+# Intent scripts for voice commands
+intent_script:
+  FrankensteinQuery:
+    speech:
+      text: "Jag frågar Frankenstein..."
+    action:
+      - service: rest_command.frankenstein_chat
+        data:
+          message: "{{ query }}"
+          context: "smart home voice command"
+
+# Automations
+automation:
+  - alias: "Frankenstein Morning Briefing"
+    trigger:
+      - platform: time
+        at: "07:00:00"
+    action:
+      - service: rest_command.frankenstein_chat
+        data:
+          message: "Ge mig en morgonbriefing: väder, kalender, smarta hem-status"
+          context: "morning briefing automation"
+
+# Shell commands for advanced integration
+shell_command:
+  openclaw_status: "curl -s http://gracestack-bridge:3031/api/openclaw/status"
+
+# Logger
+logger:
+  default: warning
+  logs:
+    homeassistant.components.rest_command: info
+    homeassistant.components.conversation: info

@@ -2275,6 +2275,131 @@ app.post("/api/openclaw/config", (req, res) => {
   res.json({ ok: true, config: openclawState.config });
 });
 
+// --- Home Assistant Integration ---
+const HA_URL = process.env.HOME_ASSISTANT_URL || "http://gracestack-homeassistant:8123";
+const HA_TOKEN = process.env.HOME_ASSISTANT_TOKEN || "";
+
+async function haFetch(path: string, method = "GET", body?: unknown): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  if (!HA_TOKEN) return { ok: false, error: "HOME_ASSISTANT_TOKEN not configured" };
+  try {
+    const opts: RequestInit = {
+      method,
+      headers: { Authorization: `Bearer ${HA_TOKEN}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(10000),
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(`${HA_URL}/api${path}`, opts);
+    if (!res.ok) return { ok: false, error: `HA ${res.status}: ${res.statusText}` };
+    const data = await res.json();
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: `HA unreachable: ${err}` };
+  }
+}
+
+app.get("/api/homeassistant/status", async (_req, res) => {
+  // Check if HA is reachable
+  const haConfigured = !!HA_TOKEN;
+  let haOnline = false;
+  let haVersion = "";
+  let haEntities = 0;
+
+  if (haConfigured) {
+    try {
+      const r = await fetch(`${HA_URL}/api/`, {
+        headers: { Authorization: `Bearer ${HA_TOKEN}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (r.ok) {
+        const d = await r.json() as Record<string, unknown>;
+        haOnline = true;
+        haVersion = String(d.version || "");
+      }
+    } catch { /* offline */ }
+
+    if (haOnline) {
+      try {
+        const r = await fetch(`${HA_URL}/api/states`, {
+          headers: { Authorization: `Bearer ${HA_TOKEN}` },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (r.ok) {
+          const states = await r.json() as unknown[];
+          haEntities = states.length;
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  res.json({
+    configured: haConfigured,
+    online: haOnline,
+    url: HA_URL,
+    version: haVersion,
+    entities: haEntities,
+    geminiEnabled: geminiAgent.isEnabled(),
+    openclawAvailable: openclawState.gatewayOnline || geminiAgent.isEnabled(),
+  });
+});
+
+app.get("/api/homeassistant/devices", async (_req, res) => {
+  const result = await haFetch("/states");
+  if (!result.ok) return res.status(503).json({ error: result.error });
+  const states = result.data as Array<{ entity_id: string; state: string; attributes: Record<string, unknown>; last_changed: string }>;
+  // Group by domain
+  const grouped: Record<string, Array<{ entity_id: string; state: string; name: string; last_changed: string }>> = {};
+  for (const s of states) {
+    const domain = s.entity_id.split(".")[0];
+    if (!grouped[domain]) grouped[domain] = [];
+    grouped[domain].push({
+      entity_id: s.entity_id,
+      state: s.state,
+      name: String(s.attributes?.friendly_name || s.entity_id),
+      last_changed: s.last_changed,
+    });
+  }
+  res.json({ devices: grouped, total: states.length });
+});
+
+app.post("/api/homeassistant/service", async (req, res) => {
+  const { domain, service, entity_id, data } = req.body || {};
+  if (!domain || !service) return res.status(400).json({ error: "domain and service required" });
+  const payload: Record<string, unknown> = { ...data };
+  if (entity_id) payload.entity_id = entity_id;
+  const result = await haFetch(`/services/${domain}/${service}`, "POST", payload);
+  if (!result.ok) return res.status(503).json({ error: result.error });
+  io.emit("ha_event", { type: "service_call", domain, service, entity_id });
+  res.json({ ok: true, result: result.data });
+});
+
+app.get("/api/homeassistant/automations", async (_req, res) => {
+  const result = await haFetch("/states");
+  if (!result.ok) return res.status(503).json({ error: result.error });
+  const states = result.data as Array<{ entity_id: string; state: string; attributes: Record<string, unknown>; last_changed: string }>;
+  const automations = states
+    .filter(s => s.entity_id.startsWith("automation."))
+    .map(s => ({
+      entity_id: s.entity_id,
+      name: String(s.attributes?.friendly_name || s.entity_id),
+      state: s.state,
+      last_triggered: s.attributes?.last_triggered || null,
+    }));
+  res.json({ automations });
+});
+
+// Voice command proxy: send text to HA conversation agent
+app.post("/api/homeassistant/voice", async (req, res) => {
+  const { text, language } = req.body || {};
+  if (!text) return res.status(400).json({ error: "text required" });
+  const result = await haFetch("/conversation/process", "POST", {
+    text: String(text),
+    language: language || "sv",
+  });
+  if (!result.ok) return res.status(503).json({ error: result.error });
+  io.emit("ha_event", { type: "voice_command", text, result: result.data });
+  res.json(result.data);
+});
+
 // --- Frankenstein AI Progress ---
 app.get("/api/frankenstein/progress", (_req, res) => {
   try {

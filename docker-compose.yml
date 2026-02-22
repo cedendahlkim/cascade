@@ -65,6 +65,21 @@ services:
       - bridge-data:/workspace/bridge/data
       - frank-training:/workspace/frankenstein-ai/training_data
 
+  # Home Assistant — smart home hub with OpenClaw/Frankenstein voice integration
+  homeassistant:
+    image: homeassistant/home-assistant:stable
+    container_name: gracestack-homeassistant
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Stockholm
+    ports:
+      - "8123:8123"
+    volumes:
+      - ha-config:/config
+      - ./deploy/homeassistant/configuration.yaml:/config/configuration.yaml:ro
+    depends_on:
+      - bridge
+
   weaviate:
     image: cr.weaviate.io/semitechnologies/weaviate:1.28.4
     container_name: gracestack-weaviate
@@ -129,3 +144,4 @@ volumes:
   certbot-etc:
   certbot-var:
   certbot-webroot:
+  ha-config:
