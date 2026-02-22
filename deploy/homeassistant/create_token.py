@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Create a long-lived access token for Home Assistant using the refresh token."""
+"""Create a long-lived access token for Home Assistant using the refresh token via websocket."""
 import urllib.request
 import urllib.parse
 import json
 import sys
+import websocket  # pip install websocket-client
 
 BASE = "http://localhost:8123"
+WS_BASE = "ws://localhost:8123"
 REFRESH = sys.argv[1] if len(sys.argv) > 1 else ""
 
 if not REFRESH:
@@ -28,20 +30,32 @@ tokens = json.loads(resp.read())
 at = tokens["access_token"]
 print("Got fresh access token")
 
-# Step 2: Try to create LLAT
-try:
-    data = json.dumps({"client_name": "Gracestack Bridge", "lifespan": 365}).encode()
-    req = urllib.request.Request(
-        BASE + "/auth/long_lived_access_token",
-        data=data,
-        headers={
-            "Authorization": "Bearer " + at,
-            "Content-Type": "application/json",
-        },
-    )
-    resp = urllib.request.urlopen(req, timeout=15)
-    llat = resp.read().decode().strip().strip('"')
+# Step 2: Create LLAT via websocket API
+ws = websocket.create_connection(WS_BASE + "/api/websocket", timeout=15)
+
+# Receive auth_required
+msg = json.loads(ws.recv())
+assert msg["type"] == "auth_required", f"Unexpected: {msg}"
+
+# Send auth
+ws.send(json.dumps({"type": "auth", "access_token": at}))
+msg = json.loads(ws.recv())
+assert msg["type"] == "auth_ok", f"Auth failed: {msg}"
+print("Websocket authenticated")
+
+# Create long-lived access token
+ws.send(json.dumps({
+    "id": 1,
+    "type": "auth/long_lived_access_token",
+    "client_name": "Gracestack Bridge",
+    "lifespan": 365,
+}))
+msg = json.loads(ws.recv())
+ws.close()
+
+if msg.get("success"):
+    llat = msg["result"]
     print("HOME_ASSISTANT_TOKEN=" + llat)
-except Exception as e:
-    print("LLAT failed: " + str(e))
+else:
+    print("LLAT failed: " + json.dumps(msg))
     print("HOME_ASSISTANT_TOKEN=" + at)
